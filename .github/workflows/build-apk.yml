@@ -31,6 +31,68 @@ jobs:
           fi
           npx cap sync android
 
+      - name: Enforce Android landscape orientation & Chinese app name
+        run: |
+          python3 - << 'EOF'
+          import os
+          import re
+
+          # 1. Force sensorLandscape on MainActivity in AndroidManifest.xml
+          manifest_path = 'android/app/src/main/AndroidManifest.xml'
+          with open(manifest_path, 'r', encoding='utf-8') as f:
+              manifest = f.read()
+
+          def patch_main_activity(match):
+              tag = match.group(0)
+              if 'android:screenOrientation=' in tag:
+                  return re.sub(
+                      r'android:screenOrientation="[^"]*"',
+                      'android:screenOrientation="sensorLandscape"',
+                      tag,
+                  )
+              return tag.replace(
+                  'android:name=".MainActivity"',
+                  'android:name=".MainActivity"\n            android:screenOrientation="sensorLandscape"',
+                  1,
+              )
+
+          manifest_new, count = re.subn(
+              r'<activity\b[^>]*android:name="[^"]*MainActivity"[^>]*>',
+              patch_main_activity,
+              manifest,
+              count=1,
+              flags=re.DOTALL,
+          )
+          assert count == 1, 'MainActivity tag not found in AndroidManifest.xml'
+          assert 'android:screenOrientation="sensorLandscape"' in manifest_new
+          with open(manifest_path, 'w', encoding='utf-8') as f:
+              f.write(manifest_new)
+
+          # 2. Enforce Chinese app_name & title_activity_main in strings.xml
+          strings_path = 'android/app/src/main/res/values/strings.xml'
+          if os.path.exists(strings_path):
+              with open(strings_path, 'r', encoding='utf-8') as f:
+                  strings_xml = f.read()
+          else:
+              os.makedirs(os.path.dirname(strings_path), exist_ok=True)
+              strings_xml = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n'
+
+          for key in ('app_name', 'title_activity_main'):
+              pat = rf'<string\s+name="{key}">[^<]*</string>'
+              rep = f'<string name="{key}">墨土拾荒录</string>'
+              if re.search(pat, strings_xml):
+                  strings_xml = re.sub(pat, rep, strings_xml)
+              else:
+                  strings_xml = strings_xml.replace('</resources>', f'    {rep}\n</resources>')
+
+          assert '<string name="app_name">墨土拾荒录</string>' in strings_xml
+          assert '<string name="title_activity_main">墨土拾荒录</string>' in strings_xml
+          with open(strings_path, 'w', encoding='utf-8') as f:
+              f.write(strings_xml)
+
+          print('Enforced sensorLandscape & app_name=墨土拾荒录 successfully!')
+          EOF
+
       - name: Apply custom Mo-Jia Ink Crucible Android launcher icons
         run: |
           python3 -m pip install --quiet pillow
@@ -93,5 +155,5 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wasteland-scavenger-debug-apk
+          name: motu-shihuanglu-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk

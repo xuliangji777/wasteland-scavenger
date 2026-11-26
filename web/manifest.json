@@ -4,7 +4,7 @@
   "description": "2.5D 水墨废土墨甲 RPG — 老年饼工作室诚意出品",
   "start_url": "./index.html",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "landscape",
   "background_color": "#121110",
   "theme_color": "#121110",
   "icons": [

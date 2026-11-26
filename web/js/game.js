@@ -72,23 +72,23 @@ const RANK_BOTS = [
 const PROLOGUE_SLIDES = [
   {
     chapter: '序章 · 一',
-    title: '天枢灾变',
-    text: '二十年前，「天枢核心」失控引发大停电，旧世界的高楼与现代炮火在墨色尘暴中崩塌。辐射异变唤醒了古老灵脉，山海妖魔、自律机甲与失控重炮从此横行荒原。'
+    title: '墨尘之夜',
+    text: '二十年前那个秋夜，二十一时四十七分。天枢崩裂，万家灯火在一瞬之间尽数熄灭。高楼化作枯骨，铁炮沉入焦土，唯有一场下了二十年的墨色尘风，吹醒了地底沉睡千年的山海灵脉。'
   },
   {
     chapter: '序章 · 二',
-    title: '墨土五域',
-    text: '幸存者在残垣间筑起主城「墨石镇」。镇外五域险象环生——铁锈废都、赤焰兵工、青瘴毒泽与深埋地底的 07 号避难所，处处藏着战前神兵与洞穴秘宝。'
+    title: '废土五域',
+    text: '活下来的人，在断壁间燃起微弱的炭火，唤作「墨石镇」。镇外千里，铁锈废都、赤焰兵工、青瘴毒泽，乃至深埋地脉的 07 号避难所——残钢与妖雾共生，断剑与孤魂同行。'
   },
   {
     chapter: '序章 · 三',
-    title: '天工墨壶',
-    text: '你身怀家传奇物「天工墨壶」——可于险境战斗中收摄妖魔与机械残灵，将古武绝学、现代枪炮、科幻墨甲与妖丹跨界炼化，铸出绝世神兵与护驾灵兽。'
+    title: '青铜墨壶',
+    text: '你怀中揣着一只温凉微鸣的青铜古壶，名曰「天工」。逢妖则鸣，遇刃则啸。凡世间残魂、断铁、古剑、旧械，入此一壶，阴阳相济，皆可化作护身之灵与掌中神兵。'
   },
   {
     chapter: '序章 · 四',
-    title: '故人寻踪',
-    text: '大停电当夜 21:47，挚友「阿哲」在撤离途中音讯全无，只留下一丝指向废土深处的线索。如今你已抵达墨石镇广场——先去「老黄杂货铺」打听消息，踏上墨土传奇！'
+    title: '故人未归',
+    text: '大停电那夜，挚友阿哲留下一块停在 21:47 的旧表，从此音讯杳然。风已起，壶已鸣。你推开墨石镇的残门——有些约定不必言明，活着的人，总要去废土深处讨一个回音。'
   }
 ];
 
@@ -606,6 +606,17 @@ function tryUnlockRegion(regionId, silent = false) {
   return true;
 }
 
+function getBgmTrackForMap(mapId) {
+  const id = String(mapId || state.mapId || 'town');
+  return id === 'town' || id.startsWith('interior_') ? 'town' : 'wild';
+}
+
+function isStudioSplashActive() {
+  const sp = $('studio-splash');
+  if (!sp) return false;
+  return !sp.classList.contains('hidden') && !sp.classList.contains('splash-done') && sp.style.display !== 'none';
+}
+
 function enterMap(mapId, spawnX = null, spawnY = null) {
   const target = MAPS_BY_ID[mapId];
   if (!target) return;
@@ -650,6 +661,9 @@ function enterMap(mapId, spawnX = null, spawnY = null) {
   }
 
   showToast(`抵达「${target.name}」`, 'info');
+  if (!isStudioSplashActive() && !battle && $('opening-prologue')?.classList.contains('hidden')) {
+    sfx.playBgm?.(getBgmTrackForMap(target.id));
+  }
   updateHUD();
   scheduleSave();
 }
@@ -868,7 +882,7 @@ function handleLootNode(node) {
     const bonusEq = rollEquipment(pickId, rollQuality(1.1));
     if (bonusEq) {
       addEquipmentToBag(bonusEq);
-      showToast(`意外发现暗黑词缀装备：【${QUALITY[bonusEq.quality].name}】${bonusEq.name}！`, 'success');
+      showToast(`意外发现异纹神兵：【${QUALITY[bonusEq.quality].name}】${bonusEq.name}！`, 'success');
     }
   }
 
@@ -1038,7 +1052,7 @@ function handleNpcOption(npc, idx, opt) {
         $('dialog-text').textContent = '“拿去吧，这片荒原的暗格与废炮位置都标好了，物资已为你重新探明！”';
       }
     } else if (idx === 1) {
-      $('dialog-text').textContent = '“北侧塌坡下就是战前防空洞，里头盘踞着墨尾巨鼠王。记得战斗中把小怪打残后用【天工墨壶】收妖！”';
+      $('dialog-text').textContent = '“北侧塌坡下就是战前防空洞，里头盘踞着墨尾巨鼠王。记得交锋时将荒原妖邪击至力竭，再以【天工墨壶】收摄残灵！”';
     } else if (idx === 2) {
       const stats = getHeroStats();
       state.hp = Math.min(stats.maxHp, state.hp + 25);
@@ -1422,6 +1436,7 @@ function startBattle(worldEnemy) {
   setBattleButtonsEnabled(true);
   updateBattleUI();
   sfx.alarm();
+  sfx.playBgm?.('battle');
 }
 
 function closeBattle() {
@@ -1435,6 +1450,7 @@ function closeBattle() {
     world.paused = false;
     world.setEncounterCooldown(2.0);
   }
+  sfx.playBgm?.(getBgmTrackForMap(state.mapId));
   updateHUD();
   scheduleSave();
 }
@@ -1831,6 +1847,7 @@ function battleUseSkill(skill) {
   const stats = getHeroStats();
   state.energy -= skill.mpCost;
   const logs = [];
+  const flavorPrefix = skill.flavor ? `${skill.flavor} ` : '';
 
   if (skill.selfBuff === 'shield') {
     const sh = (skill.baseShield || 45) + state.level * (skill.perLvShield || 8);
@@ -1838,7 +1855,7 @@ function battleUseSkill(skill) {
     battle.dmgReduceTurns = 2;
     spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
     sfx.pick('rare');
-    logs.push(`施展【${skill.name}】，获得 ${sh} 点护盾并减伤 30%！`);
+    logs.push(`${flavorPrefix}施展【${skill.name}】，获得 ${sh} 点护盾并减伤 30%！`);
   } else if (skill.selfBuff === 'overdrive') {
     const sh = skill.baseShield || 65;
     battle.heroShield += sh;
@@ -1846,7 +1863,7 @@ function battleUseSkill(skill) {
     spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
     spawnBattleDmgNum('hero', '狂涌 +30%', 'mystic', { offsetY: -30 });
     sfx.pick('legend');
-    logs.push(`启动【${skill.name}】，护盾 +${sh}，3 回合内攻击 +30%！`);
+    logs.push(`${flavorPrefix}启动【${skill.name}】，护盾 +${sh}，3 回合内攻击 +30%！`);
   } else if (skill.selfBuff === 'heal') {
     const heal = Math.round(stats.maxHp * (skill.healPct || 0.45));
     state.hp = Math.min(stats.maxHp, state.hp + heal);
@@ -1856,7 +1873,7 @@ function battleUseSkill(skill) {
     }
     spawnBattleDmgNum('hero', `+${heal} HP`, 'heal');
     sfx.pick('fine');
-    logs.push(`运转【${skill.name}】，恢复 ${heal} 气血并净化负面状态！`);
+    logs.push(`${flavorPrefix}运转【${skill.name}】，恢复 ${heal} 气血并净化负面状态！`);
   } else {
     const { dmg, isCrit, lifesteal } = calcDamageToEnemy(skill.mult || 1.6, {
       critBonus: skill.critBonus,
@@ -1876,7 +1893,7 @@ function battleUseSkill(skill) {
     spawnBattleSlashVfx('enemy', slashVariant);
     spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
     sfx.disassemble(true, true);
-    logs.push(`施展【${skill.name}】，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`);
+    logs.push(`${flavorPrefix}施展【${skill.name}】，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`);
 
     if (lifesteal > 0) {
       const heal = Math.max(1, Math.round(dmg * lifesteal));
@@ -2184,6 +2201,366 @@ function openWorldMap(selectedRegionId = null) {
   });
 }
 
+// ==================== 物品 / 妖魂 / 装备真实视觉缩略图渲染 ====================
+function _getSpiritSpriteSrc(spriteType) {
+  if (['rat', 'dog', 'boss_ratking', 'slime'].includes(spriteType)) {
+    return 'assets/sprites/enemy_beast.png';
+  }
+  if (['drone', 'flame_mech', 'guard', 'auto_turret', 'heavy_mech', 'mech_taotie', 'boss_zhurong', 'raider', 'raider_shield', 'boss_duangang'].includes(spriteType)) {
+    return 'assets/sprites/enemy_mech.png';
+  }
+  return 'assets/sprites/enemy_demon.png';
+}
+
+function _getGuardianSpriteSrc(gid) {
+  if (['guard_hound', 'guard_miasma'].includes(gid)) return 'assets/sprites/enemy_beast.png';
+  if (['guard_puppet', 'guard_zhurong', 'guard_taotie', 'guard_falcon'].includes(gid)) return 'assets/sprites/enemy_mech.png';
+  return 'assets/sprites/enemy_demon.png';
+}
+
+function _thumbImg(src, alt, size, extraStyle = '') {
+  return `<img src="${src}" alt="${escapeHtml(alt)}" style="width:${size}px;height:${size}px;object-fit:contain;display:block;flex-shrink:0;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.8));${extraStyle}">`;
+}
+
+function _thumbSvg(size, inner, extraStyle = '') {
+  return `<svg viewBox="0 0 48 48" width="${size}" height="${size}" style="width:${size}px;height:${size}px;display:block;flex-shrink:0;filter:drop-shadow(0 3px 5px rgba(0,0,0,0.75));${extraStyle}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+}
+
+function renderVisualThumb(kind, idOrObj, size = 44) {
+  const s = Number(size) || 44;
+
+  // 1. 收服妖魂 & 护驾灵兽：直接使用手绘透明 PNG 立绘
+  if (kind === 'spirit') {
+    const en = typeof idOrObj === 'object' && idOrObj ? idOrObj : ENEMIES[idOrObj];
+    const src = _getSpiritSpriteSrc(en?.spriteType || idOrObj);
+    return _thumbImg(src, en?.spiritName || en?.name || '妖魂', s);
+  }
+  if (kind === 'guardian') {
+    const g = typeof idOrObj === 'object' && idOrObj ? idOrObj : GUARDIANS[idOrObj];
+    const src = _getGuardianSpriteSrc(g?.id || idOrObj);
+    return _thumbImg(src, g?.name || '护驾', s);
+  }
+
+  // 2. 装备（武器 / 护甲 / 机甲核心 / 秘宝）
+  if (kind === 'equip' || kind === 'equipment') {
+    const eq = typeof idOrObj === 'object' && idOrObj ? idOrObj : EQUIPMENT[idOrObj];
+    if (!eq) {
+      return _thumbImg('assets/sprites/chest.png', '装备', s);
+    }
+
+    // 机甲核心
+    if (eq.slot === 'mech') {
+      if (eq.id === 'mech_crimson_frame' || eq.id === 'mech_tianshu_exo') {
+        const glow = eq.id === 'mech_tianshu_exo'
+          ? 'filter:drop-shadow(0 0 7px rgba(56,189,248,0.65)) drop-shadow(0 3px 6px rgba(0,0,0,0.8));'
+          : 'filter:drop-shadow(0 0 7px rgba(249,115,22,0.55)) drop-shadow(0 3px 6px rgba(0,0,0,0.8));';
+        return _thumbImg('assets/sprites/enemy_mech.png', eq.name, s, glow);
+      }
+      if (eq.id === 'mech_bit_array') {
+        return _thumbSvg(s, `
+          <circle cx="24" cy="24" r="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2.2"/>
+          <circle cx="24" cy="24" r="4.5" fill="#7dd3fc"/>
+          <polygon points="24,4 28,12 20,12" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
+          <polygon points="44,24 36,28 36,20" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
+          <polygon points="24,44 20,36 28,36" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
+          <polygon points="4,24 12,20 12,28" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
+          <circle cx="24" cy="8" r="1.8" fill="#38bdf8"/>
+          <circle cx="40" cy="24" r="1.8" fill="#38bdf8"/>
+          <circle cx="24" cy="40" r="1.8" fill="#38bdf8"/>
+          <circle cx="8" cy="24" r="1.8" fill="#38bdf8"/>
+        `);
+      }
+      return _thumbSvg(s, `
+        <polygon points="24,5 39,14 39,34 24,43 9,34 9,14" fill="#2b2623" stroke="#d49a3a" stroke-width="2.4"/>
+        <polygon points="24,11 33,17 33,31 24,37 15,31 15,17" fill="#1a2630" stroke="#5eead4" stroke-width="1.6"/>
+        <circle cx="24" cy="24" r="5.5" fill="#38bdf8"/>
+        <circle cx="24" cy="24" r="2.5" fill="#e0f2fe"/>
+        <path d="M24 5v6M39 14l-6 3M39 34l-6-3M24 43v-6M9 34l6-3M9 14l6 3" stroke="#e5bb5c" stroke-width="1.5"/>
+      `);
+    }
+
+    // 秘宝
+    if (eq.slot === 'relic') {
+      if (eq.id === 'relic_tianshu') {
+        return _thumbImg('assets/app_icon.png', eq.name, s, 'border-radius:50%;border:1.5px solid rgba(229,187,92,0.75);');
+      }
+      if (eq.id === 'relic_fox_orb') {
+        return _thumbSvg(s, `
+          <circle cx="24" cy="24" r="16" fill="#3b1736" stroke="#e5bb5c" stroke-width="2"/>
+          <circle cx="24" cy="24" r="11" fill="#ec4899" opacity="0.75"/>
+          <circle cx="20" cy="20" r="4.5" fill="#fbcfe8" opacity="0.85"/>
+          <path d="M10 31c4 5 24 5 28 0" fill="none" stroke="#f3ce7a" stroke-width="2" stroke-linecap="round"/>
+          <path d="M13 13c5-5 17-5 22 0" fill="none" stroke="#f472b6" stroke-width="1.6" stroke-linecap="round"/>
+        `);
+      }
+      return _thumbSvg(s, `
+        <rect x="11" y="7" width="26" height="34" rx="4" fill="#2c241b" stroke="#e5bb5c" stroke-width="2.2"/>
+        <rect x="15" y="11" width="18" height="26" rx="2" fill="#1c273d" stroke="#d49a3a" stroke-width="1.2"/>
+        <polygon points="26,12 18,25 24,25 21,36 31,22 25,22" fill="#38bdf8" stroke="#bae6fd" stroke-width="0.8"/>
+      `);
+    }
+
+    // 护甲
+    if (eq.slot === 'armor') {
+      if (eq.genre === 'scifi') {
+        return _thumbSvg(s, `
+          <path d="M12 10l6-3h12l6 3 4 9-6 4v16l-10 4-10-4V23l-6-4z" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+          <path d="M18 12h12l2 10-8 5-8-5z" fill="#334155" stroke="#7dd3fc" stroke-width="1.2"/>
+          <circle cx="24" cy="20" r="3.5" fill="#5eead4"/>
+          <path d="M16 32h16M18 36h12" stroke="#d49a3a" stroke-width="1.8" stroke-linecap="round"/>
+        `);
+      }
+      return _thumbSvg(s, `
+        <path d="M13 10l5-3h12l5 3 4 8-5 4v16l-10 4-10-4V22l-5-4z" fill="#3a3026" stroke="#d49a3a" stroke-width="2"/>
+        <path d="M15 18h18M15 24h18M16 30h16M18 35h12" stroke="#c89b3c" stroke-width="1.8"/>
+        <path d="M24 11v28" stroke="#78716c" stroke-width="1.6"/>
+        <circle cx="24" cy="21" r="3" fill="#e5bb5c"/>
+      `);
+    }
+
+    // 武器：重炮 / 电磁炮 / 加特林 / 等离子步枪 / 狙击 / 霰弹 / 手铳 / 光剑 / 古剑
+    const wt = eq.weaponType || 'blade';
+    if (wt === 'cannon') {
+      return _thumbSvg(s, `
+        <rect x="6" y="17" width="30" height="12" rx="3" fill="#475569" stroke="#d49a3a" stroke-width="2"/>
+        <rect x="34" y="15" width="8" height="16" rx="2" fill="#b45309" stroke="#f3ce7a" stroke-width="1.6"/>
+        <circle cx="14" cy="23" r="3" fill="#f97316"/>
+        <path d="M12 29l-4 10h8l2-10M24 29l4 10h6l-4-10" fill="#334155" stroke="#94a3b8" stroke-width="1.4"/>
+        <circle cx="40" cy="23" r="2.5" fill="#fde047"/>
+      `);
+    }
+    if (wt === 'railgun') {
+      return _thumbSvg(s, `
+        <rect x="5" y="15" width="35" height="5" rx="1.5" fill="#334155" stroke="#38bdf8" stroke-width="1.5"/>
+        <rect x="5" y="25" width="35" height="5" rx="1.5" fill="#334155" stroke="#38bdf8" stroke-width="1.5"/>
+        <rect x="7" y="20" width="24" height="5" fill="#f97316"/>
+        <path d="M31 22.5h12" stroke="#fde047" stroke-width="2.6" stroke-linecap="round"/>
+        <rect x="8" y="29" width="9" height="9" rx="2" fill="#475569" stroke="#d49a3a" stroke-width="1.4"/>
+        <circle cx="18" cy="22.5" r="2.2" fill="#fef08a"/>
+      `);
+    }
+    if (wt === 'gatling') {
+      return _thumbSvg(s, `
+        <rect x="18" y="15" width="24" height="3.2" rx="1" fill="#94a3b8" stroke="#1e293b" stroke-width="0.8"/>
+        <rect x="18" y="20" width="24" height="3.2" rx="1" fill="#cbd5e1" stroke="#1e293b" stroke-width="0.8"/>
+        <rect x="18" y="25" width="24" height="3.2" rx="1" fill="#94a3b8" stroke="#1e293b" stroke-width="0.8"/>
+        <rect x="33" y="14" width="4" height="15" rx="1" fill="#d49a3a"/>
+        <rect x="7" y="14" width="13" height="15" rx="3" fill="#475569" stroke="#e5bb5c" stroke-width="1.8"/>
+        <rect x="10" y="29" width="8" height="10" rx="2" fill="#b45309" stroke="#f3ce7a" stroke-width="1.3"/>
+      `);
+    }
+    if (wt === 'plasma') {
+      return _thumbSvg(s, `
+        <path d="M6 21h28l6-2v6l-6-1H22l-3 11h-6l2-9H6z" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8"/>
+        <rect x="16" y="16" width="12" height="4" rx="1.5" fill="#0ea5e9"/>
+        <rect x="24" y="20" width="11" height="3" rx="1" fill="#7dd3fc"/>
+        <circle cx="13" cy="22" r="2" fill="#5eead4"/>
+      `);
+    }
+    if (wt === 'sniper') {
+      return _thumbSvg(s, `
+        <path d="M5 25l6-4h28v3H21l-4 9h-5l2-7H5z" fill="#3f3f46" stroke="#d49a3a" stroke-width="1.6"/>
+        <rect x="14" y="14" width="14" height="4" rx="1.5" fill="#18181b" stroke="#f59e0b" stroke-width="1.3"/>
+        <line x1="18" y1="18" x2="18" y2="21" stroke="#d49a3a" stroke-width="1.5"/>
+        <line x1="24" y1="18" x2="24" y2="21" stroke="#d49a3a" stroke-width="1.5"/>
+        <rect x="38" y="20" width="5" height="5" rx="1" fill="#a1a1aa"/>
+      `);
+    }
+    if (wt === 'shotgun') {
+      return _thumbSvg(s, `
+        <path d="M5 29l9-7h26v4H23l-3 4H12l-5 4z" fill="#7c2d12" stroke="#d49a3a" stroke-width="1.6"/>
+        <rect x="16" y="18" width="25" height="4" rx="1" fill="#64748b" stroke="#cbd5e1" stroke-width="1"/>
+        <rect x="20" y="22" width="12" height="3.5" rx="1" fill="#b45309"/>
+      `);
+    }
+    if (wt === 'pistol') {
+      return _thumbSvg(s, `
+        <path d="M10 17h24l3 4-3 3H21l-4 12h-7l4-12h-4z" fill="#475569" stroke="#e5bb5c" stroke-width="1.8"/>
+        <rect x="13" y="19" width="18" height="3" fill="#f97316"/>
+        <circle cx="37" cy="21" r="2.5" fill="#fde047"/>
+      `);
+    }
+    if (eq.genre === 'scifi') {
+      return _thumbSvg(s, `
+        <line x1="12" y1="36" x2="38" y2="10" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" opacity="0.45"/>
+        <line x1="12" y1="36" x2="38" y2="10" stroke="#e0f2fe" stroke-width="2.6" stroke-linecap="round"/>
+        <line x1="11" y1="29" x2="19" y2="37" stroke="#c084fc" stroke-width="3.2" stroke-linecap="round"/>
+        <line x1="7" y1="41" x2="14" y2="34" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
+      `);
+    }
+    if (eq.genre === 'mythic') {
+      return _thumbSvg(s, `
+        <polygon points="40,8 34,18 17,35 13,31 30,14" fill="#fde047" stroke="#f59e0b" stroke-width="1.6"/>
+        <line x1="16" y1="32" x2="36" y2="12" stroke="#fef9c3" stroke-width="1.6"/>
+        <path d="M11 26l11 11" stroke="#d49a3a" stroke-width="3.4" stroke-linecap="round"/>
+        <line x1="7" y1="41" x2="15" y2="33" stroke="#7c2d12" stroke-width="3.6" stroke-linecap="round"/>
+        <circle cx="16.5" cy="31.5" r="2.5" fill="#5eead4"/>
+      `);
+    }
+    // 古武刀剑
+    return _thumbSvg(s, `
+      <polygon points="39,9 34,19 18,35 14,31 30,15" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5"/>
+      <line x1="17" y1="32" x2="36" y2="13" stroke="#f8fafc" stroke-width="1.4"/>
+      <line x1="12" y1="27" x2="21" y2="36" stroke="#d49a3a" stroke-width="3.2" stroke-linecap="round"/>
+      <line x1="7" y1="41" x2="15" y2="33" stroke="#573b26" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M8 40c-2 3 2 5 4 3" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+    `);
+  }
+
+  // 3. 丹药
+  if (kind === 'elixir') {
+    const elx = typeof idOrObj === 'object' && idOrObj ? idOrObj : ELIXIRS[idOrObj];
+    if (elx?.id === 'elixir_jiuzhuan') {
+      return _thumbSvg(s, `
+        <circle cx="24" cy="28" r="12" fill="#065f46" stroke="#6ee7b7" stroke-width="2"/>
+        <circle cx="24" cy="15" r="6" fill="#047857" stroke="#6ee7b7" stroke-width="1.8"/>
+        <rect x="21" y="7" width="6" height="4" rx="1" fill="#d49a3a"/>
+        <circle cx="20" cy="26" r="3" fill="#a7f3d0" opacity="0.8"/>
+        <path d="M17 20h14" stroke="#f3ce7a" stroke-width="2"/>
+      `);
+    }
+    return _thumbSvg(s, `
+      <circle cx="24" cy="25" r="14" fill="#78350f" stroke="#f3ce7a" stroke-width="2.2"/>
+      <circle cx="24" cy="25" r="9.5" fill="#f59e0b"/>
+      <circle cx="20" cy="21" r="3.5" fill="#fef3c7" opacity="0.85"/>
+      <path d="M14 25h20" stroke="#fde68a" stroke-width="1.2" opacity="0.7"/>
+    `);
+  }
+
+  // 4. 背包物品（补给品 / 剧情信物 / 古董 / 科技 / 废品）
+  if (kind === 'item') {
+    const it = typeof idOrObj === 'object' && idOrObj ? idOrObj : ITEMS[idOrObj];
+    if (!it) return _thumbImg('assets/sprites/chest.png', '物资', s);
+
+    if (it.isStory) {
+      return _thumbImg('assets/app_icon.png', it.name, s, 'border-radius:8px;border:1.5px solid rgba(229,187,92,0.7);');
+    }
+    if (it.isCollection) {
+      return _thumbSvg(s, `
+        <ellipse cx="24" cy="27" rx="13" ry="12" fill="#2b2114" stroke="#e5bb5c" stroke-width="2.2"/>
+        <path d="M18 15l2-6h8l2 6" fill="#92400e" stroke="#f3ce7a" stroke-width="1.8"/>
+        <circle cx="24" cy="27" r="5" fill="#34d399" stroke="#fde68a" stroke-width="1.4"/>
+        <path d="M13 27h6M29 27h6" stroke="#d49a3a" stroke-width="1.8"/>
+      `);
+    }
+
+    // 5 种核心补给品专属多色插画
+    if (it.id === 20) { // 压缩饼干
+      return _thumbSvg(s, `
+        <rect x="8" y="11" width="32" height="26" rx="4" fill="#d99b43" stroke="#f3ce7a" stroke-width="2"/>
+        <rect x="12" y="15" width="24" height="18" rx="2" fill="#b4752a"/>
+        <rect x="8" y="21" width="32" height="6" fill="#991b1b" opacity="0.88"/>
+        <circle cx="16" cy="18" r="1.3" fill="#fde68a"/><circle cx="24" cy="18" r="1.3" fill="#fde68a"/><circle cx="32" cy="18" r="1.3" fill="#fde68a"/>
+        <circle cx="16" cy="30" r="1.3" fill="#fde68a"/><circle cx="24" cy="30" r="1.3" fill="#fde68a"/><circle cx="32" cy="30" r="1.3" fill="#fde68a"/>
+      `);
+    }
+    if (it.id === 21) { // 纯净水
+      return _thumbSvg(s, `
+        <rect x="19" y="6" width="10" height="5" rx="1.5" fill="#cbd5e1" stroke="#38bdf8" stroke-width="1.2"/>
+        <path d="M15 15c0-3 4-4 9-4s9 1 9 4v21a5 5 0 0 1-5 5h-8a5 5 0 0 1-5-5z" fill="#0369a1" stroke="#7dd3fc" stroke-width="2"/>
+        <path d="M16 25q4-3 8 0t8 0v10a4 4 0 0 1-4 4h-8a4 4 0 0 1-4-4z" fill="#38bdf8" opacity="0.85"/>
+        <line x1="19" y1="16" x2="19" y2="33" stroke="#e0f2fe" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+      `);
+    }
+    if (it.id === 22) { // 金疮药散
+      return _thumbSvg(s, `
+        <rect x="18" y="7" width="12" height="5" rx="1.5" fill="#92400e" stroke="#f3ce7a" stroke-width="1.2"/>
+        <rect x="12" y="13" width="24" height="27" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
+        <rect x="21.5" y="19" width="5" height="15" rx="1" fill="#dc2626"/>
+        <rect x="16.5" y="24" width="15" height="5" rx="1" fill="#dc2626"/>
+      `);
+    }
+    if (it.id === 23) { // 抗辐射药剂
+      return _thumbSvg(s, `
+        <path d="M24 7l14 6v11c0 9-6 14-14 17-8-3-14-8-14-17V13z" fill="#14532d" stroke="#a3e635" stroke-width="2"/>
+        <circle cx="24" cy="23" r="6.5" fill="#84cc16" opacity="0.85"/>
+        <circle cx="24" cy="23" r="2.4" fill="#fef08a"/>
+        <path d="M24 14v3M16 27l2.5-1.5M32 27l-2.5-1.5" stroke="#ecfccb" stroke-width="1.8" stroke-linecap="round"/>
+      `);
+    }
+    if (it.id === 24) { // 烟雾弹
+      return _thumbSvg(s, `
+        <rect x="15" y="15" width="18" height="24" rx="4" fill="#3f6212" stroke="#a3e635" stroke-width="1.8"/>
+        <rect x="19" y="10" width="10" height="5" rx="1" fill="#94a3b8"/>
+        <rect x="15" y="23" width="18" height="5" fill="#e5bb5c" opacity="0.85"/>
+        <circle cx="31" cy="11" r="4" fill="#e2e8f0" opacity="0.75"/>
+        <circle cx="36" cy="8" r="3" fill="#f8fafc" opacity="0.65"/>
+      `);
+    }
+
+    // 宝箱/残骸容器类直接用 chest.png
+    if (it.id === 1 || it.id === 11 || it.id === 15) {
+      return _thumbImg('assets/sprites/chest.png', it.name, s);
+    }
+    // 辐射稳定核 / 避难所芯片
+    if (it.id === 10 || it.id === 19) {
+      return _thumbSvg(s, `
+        <rect x="10" y="10" width="28" height="28" rx="6" fill="#1e1b4b" stroke="#38bdf8" stroke-width="2"/>
+        <circle cx="24" cy="24" r="7" fill="#0ea5e9"/>
+        <circle cx="24" cy="24" r="3.2" fill="#e0f2fe"/>
+        <path d="M24 5v5M24 38v5M5 24h5M38 24h5" stroke="#c084fc" stroke-width="2" stroke-linecap="round"/>
+      `);
+    }
+    // 变异荧光菇
+    if (it.id === 17) {
+      return _thumbSvg(s, `
+        <path d="M10 25c0-10 6-15 14-15s14 5 14 15z" fill="#10b981" stroke="#6ee7b7" stroke-width="2"/>
+        <rect x="20" y="25" width="8" height="14" rx="3" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
+        <circle cx="18" cy="18" r="2.2" fill="#fef08a"/><circle cx="28" cy="16" r="2.5" fill="#a7f3d0"/><circle cx="25" cy="22" r="1.6" fill="#fef08a"/>
+      `);
+    }
+    // 应急信号枪
+    if (it.id === 14) {
+      return _thumbSvg(s, `
+        <path d="M10 17h24l3 4-3 3H21l-4 12h-7l4-12h-4z" fill="#991b1b" stroke="#f3ce7a" stroke-width="1.8"/>
+        <circle cx="37" cy="21" r="3" fill="#fb923c"/>
+      `);
+    }
+    // 通行币 / 腕表
+    if (it.id === 12 || it.id === 16) {
+      return _thumbSvg(s, `
+        <circle cx="24" cy="24" r="14" fill="#78350f" stroke="#f3ce7a" stroke-width="2.4"/>
+        <circle cx="24" cy="24" r="9.5" fill="#d97706" stroke="#fde68a" stroke-width="1.3"/>
+        <path d="M24 18v6l4 3" fill="none" stroke="#fef9c3" stroke-width="2.2" stroke-linecap="round"/>
+      `);
+    }
+    // 科技电子件（电路板/显卡/电池/无人机/光学镜片/伺服机）
+    if (it.category === 'tech' || it.id === 18) {
+      return _thumbSvg(s, `
+        <rect x="8" y="10" width="32" height="28" rx="4" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
+        <rect x="16" y="17" width="16" height="14" rx="2" fill="#1e293b" stroke="#e5bb5c" stroke-width="1.6"/>
+        <circle cx="24" cy="24" r="3.2" fill="#38bdf8"/>
+        <path d="M12 15h4M32 15h4M12 33h6M30 33h6" stroke="#f3ce7a" stroke-width="1.8" stroke-linecap="round"/>
+      `);
+    }
+    // 其余通用废品/铜线/铁罐/钢缆
+    return _thumbSvg(s, `
+      <rect x="11" y="12" width="26" height="25" rx="5" fill="#44403c" stroke="#d49a3a" stroke-width="2"/>
+      <ellipse cx="24" cy="14" rx="12" ry="3.5" fill="#78716c" stroke="#e5bb5c" stroke-width="1.4"/>
+      <path d="M12 22h24M12 29h24" stroke="#b45309" stroke-width="2.2"/>
+      <circle cx="24" cy="25.5" r="3" fill="#f59e0b"/>
+    `);
+  }
+
+  // 5. 空装备槽 / 炼化炉预览图标
+  if (kind === 'empty_slot') {
+    const map = {
+      weapon: `<line x1="13" y1="35" x2="35" y2="13" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/><line x1="13" y1="27" x2="21" y2="35" stroke="#d49a3a" stroke-width="2.5" stroke-linecap="round"/>`,
+      armor: `<path d="M14 12l5-2h10l5 2 3 7-4 3v14l-9 4-9-4V22l-4-3z" fill="none" stroke="#94a3b8" stroke-width="2.2"/>`,
+      mech: `<polygon points="24,8 37,16 37,32 24,40 11,32 11,16" fill="none" stroke="#94a3b8" stroke-width="2.2"/><circle cx="24" cy="24" r="5" fill="none" stroke="#5eead4" stroke-width="1.8"/>`,
+      relic: `<circle cx="24" cy="24" r="13" fill="none" stroke="#d49a3a" stroke-width="2.2"/><polygon points="24,14 28,24 24,34 20,24" fill="none" stroke="#c084fc" stroke-width="1.8"/>`
+    };
+    return _thumbSvg(s, map[idOrObj] || map.relic, 'opacity:0.42;');
+  }
+
+  // 天工未知炼化 / 炉台默认图腾
+  return _thumbSvg(s, `
+    <circle cx="24" cy="24" r="16" fill="#241738" stroke="#c084fc" stroke-width="2.2"/>
+    <circle cx="24" cy="24" r="10" fill="none" stroke="#5eead4" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <circle cx="24" cy="24" r="4.5" fill="#e5bb5c"/>
+  `);
+}
+
 // ==================== 2. 「天工墨壶」双槽炼化与护驾 ====================
 function getCruciblePoolEntries() {
   const pool = [];
@@ -2334,38 +2711,80 @@ function openCrucible() {
     const [a, b] = crucibleSlots;
     const match = findMatchingRecipe(a, b);
     const previewHtml = match
-      ? `<strong style="color:${QUALITY[match.quality]?.color || '#e5bb5c'}">${escapeHtml(match.name)}</strong><small class="modal-item-desc">${escapeHtml(match.desc)}</small>`
+      ? `${renderVisualThumb(match.resultType, match.resultId, 76)}
+         <strong style="font-family:var(--font-serif);color:${QUALITY[match.quality]?.color || '#e5bb5c'};font-size:13px;letter-spacing:1.5px;text-shadow:0 2px 10px #000;line-height:1.2;max-width:128px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(match.name)}</strong>`
       : (a && b)
-        ? `<strong style="color:#c4a6f5">天工未知炼化</strong><small class="modal-item-desc">任意二合一：产出带暗黑词缀的神兵/丹药/护驾</small>`
-        : `<small class="modal-item-desc">点击下方素材填入双槽</small>`;
+        ? `${renderVisualThumb('mystery', null, 68)}
+           <strong style="font-family:var(--font-serif);color:#c4a6f5;font-size:13px;letter-spacing:1.5px;text-shadow:0 2px 10px #000;line-height:1.2;">天工未知炼化</strong>`
+        : `${renderVisualThumb('crucible', null, 58)}
+           <small style="font-family:var(--font-serif);color:rgba(240,232,216,0.72);font-size:12px;letter-spacing:2px;text-shadow:0 2px 8px #000;">待启炼化</small>`;
+
+    const recipeHintHtml = match
+      ? `<div class="modal-item-desc" style="text-align:center;color:#e5bb5c;font-family:var(--font-serif);letter-spacing:1px;text-shadow:0 2px 8px #000;">已感应丹方 · ${escapeHtml(match.desc)}</div>`
+      : (a && b)
+        ? `<div class="modal-item-desc" style="text-align:center;color:#c4a6f5;font-family:var(--font-serif);letter-spacing:1px;text-shadow:0 2px 8px #000;">阴阳化生 · 万物皆可入壶（凝炼灵韵异纹神兵 / 丹药 / 护驾）</div>`
+        : '';
+
+    const renderSlotInner = (slotObj, emptyTitle) => {
+      if (!slotObj) {
+        return `<span style="font-family:var(--font-serif);font-size:14px;font-weight:700;letter-spacing:2px;color:var(--bronze-bright);text-shadow:0 2px 10px #000;">${emptyTitle}</span>
+                <small style="font-family:var(--font-serif);opacity:0.68;font-size:11px;letter-spacing:1px;text-shadow:0 2px 8px #000;">点击下方素材纳灵</small>`;
+      }
+      const thumb = renderVisualThumb(slotObj.kind, slotObj.kind === 'equip' ? slotObj.eq : slotObj.id, 76);
+      return `${thumb}
+              <strong style="font-family:var(--font-serif);font-size:13px;letter-spacing:1.5px;color:#f5ecd8;text-shadow:0 2px 10px #000;line-height:1.2;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(slotObj.name)}</strong>`;
+    };
+
+    const slotMistStyle = (filled) =>
+      `width:132px;height:126px;padding:4px;border:none;border-radius:0;box-shadow:none;background:${
+        filled
+          ? 'radial-gradient(ellipse at 50% 62%, rgba(157,124,216,0.34), rgba(94,234,212,0.12) 45%, transparent 74%)'
+          : 'radial-gradient(ellipse at 50% 65%, rgba(212,162,74,0.16), rgba(94,234,212,0.05) 45%, transparent 72%)'
+      };`;
 
     const poolHtml = pool.length
       ? pool.map((p) => {
         const isSel = (a && a.key === p.key) || (b && b.key === p.key);
-        return `<button class="crucible-chip${isSel ? ' selected' : ''}" data-pkey="${escapeHtml(p.key)}"><span class="item-seal-badge" style="width:20px;height:20px;font-size:11px;">${escapeHtml(p.seal)}</span>${escapeHtml(p.name)} ×${p.count}</button>`;
+        const thumb = renderVisualThumb(p.kind, p.kind === 'equip' ? p.eq : p.id, 52);
+        return `
+          <button class="crucible-chip${isSel ? ' selected' : ''}" data-pkey="${escapeHtml(p.key)}" title="${escapeHtml(p.name)} ×${p.count}"
+            style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:90px;min-height:88px;padding:6px 4px;clip-path:none;border:none;border-radius:10px;box-shadow:none;position:relative;text-align:center;background:${
+              isSel
+                ? 'radial-gradient(circle at 50% 45%, rgba(157,124,216,0.38), rgba(94,234,212,0.12) 52%, transparent 76%)'
+                : 'radial-gradient(circle at 50% 48%, rgba(212,162,74,0.08), transparent 72%)'
+            };">
+            ${thumb}
+            <span style="font-family:var(--font-serif);font-size:12px;letter-spacing:1px;line-height:1.2;color:${isSel ? '#f3ce7a' : '#ede4d2'};text-shadow:0 2px 8px #000;max-width:82px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.name)}</span>
+            <span style="position:absolute;top:2px;right:6px;font-size:11px;font-weight:800;color:#f3ce7a;text-shadow:0 1px 6px #000;">×${p.count}</span>
+          </button>`;
       }).join('')
       : '<div class="modal-item-desc">暂无可用妖魂或物资，去野外战斗收妖或拾荒吧！</div>';
 
     contentHtml = `
-      <div class="crucible-workbench">
-        <div class="crucible-slots">
-          <div class="crucible-slot${a ? ' filled' : ''}" id="crucible-slot-0">
-            ${a ? `<strong>${escapeHtml(a.name)}</strong><small>点击卸下</small>` : '<small>槽位一 · 妖魂/物资</small>'}
-          </div>
-          <div class="crucible-plus">+</div>
-          <div class="crucible-slot${b ? ' filled' : ''}" id="crucible-slot-1">
-            ${b ? `<strong>${escapeHtml(b.name)}</strong><small>点击卸下</small>` : '<small>槽位二 · 妖魂/物资</small>'}
-          </div>
-          <div class="crucible-arrow">→</div>
-          <div class="crucible-result-preview">${previewHtml}</div>
+      <div class="crucible-workbench" style="border:none;padding:8px 4px 12px;gap:10px;background:radial-gradient(ellipse at 50% 34%, rgba(94,234,212,0.14), rgba(157,124,216,0.14) 38%, transparent 74%);">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;margin-bottom:-4px;">
+          <img src="assets/app_icon.png" alt="天工墨壶" style="width:94px;height:94px;object-fit:contain;display:block;-webkit-mask-image:radial-gradient(circle, #000 54%, transparent 74%);mask-image:radial-gradient(circle, #000 54%, transparent 74%);filter:drop-shadow(0 0 18px rgba(94,234,212,0.52)) drop-shadow(0 0 28px rgba(157,124,216,0.42));">
+          <div style="font-family:var(--font-serif);font-size:12px;letter-spacing:4px;color:rgba(243,206,122,0.88);text-shadow:0 2px 10px #000;">天工墨壶 · 纳灵炼化坛</div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
-          <button class="btn btn-secondary btn-sm" id="btn-crucible-clear">清空槽位</button>
-          <button class="btn btn-purple" id="btn-crucible-fuse" ${a && b ? '' : 'disabled'}>启动天工墨壶炼化</button>
+        <div class="crucible-slots" style="gap:10px;">
+          <div class="crucible-slot${a ? ' filled' : ''}" id="crucible-slot-0" title="${a ? '点击卸下' : '槽位一'}" style="${slotMistStyle(!!a)}">
+            ${renderSlotInner(a, '阵眼一')}
+          </div>
+          <div class="crucible-plus" style="font-family:var(--font-serif);font-size:20px;opacity:0.85;">＋</div>
+          <div class="crucible-slot${b ? ' filled' : ''}" id="crucible-slot-1" title="${b ? '点击卸下' : '槽位二'}" style="${slotMistStyle(!!b)}">
+            ${renderSlotInner(b, '阵眼二')}
+          </div>
+          <div class="crucible-arrow" style="font-family:var(--font-serif);font-size:20px;opacity:0.85;">⟶</div>
+          <div class="crucible-result-preview" title="${match ? escapeHtml(match.desc) : '炼化产物预览'}" style="width:138px;height:126px;padding:4px;border:none;border-radius:0;box-shadow:none;background:radial-gradient(ellipse at 50% 60%, rgba(94,234,212,0.24), rgba(212,162,74,0.08) 46%, transparent 74%);">${previewHtml}</div>
+        </div>
+        ${recipeHintHtml}
+        <div style="display:flex;justify-content:center;gap:12px;margin-top:2px;">
+          <button class="btn btn-secondary btn-sm" id="btn-crucible-clear">清空阵眼</button>
+          <button class="btn btn-purple" id="btn-crucible-fuse" ${a && b ? '' : 'disabled'}>开炉炼化</button>
         </div>
       </div>
-      <div class="modal-item-title">可选素材（妖魂 / 物资 / 闲置装备）</div>
-      <div class="crucible-pool">${poolHtml}</div>
+      <div class="modal-item-title" style="font-family:var(--font-serif);letter-spacing:2px;">可选素材（妖魂 / 物资 / 闲置装备）</div>
+      <div class="crucible-pool" style="max-height:215px;gap:10px;justify-content:flex-start;">${poolHtml}</div>
     `;
   } else if (crucibleTab === 'guardians') {
     const cards = Object.values(GUARDIANS).map((g) => {
@@ -2374,7 +2793,7 @@ function openCrucible() {
       return `
         <div class="modal-list-item${active ? ' done' : ''}" style="${unlocked ? '' : 'opacity:0.5;'}">
           <div style="display:flex;align-items:center;gap:10px;">
-            <span class="item-seal-badge" style="border-color:${g.accent};color:${g.accent};">${escapeHtml(g.seal)}</span>
+            ${renderVisualThumb('guardian', g, 48)}
             <div>
               <div class="modal-item-title">${escapeHtml(g.name)} <small style="color:${QUALITY[g.quality]?.color}">[${QUALITY[g.quality]?.name}]</small></div>
               <div class="modal-item-desc">${escapeHtml(g.desc)}</div>
@@ -2396,9 +2815,12 @@ function openCrucible() {
       const ready = hasA && hasB;
       return `
         <div class="modal-list-item${ready ? ' done' : ''}">
-          <div>
-            <div class="modal-item-title" style="color:${QUALITY[r.quality]?.color}">${escapeHtml(r.name)}</div>
-            <div class="modal-item-desc">${escapeHtml(nameA)} + ${escapeHtml(nameB)} · ${escapeHtml(r.desc)}</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${renderVisualThumb(r.resultType, r.resultId, 42)}
+            <div>
+              <div class="modal-item-title" style="color:${QUALITY[r.quality]?.color}">${escapeHtml(r.name)}</div>
+              <div class="modal-item-desc">${escapeHtml(nameA)} + ${escapeHtml(nameB)} · ${escapeHtml(r.desc)}</div>
+            </div>
           </div>
           ${ready ? `<button class="btn btn-purple btn-sm" data-quick-rec="${r.id}">填入炼化</button>` : '<small class="modal-item-desc">缺素材</small>'}
         </div>
@@ -2482,11 +2904,16 @@ function renderEquipCard(eq, actionsHtml) {
 
   return `
     <div class="equip-card q-${q.key}">
-      <div class="equip-head">
-        <span class="equip-name" style="color:${q.color};">【${escapeHtml(eq.seal || '装')}】${escapeHtml(eq.name)}</span>
-        <span class="genre-tag ${g.cls}">${g.label}</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        ${renderVisualThumb('equip', eq, 44)}
+        <div style="flex:1;min-width:0;">
+          <div class="equip-head">
+            <span class="equip-name" style="color:${q.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(eq.name)}</span>
+            <span class="genre-tag ${g.cls}">${g.label}</span>
+          </div>
+          <div class="modal-item-desc">${escapeHtml(SLOT_NAMES[eq.slot] || eq.slot)} · ${statBits.join(' / ') || escapeHtml(eq.desc)}</div>
+        </div>
       </div>
-      <div class="modal-item-desc">${escapeHtml(SLOT_NAMES[eq.slot] || eq.slot)} · ${statBits.join(' / ') || escapeHtml(eq.desc)}</div>
       ${affixHtml ? `<div class="affix-list">${affixHtml}</div>` : ''}
       <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">${actionsHtml}</div>
     </div>
@@ -2532,13 +2959,19 @@ function openBagModal() {
     const slotsHtml = ['weapon', 'armor', 'mech', 'relic'].map((slot) => {
       const eq = state.equipped[slot];
       if (!eq) {
-        return `<div class="equip-slot-card"><div class="equip-slot-label">${SLOT_NAMES[slot]}</div><div class="modal-item-desc">空槽位</div></div>`;
+        return `
+          <div class="equip-slot-card" style="align-items:center;text-align:center;">
+            <div class="equip-slot-label">${SLOT_NAMES[slot]}</div>
+            ${renderVisualThumb('empty_slot', slot, 42)}
+            <div class="modal-item-desc">空槽位</div>
+          </div>`;
       }
       const q = QUALITY[eq.quality] || QUALITY.common;
       return `
-        <div class="equip-slot-card q-${q.key}">
+        <div class="equip-slot-card q-${q.key}" style="align-items:center;text-align:center;">
           <div class="equip-slot-label">${SLOT_NAMES[slot]} · 已装备</div>
-          <div class="equip-name" style="color:${q.color};">${escapeHtml(eq.name)}</div>
+          ${renderVisualThumb('equip', eq, 48)}
+          <div class="equip-name" style="color:${q.color};font-size:12px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(eq.name)}">${escapeHtml(eq.name)}</div>
           <button class="btn btn-secondary btn-sm" data-unequip="${slot}" style="margin-top:auto;">卸下</button>
         </div>
       `;
@@ -2549,7 +2982,7 @@ function openBagModal() {
           <button class="btn btn-amber btn-sm" data-equip-uid="${eq.uid}">装备</button>
           <button class="btn btn-secondary btn-sm" data-sell-eq="${eq.uid}">卖 ${getEquipSellPrice(eq)}币</button>
         `)).join('')
-      : '<div class="modal-item-desc">装备库暂无闲置神兵，探索废墟、拆解重炮或墨壶炼化即可获得暗黑词缀装备！</div>';
+      : '<div class="modal-item-desc">装备库暂无闲置神兵，探索废墟、拆解重炮或墨壶炼化即可获得灵韵异纹神兵！</div>';
 
     bodyHtml = `
       <div class="modal-item-desc">当前战力面板：攻击 <strong>${stats.atk}</strong> · 防御 <strong>${stats.def}</strong> · 暴击 <strong>${Math.round(stats.crit * 100)}%</strong> · 穿甲 <strong>${Math.round(stats.armorPen * 100)}%</strong> · 吸血 <strong>${Math.round(stats.lifesteal * 100)}%</strong></div>
@@ -2565,8 +2998,8 @@ function openBagModal() {
         const price = getSellPrice(b);
         return `
           <div class="modal-list-item">
-            <div style="display:flex;align-items:center;gap:9px;">
-              <span class="item-seal-badge" style="border-color:${q.color};color:${q.color};">${escapeHtml(it.seal)}</span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              ${renderVisualThumb('item', it, 44)}
               <div>
                 <div class="modal-item-title" style="color:${q.color};">[${q.name}] ${escapeHtml(it.name)}</div>
                 <div class="modal-item-desc">${escapeHtml(it.desc)}</div>
@@ -2589,9 +3022,12 @@ function openBagModal() {
         const e = ELIXIRS[eid];
         return `
           <div class="modal-list-item">
-            <div>
-              <div class="modal-item-title">【${e.seal}】${escapeHtml(e.name)} ×${cnt}</div>
-              <div class="modal-item-desc">${escapeHtml(e.desc)}</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              ${renderVisualThumb('elixir', e, 44)}
+              <div>
+                <div class="modal-item-title">${escapeHtml(e.name)} ×${cnt}</div>
+                <div class="modal-item-desc">${escapeHtml(e.desc)}</div>
+              </div>
             </div>
             <button class="btn btn-green btn-sm" data-use-elx="${eid}">服用</button>
           </div>
@@ -2600,7 +3036,7 @@ function openBagModal() {
     bodyHtml = elxRows || '<div class="modal-item-desc">暂无天工墨壶炼制的稀世丹药，可用金疮药散+荧光菇或饼干+纯净水炼制！</div>';
   }
 
-  openModal('行囊与暗黑词缀装备', tabsHtml + bodyHtml, footerHtml);
+  openModal('行囊与异纹神兵', tabsHtml + bodyHtml, footerHtml);
 
   $('modal-body').querySelectorAll('[data-btab]').forEach((btn) => {
     btn.addEventListener('click', () => { bagTab = btn.dataset.btab; openBagModal(); });
@@ -2729,6 +3165,7 @@ function openSkill() {
       <div class="modal-list-item${unlocked ? ' done' : ''}" style="${unlocked ? '' : 'opacity:0.55;'}">
         <div>
           <div class="modal-item-title">【${cs.seal}】${escapeHtml(cs.name)} <small>(${cs.mpCost}内息 · Lv.${cs.unlockLv})</small></div>
+          ${cs.flavor ? `<div class="modal-item-desc" style="color:#e5bb5c;font-family:var(--font-serif);font-style:italic;margin:2px 0;">${escapeHtml(cs.flavor)}</div>` : ''}
           <div class="modal-item-desc">${escapeHtml(cs.desc)}</div>
         </div>
       </div>
@@ -3024,8 +3461,8 @@ function openShop() {
     const it = ITEMS[s.itemId];
     return `
       <div class="modal-list-item">
-        <div style="display:flex;align-items:center;gap:9px;">
-          <span class="item-seal-badge">${escapeHtml(it.seal)}</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${renderVisualThumb('item', it, 44)}
           <div>
             <div class="modal-item-title">${escapeHtml(it.name)}</div>
             <div class="modal-item-desc">${escapeHtml(it.desc)}</div>
@@ -3129,9 +3566,12 @@ function openDisassemble() {
       const baseVal = getSellPrice(b);
       return `
         <div class="modal-list-item">
-          <div>
-            <div class="modal-item-title" style="color:${q.color};">[${q.name}] ${escapeHtml(it.name)}</div>
-            <div class="modal-item-desc">原价 ${baseVal} 币 · 拆解成功率 ${Math.round(baseRate * 100)}%（成功 1.8×~2.8× 暴击收益）</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${renderVisualThumb('item', it, 44)}
+            <div>
+              <div class="modal-item-title" style="color:${q.color};">[${q.name}] ${escapeHtml(it.name)}</div>
+              <div class="modal-item-desc">原价 ${baseVal} 币 · 拆解成功率 ${Math.round(baseRate * 100)}%（成功 1.8×~2.8× 暴击收益）</div>
+            </div>
           </div>
           <button class="btn btn-amber btn-sm" data-dis-uid="${b.uid}">拆解</button>
         </div>
@@ -3219,7 +3659,7 @@ function openSaveModal(atShrine = false) {
   const tabsHtml = `
     <div class="modal-tabs">
       <button class="modal-tab-btn${saveModalTab === 'slots' ? ' active' : ''}" data-stab="slots">多档位存/读档 (槽位 1~3 + 自动档)</button>
-      <button class="modal-tab-btn${saveModalTab === 'account' ? ' active' : ''}" data-stab="account">账号切换 &amp; JSON 备份</button>
+      <button class="modal-tab-btn${saveModalTab === 'account' ? ' active' : ''}" data-stab="account">行者名录 · 密卷拓印</button>
     </div>
   `;
 
@@ -3270,11 +3710,11 @@ function openSaveModal(atShrine = false) {
       </div>
       <div class="modal-item-title">已有存档账号</div>
       ${listHtml}
-      <div class="modal-item-title" style="margin-top:6px;">JSON 存档备份 / 导入</div>
-      <textarea id="json-backup-text" class="textarea-field" placeholder="点击「导出当前存档」生成 JSON，或粘贴存档 JSON 后点击「导入覆盖」"></textarea>
+      <div class="modal-item-title" style="margin-top:6px;">行迹密卷 · 镌刻与拓印</div>
+      <textarea id="json-backup-text" class="textarea-field" placeholder="点击「拓印当前行迹」生成密卷铭文，或粘贴密卷铭文后点击「还原行迹」"></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn btn-secondary btn-sm" id="btn-json-export">导出当前存档</button>
-        <button class="btn btn-purple btn-sm" id="btn-json-import">导入覆盖当前账号</button>
+        <button class="btn btn-secondary btn-sm" id="btn-json-export">拓印当前行迹</button>
+        <button class="btn btn-purple btn-sm" id="btn-json-import">还原覆盖当前行者</button>
       </div>
     `;
   }
@@ -3355,21 +3795,21 @@ function openSaveModal(atShrine = false) {
         box.value = JSON.stringify(state);
         box.select();
       }
-      showToast('已导出当前存档 JSON，可复制保存！', 'success');
+      showToast('已拓印当前行迹密卷，可复制留存！', 'success');
     });
 
     $('btn-json-import')?.addEventListener('click', () => {
       const raw = $('json-backup-text')?.value?.trim();
-      if (!raw) { showToast('请先粘贴存档 JSON！', 'warn'); return; }
+      if (!raw) { showToast('请先粘贴行迹密卷铭文！', 'warn'); return; }
       try {
         const parsed = JSON.parse(raw);
         state = migrateState(parsed);
         saveNow();
         closeModal();
         enterMap(state.mapId, state.heroX, state.heroY);
-        showToast('存档 JSON 导入成功！', 'success');
+        showToast('行迹密卷还原成功！', 'success');
       } catch {
-        showToast('JSON 格式有误，导入失败！', 'danger');
+        showToast('密卷铭文残缺有误，还原失败！', 'danger');
       }
     });
   }
@@ -3393,14 +3833,16 @@ function openHelpModal() {
     `
       <div class="modal-list-item"><div class="modal-item-desc"><strong>移动与交互</strong>：桌面使用 WASD/方向键或点击地面寻路，E/空格键交互；手机端使用左下角四向十字键与右下角主交互键。</div></div>
       <div class="modal-list-item"><div class="modal-item-desc"><strong>五域 21 图</strong>：点击「天下舆图」可纵览五大区域与全部 21 张无缝地图（城镇/室内/荒原/秘境洞窟）。</div></div>
-      <div class="modal-list-item"><div class="modal-item-desc"><strong>收妖与天工墨壶</strong>：战斗中将普通怪物血量压至 ≤40%，点击「收妖」收入墨壶；在「天工墨壶」中放入任意 2 件妖魂/物资即可跨界炼化护驾灵兽、稀世丹药与暗黑词缀神兵！</div></div>
+      <div class="modal-list-item"><div class="modal-item-desc"><strong>收妖与天工墨壶</strong>：战斗中将荒原妖邪血量压至 ≤40%，点击「收妖」收入墨壶；在「天工墨壶」中放入任意 2 件妖魂/物资，阴阳化生即可炼成护驾灵兽、稀世丹药与异纹神兵！</div></div>
       <div class="modal-list-item"><div class="modal-item-desc"><strong>四大流派</strong>：古武门派、现代军火、科幻墨甲、仙妖奇术 16 项主动技能随等级自动解锁。</div></div>
     `
   );
 }
 
 // ==================== 10. 开篇四幕水墨序章过场 ====================
-function renderPrologueSlide() {
+let prologueFadeTimer = null;
+
+function applyPrologueSlideContent() {
   const slide = PROLOGUE_SLIDES[prologueIndex] || PROLOGUE_SLIDES[0];
   const chEl = $('prologue-chapter');
   const titleEl = $('prologue-title');
@@ -3426,13 +3868,35 @@ function renderPrologueSlide() {
   }
 }
 
-function openOpeningPrologue() {
+function renderPrologueSlide(withFade = false) {
+  const card = document.querySelector('#opening-prologue .prologue-scroll-card');
+  if (!withFade || !card) {
+    applyPrologueSlideContent();
+    return;
+  }
+  if (prologueFadeTimer) clearTimeout(prologueFadeTimer);
+  card.style.transition = 'opacity 0.22s ease';
+  card.classList.remove('slide-fade-in');
+  card.classList.add('slide-fade-out');
+  card.style.opacity = '0';
+  prologueFadeTimer = setTimeout(() => {
+    applyPrologueSlideContent();
+    card.classList.remove('slide-fade-out');
+    card.classList.add('slide-fade-in');
+    card.style.opacity = '1';
+  }, 200);
+}
+
+function openOpeningPrologue(deferBgm = false) {
   const overlay = $('opening-prologue');
   if (!overlay) return;
   prologueIndex = 0;
   if (world) world.paused = true;
-  renderPrologueSlide();
+  renderPrologueSlide(false);
   overlay.classList.remove('hidden');
+  if (!deferBgm) {
+    sfx.playBgm?.('prologue');
+  }
 }
 
 function finishOpeningPrologue() {
@@ -3442,6 +3906,9 @@ function finishOpeningPrologue() {
   saveNow();
   if (world && !battle && !currentDialog && $('modal-backdrop')?.classList.contains('hidden')) {
     world.paused = false;
+  }
+  if (!battle) {
+    sfx.playBgm?.(getBgmTrackForMap(state.mapId));
   }
 }
 
@@ -3574,7 +4041,7 @@ function init() {
     sfx.pick('common');
     if (prologueIndex < PROLOGUE_SLIDES.length - 1) {
       prologueIndex += 1;
-      renderPrologueSlide();
+      renderPrologueSlide(true);
     } else {
       finishOpeningPrologue();
     }
@@ -3594,9 +4061,34 @@ function init() {
   startHazardLoop();
   updateHUD();
 
-  // 新手首次进入时在开屏动画之后呈现四幕水墨序章
+  // 开屏动画音效与 BGM 平滑衔接
+  const splashActive = isStudioSplashActive();
   if (!state.prologueSeen) {
-    openOpeningPrologue();
+    openOpeningPrologue(splashActive);
+  }
+  if (splashActive) {
+    sfx.playStudioJingle?.();
+    let handedOff = false;
+    const handoffPostSplashBgm = () => {
+      if (handedOff) return;
+      handedOff = true;
+      const prologueOpen = $('opening-prologue') && !$('opening-prologue').classList.contains('hidden');
+      sfx.playBgm?.(prologueOpen ? 'prologue' : getBgmTrackForMap(state.mapId));
+    };
+    $('btn-skip-splash')?.addEventListener('click', handoffPostSplashBgm, { once: true });
+    const splashEl = $('studio-splash');
+    if (splashEl) {
+      const obs = new MutationObserver(() => {
+        if (!isStudioSplashActive()) {
+          obs.disconnect();
+          handoffPostSplashBgm();
+        }
+      });
+      obs.observe(splashEl, { attributes: true, attributeFilter: ['class', 'style'] });
+    }
+    setTimeout(handoffPostSplashBgm, 5400);
+  } else if (state.prologueSeen) {
+    sfx.playBgm?.(getBgmTrackForMap(state.mapId));
   }
 }
 

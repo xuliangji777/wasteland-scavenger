@@ -592,9 +592,9 @@
         splash.classList.add('splash-fading');
         setTimeout(() => {
           splash.classList.add('splash-done');
-        }, 520);
+        }, 1050);
       };
-      const autoTimer = setTimeout(dismiss, 3200);
+      const autoTimer = setTimeout(dismiss, 5200);
       if (skipBtn) skipBtn.addEventListener('click', dismiss, { once: true });
       splash.addEventListener('click', dismiss, { once: true });
 

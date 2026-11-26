@@ -82,8 +82,13 @@ html, body {
   overflow: hidden;
   cursor: pointer;
   opacity: 1;
-  transition: opacity 0.5s ease, visibility 0.5s ease;
+  animation: splashOverlayIn 1.0s ease both;
+  transition: opacity 1.0s cubic-bezier(0.22, 0.72, 0.25, 1), visibility 1.0s ease;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+@keyframes splashOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .studio-splash.splash-fading {
   opacity: 0;
@@ -137,20 +142,20 @@ html, body {
   filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.78));
 }
 
-/* 水墨圆环毛笔挥毫描边动画 */
+/* 水墨圆环毛笔挥毫描边动画（5.2s 舒缓节奏） */
 .ink-brush-ring {
   stroke-dasharray: 640;
   stroke-dashoffset: 640;
-  animation: splashBrushDraw 1.25s cubic-bezier(0.22, 0.85, 0.32, 1) 0.1s forwards;
+  animation: splashBrushDraw 1.6s cubic-bezier(0.22, 0.85, 0.32, 1) 0.25s forwards;
 }
 .ink-brush-subring {
   opacity: 0;
-  animation: splashFadeIn 0.8s ease 0.55s forwards;
+  animation: splashFadeIn 1.0s ease 0.8s forwards;
 }
 .bing-motif {
   opacity: 0;
   transform-origin: 120px 116px;
-  animation: splashMotifReveal 0.85s cubic-bezier(0.2, 0.8, 0.25, 1) 0.45s forwards;
+  animation: splashMotifReveal 1.05s cubic-bezier(0.2, 0.8, 0.25, 1) 0.65s forwards;
 }
 
 /* 朱砂方印落款盖章动效 */
@@ -177,7 +182,7 @@ html, body {
   box-shadow: 0 6px 18px rgba(181, 58, 46, 0.52), inset 0 0 4px rgba(0, 0, 0, 0.35);
   opacity: 0;
   transform: scale(2.15) rotate(-16deg);
-  animation: splashSealStamp 0.42s cubic-bezier(0.18, 0.89, 0.32, 1.18) 1.05s forwards;
+  animation: splashSealStamp 0.48s cubic-bezier(0.18, 0.89, 0.32, 1.18) 1.5s forwards;
 }
 
 .splash-text-block {
@@ -197,7 +202,7 @@ html, body {
   text-shadow: 0 3px 16px rgba(0, 0, 0, 0.85), 0 0 24px rgba(200, 155, 60, 0.22);
   opacity: 0;
   transform: translateY(10px);
-  animation: splashTextRise 0.72s ease 0.85s forwards;
+  animation: splashTextRise 0.9s ease 1.25s forwards;
 }
 
 .splash-studio-sub {
@@ -208,7 +213,7 @@ html, body {
   padding-left: 0.28em;
   color: var(--bronze-gold);
   opacity: 0;
-  animation: splashFadeIn 0.65s ease 1.2s forwards;
+  animation: splashFadeIn 0.85s ease 1.75s forwards;
 }
 
 .splash-ink-divider {
@@ -218,7 +223,7 @@ html, body {
   background: linear-gradient(90deg, transparent, var(--bronze-bright) 50%, transparent);
   transform: scaleX(0);
   opacity: 0;
-  animation: splashDividerGrow 0.6s ease 1.45s forwards;
+  animation: splashDividerGrow 0.75s ease 2.1s forwards;
 }
 
 .splash-game-title {
@@ -231,7 +236,7 @@ html, body {
   text-shadow: 0 2px 14px rgba(200, 155, 60, 0.38);
   opacity: 0;
   transform: translateY(8px);
-  animation: splashTextRise 0.7s ease 1.65s forwards;
+  animation: splashTextRise 0.9s ease 2.4s forwards;
 }
 
 .btn-skip-splash {
@@ -356,26 +361,23 @@ html, body {
   position: relative;
   z-index: 2;
   width: 100%;
-  max-width: 660px;
+  max-width: 680px;
   background:
-    radial-gradient(circle at 50% 0%, rgba(232, 222, 200, 0.09), transparent 55%),
-    linear-gradient(180deg, rgba(31, 26, 21, 0.94) 0%, rgba(18, 15, 13, 0.97) 100%);
-  border: 1.5px solid var(--bronze-gold);
-  border-radius: 10px;
-  padding: 24px 28px;
-  box-shadow:
-    0 28px 80px rgba(0, 0, 0, 0.88),
-    inset 0 0 0 1px rgba(232, 222, 200, 0.10);
+    radial-gradient(ellipse at 50% 45%, rgba(22, 18, 15, 0.72) 0%, rgba(14, 12, 10, 0.36) 62%, transparent 100%);
+  border: none;
+  border-radius: 0;
+  padding: 26px 28px;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .prologue-card-ornament {
-  height: 2px;
+  height: 1.5px;
   width: 100%;
-  background: linear-gradient(90deg, transparent, rgba(200, 155, 60, 0.55) 25%, rgba(229, 187, 92, 0.85) 50%, rgba(200, 155, 60, 0.55) 75%, transparent);
-  opacity: 0.7;
+  background: linear-gradient(90deg, transparent 4%, rgba(200, 155, 60, 0.55) 28%, rgba(229, 187, 92, 0.85) 50%, rgba(94, 234, 212, 0.45) 72%, transparent 96%);
+  opacity: 0.75;
 }
 
 .prologue-head {
@@ -389,7 +391,7 @@ html, body {
   display: inline-flex;
   align-items: center;
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: 3px;
   background: linear-gradient(135deg, #c23d30, #8f231a);
   border: 1px solid rgba(255, 232, 198, 0.5);
   color: #fff3df;
@@ -402,21 +404,23 @@ html, body {
 
 .btn-prologue-skip {
   min-height: 44px;
-  padding: 0 14px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(232, 222, 200, 0.2);
-  color: var(--paper-muted);
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
+  padding: 0 12px;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  color: rgba(232, 222, 200, 0.68);
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px #000;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.16s, text-shadow 0.16s, transform 0.12s;
 }
 .btn-prologue-skip:hover {
-  color: var(--paper-light);
-  border-color: var(--bronze-gold);
-  background: rgba(200, 155, 60, 0.14);
+  color: var(--bronze-bright);
+  text-shadow: 0 2px 8px #000, 0 0 14px rgba(229, 187, 92, 0.55);
+  transform: translateY(-1px);
 }
 
 .prologue-body {
@@ -427,6 +431,31 @@ html, body {
   gap: 12px;
   min-height: 158px;
   justify-content: center;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.38s ease, transform 0.38s ease;
+}
+.prologue-body.is-fading,
+.prologue-body.fading,
+.prologue-body.slide-fading,
+.prologue-body.slide-fade-out,
+.prologue-scroll-card.is-fading .prologue-body,
+.prologue-scroll-card.slide-fade-out .prologue-body,
+.opening-prologue.slide-fading .prologue-body,
+.opening-prologue.slide-fade-out .prologue-body {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.prologue-body.slide-fade-in,
+.prologue-scroll-card.slide-fade-in .prologue-body,
+.opening-prologue.slide-fade-in .prologue-body {
+  opacity: 1;
+  transform: translateY(0);
+}
+.opening-prologue.prologue-fading {
+  opacity: 0;
+  transition: opacity 0.55s ease;
+  pointer-events: none;
 }
 
 .prologue-title {
@@ -543,24 +572,36 @@ html, body {
   pointer-events: none;
   max-width: min(92vw, 460px);
 }
+.toast,
 .toast-item {
-  background: linear-gradient(180deg, rgba(22, 19, 16, 0.90), rgba(13, 11, 10, 0.94));
+  background: linear-gradient(90deg, rgba(16, 14, 12, 0.88) 0%, rgba(24, 20, 17, 0.92) 50%, rgba(16, 14, 12, 0.88) 100%);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(212, 162, 74, 0.48);
+  border: none;
   border-left: 3px solid var(--bronze-bright);
+  border-bottom: 1px solid rgba(212, 162, 74, 0.34);
   color: var(--paper-text);
-  padding: 7px 16px;
-  border-radius: 3px;
-  font-size: 12.5px;
-  font-weight: 600;
-  font-family: var(--font-sans);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.72);
+  padding: 7px 18px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-serif);
+  letter-spacing: 0.6px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.78);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
   animation: toastIn 0.22s ease;
   text-align: center;
 }
-.toast-item.warn { border-color: var(--vermilion); border-left-color: var(--vermilion-bright); color: #f7bcb4; }
-.toast-item.good { border-color: var(--jade-ink); border-left-color: var(--jade-bright); color: #c7efd7; }
-.toast-item.legend { border-color: #eab308; border-left-color: #fde047; color: #fef08a; box-shadow: 0 0 22px rgba(234, 179, 8, 0.32); }
+.toast.info,
+.toast-item.info { border-left-color: var(--holo-cyan-bright); border-bottom-color: rgba(94, 234, 212, 0.36); color: #e2fcf8; }
+.toast.warn,
+.toast-item.warn { border-left-color: var(--bronze-bright); border-bottom-color: rgba(229, 187, 92, 0.42); color: #fde6b4; }
+.toast.danger,
+.toast-item.danger { border-left-color: var(--vermilion-bright); border-bottom-color: rgba(217, 76, 61, 0.48); color: #ffc8bf; }
+.toast.success,
+.toast.good,
+.toast-item.good { border-left-color: var(--jade-bright); border-bottom-color: rgba(116, 198, 152, 0.42); color: #c7efd7; }
+.toast.legend,
+.toast-item.legend { border-left-color: #fde047; border-bottom-color: rgba(234, 179, 8, 0.55); color: #fef08a; box-shadow: 0 0 22px rgba(234, 179, 8, 0.32); }
 
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(-8px) scale(0.97); }
@@ -1434,14 +1475,14 @@ html, body {
   to { opacity: 1; }
 }
 
-/* 战地水墨暗角与天地微暗渐变（保留石台中央清亮） */
+/* 战地水墨暗角与天地微暗渐变（保留石台中央清亮，底部柔和加深以衬托无框浮空指令） */
 .battle-vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 50% 54%, transparent 28%, rgba(8, 7, 6, 0.62) 100%),
-    linear-gradient(180deg, rgba(10, 9, 8, 0.66) 0%, transparent 24%, transparent 68%, rgba(10, 8, 7, 0.88) 100%);
+    radial-gradient(ellipse at 50% 50%, transparent 26%, rgba(8, 7, 6, 0.64) 100%),
+    linear-gradient(180deg, rgba(10, 9, 8, 0.66) 0%, transparent 24%, transparent 60%, rgba(9, 8, 7, 0.72) 82%, rgba(7, 6, 5, 0.94) 100%);
   z-index: 0;
 }
 
@@ -1904,60 +1945,72 @@ html, body {
   100% { transform: scaleX(-1) translateX(0); }
 }
 
-/* --- 战斗底部黑曜青铜斜刃指令条 --- */
+/* --- 战斗底部 100% 无框浮空书法战报与挥毫指令（零方框、零边框） --- */
 .battle-bottom-panel {
   width: 100%;
   max-width: 920px;
   margin: 0 auto;
-  padding: 10px 14px 6px;
-  background: linear-gradient(180deg, rgba(14, 12, 10, 0.52) 0%, rgba(10, 9, 8, 0.88) 100%);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(212, 162, 74, 0.42);
-  border-radius: 6px 6px 2px 2px;
-  box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.65);
+  padding: 4px 6px 4px;
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   flex-shrink: 0;
 }
 
 .battle-log {
-  font-size: 13px;
-  line-height: 1.48;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--paper-light);
-  margin-bottom: 9px;
+  margin-bottom: 10px;
   min-height: 20px;
-  padding: 0 4px 6px;
-  border-bottom: 1px solid rgba(212, 162, 74, 0.18);
+  padding: 0 6px;
+  background: transparent;
+  border: none;
   font-family: var(--font-serif);
-  letter-spacing: 0.4px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  letter-spacing: 0.8px;
+  text-align: center;
+  text-shadow:
+    0 2px 10px rgba(0, 0, 0, 1),
+    0 0 4px rgba(0, 0, 0, 0.96),
+    0 0 16px rgba(212, 162, 74, 0.25);
 }
 
-/* 可展开绝学/丹药子面板 */
+/* 可展开绝学/丹药子面板（零方框、纯水墨浮空书法） */
 .battle-subpanel {
-  margin-bottom: 9px;
-  padding: 8px 10px;
-  background: rgba(10, 9, 8, 0.84);
-  border: 1px solid rgba(212, 162, 74, 0.34);
-  border-radius: 4px;
+  margin-bottom: 10px;
+  padding: 4px 2px 2px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   max-height: 175px;
   overflow-y: auto;
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
 }
 
 .skill-branch-tabs {
   display: flex;
-  gap: 14px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid rgba(212, 162, 74, 0.18);
+  justify-content: center;
+  gap: 18px;
+  margin-bottom: 8px;
+  padding-bottom: 2px;
+  border-bottom: none;
+  background: linear-gradient(90deg, transparent 8%, rgba(212, 162, 74, 0.36) 35%, rgba(94, 234, 212, 0.24) 65%, transparent 92%) 0 100% / 100% 1px no-repeat;
   flex-wrap: wrap;
 }
 .skill-branch-tab {
-  padding: 5px 4px 7px;
+  padding: 4px 6px 6px;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--paper-muted);
-  font-size: 12px;
+  color: rgba(232, 222, 200, 0.72);
+  font-family: var(--font-serif);
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: 1.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.98);
   cursor: pointer;
   transition: color 0.16s, border-color 0.16s, text-shadow 0.16s;
 }
@@ -1968,54 +2021,104 @@ html, body {
   background: transparent;
   border-bottom-color: var(--bronze-bright);
   color: #fce2a6;
-  text-shadow: 0 0 10px rgba(212, 162, 74, 0.5);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.98), 0 0 14px rgba(212, 162, 74, 0.72);
 }
 
 .battle-subgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
-  gap: 6px;
+  gap: 8px 14px;
 }
 .bat-skill-btn,
 .bat-item-btn {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 7px 9px;
-  border-radius: 4px;
-  background: rgba(24, 21, 18, 0.88);
-  border: 1px solid rgba(212, 162, 74, 0.26);
+  padding: 6px 8px 8px;
+  border: none;
+  border-radius: 0;
+  clip-path: none;
+  background: transparent;
+  backdrop-filter: none;
   color: var(--paper-light);
+  font-family: var(--font-serif);
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s, border-color 0.14s;
+  box-shadow: none;
+  transition: transform 0.16s ease, background 0.18s ease, color 0.16s ease;
+}
+.bat-skill-btn::after,
+.bat-item-btn::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 12px;
+  bottom: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, rgba(212, 162, 74, 0.58) 0%, rgba(94, 234, 212, 0.25) 55%, transparent 100%);
+  opacity: 0.55;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.bat-item-btn::after {
+  background: linear-gradient(90deg, rgba(94, 234, 212, 0.62) 0%, rgba(116, 198, 152, 0.28) 55%, transparent 100%);
 }
 .bat-skill-btn:hover:not(:disabled),
 .bat-item-btn:hover:not(:disabled) {
-  background: rgba(44, 38, 31, 0.95);
-  border-color: var(--bronze-bright);
+  transform: translateY(-2px);
+  background: radial-gradient(ellipse at 35% 55%, rgba(212, 162, 74, 0.20) 0%, rgba(79, 209, 197, 0.08) 48%, transparent 78%);
+  color: #fff8e6;
+}
+.bat-item-btn:hover:not(:disabled) {
+  background: radial-gradient(ellipse at 35% 55%, rgba(94, 234, 212, 0.20) 0%, rgba(78, 140, 106, 0.08) 48%, transparent 78%);
+}
+.bat-skill-btn:hover:not(:disabled)::after,
+.bat-item-btn:hover:not(:disabled)::after {
+  opacity: 1;
+}
+.bat-skill-btn:active:not(:disabled),
+.bat-item-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
 }
 .bat-skill-btn:disabled,
-.bat-item-btn:disabled { opacity: 0.42; cursor: not-allowed; }
+.bat-item-btn:disabled { opacity: 0.36; cursor: not-allowed; }
 .bat-skill-head {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.bat-skill-cost { font-size: 10.5px; color: var(--holo-cyan-bright); }
-.bat-skill-desc { font-size: 10.5px; color: var(--paper-muted); line-height: 1.35; }
-
-/* 5 项暗墨青铜斜切刀刃指令 */
-.battle-commands {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
   font-family: var(--font-serif);
+  font-size: 14.5px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 1), 0 0 3px #000;
+}
+.bat-skill-cost {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--holo-cyan-bright);
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.98);
+}
+.bat-skill-desc {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  color: rgba(232, 222, 200, 0.78);
+  line-height: 1.35;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.98);
+}
+
+/* 5 项《轩辕剑三》式纯水墨浮空书法指令（零方框、零边框、零剪裁盒） */
+.battle-commands {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 3vw, 38px);
+  font-family: var(--font-serif);
+  padding: 2px 0;
 }
 .bat-cmd {
   position: relative;
@@ -2024,86 +2127,119 @@ html, body {
   justify-content: center;
   gap: 7px;
   min-height: 44px;
-  padding: 9px 10px;
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: 1px;
+  padding: 6px 12px 10px;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 3px;
   cursor: pointer;
   color: var(--paper-light);
-  background: linear-gradient(180deg, rgba(32, 27, 23, 0.92) 0%, rgba(16, 14, 12, 0.96) 100%);
-  border: 1px solid rgba(212, 162, 74, 0.42);
-  border-bottom: 2px solid rgba(212, 162, 74, 0.52);
-  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 240, 210, 0.12);
-  transition: transform 0.1s, background 0.16s, border-color 0.16s, color 0.16s;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  clip-path: none;
+  box-shadow: none;
+  text-shadow: 0 2px 10px #000, 0 0 4px #000;
+  transition: transform 0.14s ease, color 0.16s ease, text-shadow 0.18s ease, background 0.18s ease;
+}
+.bat-cmd::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: 2px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(212, 162, 74, 0.78) 50%, transparent 100%);
+  opacity: 0.38;
+  transform: scaleX(0.65);
+  transition: opacity 0.18s ease, transform 0.2s ease;
 }
 .bat-cmd .bat-ico {
-  width: 19px;
-  height: 19px;
+  width: 21px;
+  height: 21px;
   flex-shrink: 0;
   display: block;
-  transition: filter 0.16s ease, transform 0.16s ease;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.95));
+  transition: filter 0.18s ease, transform 0.18s ease;
 }
-.bat-cmd:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(52, 43, 34, 0.96) 0%, rgba(24, 20, 17, 0.98) 100%);
-  border-color: var(--bronze-bright);
-  color: #fff8e8;
+.bat-cmd:hover:not(:disabled),
+.bat-cmd:focus-visible:not(:disabled) {
+  transform: translateY(-2px);
+  background: radial-gradient(ellipse at 50% 58%, rgba(212, 162, 74, 0.22) 0%, transparent 72%);
+  color: #fff9ec;
+  text-shadow: 0 2px 10px #000, 0 0 18px rgba(229, 187, 92, 0.65);
+  outline: none;
+}
+.bat-cmd:hover:not(:disabled)::after,
+.bat-cmd:focus-visible:not(:disabled)::after {
+  opacity: 1;
+  transform: scaleX(1.08);
 }
 .bat-cmd:hover:not(:disabled) .bat-ico {
-  filter: drop-shadow(0 0 6px rgba(94, 234, 212, 0.65));
-  transform: scale(1.08);
+  filter: drop-shadow(0 0 8px rgba(94, 234, 212, 0.75)) drop-shadow(0 2px 6px #000);
+  transform: scale(1.1);
 }
-.bat-cmd:active:not(:disabled) { transform: scale(0.96); }
+.bat-cmd:active:not(:disabled) { transform: translateY(0) scale(0.95); }
 
-/* 统一暗曜黑底，仅以朱砂/青玉/紫墨微光刃口区分职能，绝不刺眼 */
+/* 以朱砂/青玉/紫墨/翠竹笔意与悬停气晕区分职能，零方框 */
 .bat-cmd.primary {
-  background: linear-gradient(180deg, rgba(66, 24, 20, 0.92) 0%, rgba(28, 12, 10, 0.96) 100%);
-  border-color: rgba(217, 76, 61, 0.72);
-  border-bottom-color: var(--vermilion-bright);
-  color: #ffe8e2;
+  color: #ffe8e0;
+  text-shadow: 0 2px 10px #000, 0 0 16px rgba(217, 76, 61, 0.48);
+}
+.bat-cmd.primary::after {
+  background: linear-gradient(90deg, transparent 0%, var(--vermilion-bright) 50%, transparent 100%);
+  opacity: 0.72;
 }
 .bat-cmd.primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(96, 30, 24, 0.96) 0%, rgba(42, 15, 12, 0.98) 100%);
-  border-color: var(--bronze-bright);
+  background: radial-gradient(ellipse at 50% 58%, rgba(217, 76, 61, 0.30) 0%, transparent 72%);
+  text-shadow: 0 2px 10px #000, 0 0 22px rgba(217, 76, 61, 0.85);
 }
-.bat-cmd.skill {
-  border-bottom-color: rgba(94, 234, 212, 0.72);
+.bat-cmd.skill::after {
+  background: linear-gradient(90deg, transparent 0%, var(--holo-cyan-bright) 50%, transparent 100%);
 }
 .bat-cmd.skill:hover:not(:disabled) {
-  border-color: var(--holo-cyan-bright);
+  background: radial-gradient(ellipse at 50% 58%, rgba(94, 234, 212, 0.24) 0%, transparent 72%);
+  text-shadow: 0 2px 10px #000, 0 0 20px rgba(94, 234, 212, 0.75);
 }
-.bat-cmd.capture {
-  border-bottom-color: rgba(157, 124, 216, 0.75);
+.bat-cmd.capture::after {
+  background: linear-gradient(90deg, transparent 0%, var(--mystic-purple) 50%, transparent 100%);
 }
-.bat-cmd.item {
-  border-bottom-color: rgba(116, 198, 152, 0.72);
+.bat-cmd.capture:hover:not(:disabled) {
+  background: radial-gradient(ellipse at 50% 58%, rgba(157, 124, 216, 0.26) 0%, transparent 72%);
+  text-shadow: 0 2px 10px #000, 0 0 20px rgba(157, 124, 216, 0.78);
+}
+.bat-cmd.item::after {
+  background: linear-gradient(90deg, transparent 0%, var(--jade-bright) 50%, transparent 100%);
+}
+.bat-cmd.item:hover:not(:disabled) {
+  background: radial-gradient(ellipse at 50% 58%, rgba(116, 198, 152, 0.24) 0%, transparent 72%);
+  text-shadow: 0 2px 10px #000, 0 0 18px rgba(116, 198, 152, 0.72);
 }
 .bat-cmd.escape {
-  border-color: rgba(232, 222, 200, 0.22);
-  border-bottom-color: rgba(166, 155, 137, 0.45);
-  color: var(--paper-muted);
+  color: rgba(232, 222, 200, 0.72);
 }
-.bat-cmd:disabled { opacity: 0.38; cursor: not-allowed; }
+.bat-cmd.escape::after {
+  background: linear-gradient(90deg, transparent 0%, rgba(232, 222, 200, 0.5) 50%, transparent 100%);
+}
+.bat-cmd:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* ==================== 4. 底部居中浮空水墨徽章功能坞 (.ink-dock) ==================== */
+/* ==================== 4. 底部居中无框水墨浮空功能坞 (.ink-dock) ==================== */
 .ink-dock {
   position: absolute;
   left: 50%;
-  bottom: calc(14px + env(safe-area-inset-bottom));
+  bottom: calc(12px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 22;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, transparent 5%, rgba(94, 234, 212, 0.28) 32%, rgba(212, 162, 74, 0.42) 50%, rgba(94, 234, 212, 0.28) 68%, transparent 95%) 0 0 / 100% 1px no-repeat,
-    linear-gradient(180deg, rgba(24, 20, 17, 0.78) 0%, rgba(12, 10, 9, 0.88) 100%);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(212, 162, 74, 0.38);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 242, 216, 0.08);
-  font-family: var(--font-sans);
+  gap: 10px;
+  padding: 2px 6px;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  font-family: var(--font-serif);
   max-width: calc(100vw - 24px);
 }
 
@@ -2112,180 +2248,226 @@ html, body {
   min-width: 56px;
   min-height: 44px;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 4px 10px;
+  border: none;
+  border-radius: 0;
+  padding: 4px 8px;
   color: var(--paper-light);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
+  box-shadow: none;
+  transition: transform 0.14s ease, background 0.18s ease, color 0.16s ease;
 }
 .dock-tab:hover,
 .dock-tab:focus-visible {
-  background: rgba(212, 162, 74, 0.16);
-  border-color: rgba(212, 162, 74, 0.48);
-  box-shadow: 0 0 14px rgba(94, 234, 212, 0.2);
+  background: radial-gradient(circle at 50% 45%, rgba(212, 162, 74, 0.24) 0%, rgba(94, 234, 212, 0.08) 48%, transparent 74%);
+  border: none;
+  box-shadow: none;
+  transform: translateY(-2px);
   outline: none;
 }
 .dock-tab:active {
-  transform: scale(0.95);
+  transform: scale(0.94);
 }
 
 .dock-ico {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   line-height: 1;
 }
 .dock-ico .cyber-ink-ico {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.95));
   transition: filter 0.18s ease, transform 0.18s ease;
 }
 .dock-tab:hover .dock-ico .cyber-ink-ico,
 .dock-tab:active .dock-ico .cyber-ink-ico,
 .dock-tab:focus-visible .dock-ico .cyber-ink-ico {
-  filter: drop-shadow(0 0 6px rgba(94, 234, 212, 0.72)) drop-shadow(0 0 2px rgba(212, 162, 74, 0.55));
-  transform: translateY(-1px) scale(1.08);
+  filter: drop-shadow(0 0 8px rgba(94, 234, 212, 0.8)) drop-shadow(0 0 3px rgba(212, 162, 74, 0.65)) drop-shadow(0 2px 6px #000);
+  transform: translateY(-1px) scale(1.1);
 }
 .dock-tab small {
-  font-size: 10px;
-  font-weight: 600;
-  color: rgba(232, 222, 200, 0.76);
+  font-family: var(--font-serif);
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(242, 234, 216, 0.90);
   white-space: nowrap;
-  letter-spacing: 0.3px;
-  transition: color 0.16s ease;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 8px #000, 0 0 3px #000;
+  transition: color 0.16s ease, text-shadow 0.16s ease;
 }
 .dock-tab:hover small,
 .dock-tab:active small {
-  color: var(--paper-light);
+  color: #fff9ea;
+  text-shadow: 0 2px 8px #000, 0 0 12px rgba(229, 187, 92, 0.65);
 }
 
 .dock-tab.accent {
-  background: rgba(181, 58, 46, 0.22);
-  border-color: rgba(217, 76, 61, 0.48);
+  background: radial-gradient(circle at 50% 45%, rgba(196, 67, 50, 0.22) 0%, transparent 72%);
+  border: none;
 }
 .dock-tab.accent:hover {
-  background: rgba(196, 67, 50, 0.34);
-  border-color: var(--bronze-bright);
+  background: radial-gradient(circle at 50% 45%, rgba(217, 76, 61, 0.34) 0%, transparent 74%);
 }
-.dock-tab.accent small { color: #fde4dc; font-weight: 700; }
+.dock-tab.accent small { color: #ffe4dc; font-weight: 900; }
 
 .dock-tab.crucible-tab {
-  background: rgba(114, 72, 178, 0.20);
-  border-color: rgba(157, 124, 216, 0.46);
+  background: radial-gradient(circle at 50% 45%, rgba(157, 124, 216, 0.22) 0%, transparent 72%);
+  border: none;
 }
 .dock-tab.crucible-tab:hover {
-  background: rgba(126, 82, 189, 0.32);
-  border-color: var(--holo-cyan-bright);
+  background: radial-gradient(circle at 50% 45%, rgba(94, 234, 212, 0.26) 0%, rgba(157, 124, 216, 0.18) 46%, transparent 74%);
 }
-.dock-tab.crucible-tab small { color: #eadbff; font-weight: 700; }
+.dock-tab.crucible-tab small { color: #efe4ff; font-weight: 900; }
 
-/* ==================== 5. 通用古卷弹窗系统（轻薄通透古风） ==================== */
+/* ==================== 5. 通用沉浸式水墨幻境全屏界面（零网页弹窗框感） ==================== */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(6, 5, 4, 0.74);
-  backdrop-filter: blur(6px);
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(28, 24, 20, 0.88) 0%, rgba(12, 11, 10, 0.96) 64%, rgba(5, 5, 5, 0.99) 100%);
+  backdrop-filter: blur(12px);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 14px;
+  padding: 18px 24px;
   font-family: var(--font-sans);
 }
 
+#modal-box,
 .modal-box {
   position: relative;
   width: 100%;
-  max-width: 740px;
-  max-height: 86vh;
+  max-width: 860px;
+  max-height: 90vh;
   background:
-    linear-gradient(to right, rgba(94, 234, 212, 0.32) 14px, transparent 14px) 0 0 / 16px 1.5px no-repeat,
-    linear-gradient(to bottom, rgba(94, 234, 212, 0.32) 14px, transparent 14px) 0 0 / 1.5px 16px no-repeat,
-    linear-gradient(to left, rgba(94, 234, 212, 0.32) 14px, transparent 14px) 100% 0 / 16px 1.5px no-repeat,
-    linear-gradient(to bottom, rgba(94, 234, 212, 0.32) 14px, transparent 14px) 100% 0 / 1.5px 16px no-repeat,
-    linear-gradient(to right, rgba(94, 234, 212, 0.26) 14px, transparent 14px) 0 100% / 16px 1.5px no-repeat,
-    linear-gradient(to top, rgba(94, 234, 212, 0.26) 14px, transparent 14px) 0 100% / 1.5px 16px no-repeat,
-    linear-gradient(to left, rgba(94, 234, 212, 0.26) 14px, transparent 14px) 100% 100% / 16px 1.5px no-repeat,
-    linear-gradient(to top, rgba(94, 234, 212, 0.26) 14px, transparent 14px) 100% 100% / 1.5px 16px no-repeat,
-    linear-gradient(180deg, rgba(28, 24, 20, 0.94) 0%, rgba(17, 14, 12, 0.97) 100%);
-  border: 1px solid rgba(212, 162, 74, 0.52);
-  border-radius: 6px;
-  box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.88),
-    0 0 24px rgba(79, 209, 197, 0.08);
+    radial-gradient(ellipse at 50% 24%, rgba(212, 162, 74, 0.12) 0%, transparent 56%),
+    radial-gradient(ellipse at 50% 82%, rgba(79, 209, 197, 0.10) 0%, transparent 54%),
+    radial-gradient(circle at 50% 50%, rgba(20, 17, 15, 0.62) 0%, rgba(12, 11, 10, 0.22) 72%, transparent 100%);
+  border: none;
+  border-radius: 0;
+  clip-path: none;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: modalPop 0.18s ease;
+  animation: modalPop 0.2s ease;
 }
+
+/* 顶底两道渐隐水墨流光丝线，取代生硬矩形框边 */
+#modal-box::before,
+.modal-box::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1.5px;
+  pointer-events: none;
+  z-index: 6;
+  background: linear-gradient(90deg, transparent 4%, rgba(212, 162, 74, 0.52) 32%, rgba(94, 234, 212, 0.48) 68%, transparent 96%);
+}
+
+#modal-box::after,
+.modal-box::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  pointer-events: none;
+  z-index: 6;
+  background: linear-gradient(90deg, transparent 6%, rgba(94, 234, 212, 0.42) 36%, rgba(212, 162, 74, 0.48) 64%, transparent 94%);
+}
+
 @keyframes modalPop {
-  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .modal-header {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(212, 162, 74, 0.28);
-  background: linear-gradient(90deg, rgba(200, 155, 60, 0.09), transparent 65%);
+  padding: 14px 20px 12px;
+  border-bottom: none;
+  background:
+    linear-gradient(90deg, transparent 2%, rgba(212, 162, 74, 0.36) 28%, rgba(94, 234, 212, 0.22) 64%, transparent 96%) 0 100% / 100% 1px no-repeat;
 }
 .modal-title-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .modal-seal-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 2px;
   transform: rotate(45deg);
-  background: var(--vermilion-bright);
+  background: linear-gradient(135deg, var(--vermilion-bright), #8f231a);
   border: 1px solid var(--bronze-bright);
+  box-shadow: 0 0 10px rgba(217, 76, 61, 0.55);
 }
 .modal-header h3 {
-  font-size: 15.5px;
+  font-size: 19px;
   font-weight: 900;
   color: var(--bronze-bright);
   font-family: var(--font-serif);
-  letter-spacing: 1px;
+  letter-spacing: 3px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.96), 0 0 18px rgba(212, 162, 74, 0.30);
 }
 .modal-close-x {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(232, 222, 200, 0.14);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
   color: var(--paper-muted);
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 2px 6px #000;
+  transition: color 0.16s, background 0.16s, transform 0.14s;
 }
-.modal-close-x:hover { color: var(--paper-light); border-color: var(--bronze-gold); }
+.modal-close-x:hover {
+  color: #fff8e6;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.22) 0%, transparent 72%);
+  transform: scale(1.1);
+}
 
 .modal-body {
-  padding: 12px 14px;
+  position: relative;
+  z-index: 2;
+  padding: 14px 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 12px;
 }
 .modal-footer {
-  padding: 9px 14px;
-  border-top: 1px solid rgba(212, 162, 74, 0.25);
+  position: relative;
+  z-index: 2;
+  padding: 10px 20px 14px;
+  border-top: none;
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  background: rgba(12, 10, 9, 0.5);
+  gap: 10px;
+  background:
+    linear-gradient(90deg, transparent 8%, rgba(212, 162, 74, 0.28) 50%, transparent 92%) 0 0 / 100% 1px no-repeat;
 }
 
 /* 弹窗内标签切换：无框下划流光游戏页签 */
@@ -2512,115 +2694,146 @@ html, body {
   color: #bbf7d0;
 }
 
-/* ==================== 「天工墨壶」圆形丹炉阵眼炼化台 (.crucible-slots) ==================== */
+/* ==================== 「天工墨壶」无框墨雾仙阵炼化台 (.crucible-slots) ==================== */
 .crucible-workbench {
+  position: relative;
+  overflow: hidden;
   background:
-    radial-gradient(circle at 50% 35%, rgba(157, 124, 216, 0.16), rgba(94, 234, 212, 0.04) 45%, transparent 72%);
+    radial-gradient(ellipse at 50% 45%, rgba(212, 162, 74, 0.16) 0%, rgba(79, 209, 197, 0.11) 38%, rgba(157, 124, 216, 0.06) 58%, transparent 78%);
   border: none;
-  border-top: 1px solid rgba(212, 162, 74, 0.22);
-  border-bottom: 1px solid rgba(212, 162, 74, 0.22);
-  padding: 16px 8px;
+  padding: 20px 10px 18px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+}
+.crucible-workbench > * {
+  position: relative;
+  z-index: 1;
 }
 .crucible-slots {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 18px;
   flex-wrap: wrap;
 }
 .crucible-slot {
-  width: 112px;
-  height: 112px;
-  border-radius: 50%;
-  border: 2px solid rgba(212, 162, 74, 0.45);
-  background:
-    radial-gradient(circle at 50% 45%, rgba(212, 162, 74, 0.14), rgba(16, 14, 12, 0.88) 70%);
-  box-shadow:
-    0 0 24px rgba(212, 162, 74, 0.14),
-    inset 0 0 18px rgba(0, 0, 0, 0.82),
-    inset 0 0 0 4px rgba(212, 162, 74, 0.08);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 3px;
-  cursor: pointer;
-  transition: border-color 0.18s, box-shadow 0.18s, transform 0.14s;
-}
-.crucible-slot:hover {
-  border-color: var(--bronze-bright);
-  box-shadow: 0 0 28px rgba(229, 187, 92, 0.3), inset 0 0 18px rgba(212, 162, 74, 0.18);
-  transform: scale(1.03);
-}
-.crucible-slot.filled {
-  border-color: #c4a6f5;
-  background: radial-gradient(circle at 50% 45%, rgba(157, 124, 216, 0.28), rgba(18, 13, 28, 0.92) 72%);
-  box-shadow: 0 0 28px rgba(157, 124, 216, 0.36), inset 0 0 16px rgba(94, 234, 212, 0.18);
-}
-.crucible-plus,
-.crucible-arrow {
-  font-size: 18px;
-  font-weight: 900;
-  color: var(--bronze-bright);
-  text-shadow: 0 0 12px rgba(212, 162, 74, 0.5);
-  text-align: center;
-}
-.crucible-result-preview {
+  position: relative;
   width: 126px;
-  height: 126px;
+  min-height: 126px;
   border-radius: 50%;
-  border: 2px solid rgba(94, 234, 212, 0.52);
-  background: radial-gradient(circle at 50% 45%, rgba(94, 234, 212, 0.16), rgba(22, 18, 28, 0.92) 72%);
-  box-shadow: 0 0 32px rgba(79, 209, 197, 0.22), inset 0 0 18px rgba(0, 0, 0, 0.78);
-  padding: 12px;
+  border: none;
+  background:
+    radial-gradient(circle at 50% 54%, rgba(94, 234, 212, 0.16) 0%, rgba(212, 162, 74, 0.14) 36%, rgba(157, 124, 216, 0.06) 58%, transparent 76%);
+  box-shadow: none;
+  padding: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: 4px;
+  cursor: pointer;
+  font-family: var(--font-serif);
+  text-shadow: 0 2px 8px #000, 0 0 3px #000;
+  transition: transform 0.18s ease, background 0.2s ease, filter 0.18s ease;
+}
+.crucible-slot:hover {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(229, 187, 92, 0.28) 0%, rgba(94, 234, 212, 0.16) 42%, transparent 76%);
+  transform: translateY(-3px) scale(1.04);
+}
+.crucible-slot.filled {
+  border: none;
+  background:
+    radial-gradient(circle at 50% 56%, rgba(94, 234, 212, 0.26) 0%, rgba(157, 124, 216, 0.18) 42%, transparent 76%);
+  box-shadow: none;
+}
+.crucible-slot img,
+.crucible-slot svg,
+.crucible-result-preview img,
+.crucible-result-preview svg {
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 12px rgba(94, 234, 212, 0.32));
+}
+.crucible-plus,
+.crucible-arrow {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--bronze-bright);
+  text-shadow: 0 2px 10px #000, 0 0 16px rgba(229, 187, 92, 0.75);
+  text-align: center;
+}
+.crucible-result-preview {
+  position: relative;
+  width: 138px;
+  min-height: 138px;
+  border-radius: 50%;
+  border: none;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(94, 234, 212, 0.26) 0%, rgba(229, 187, 92, 0.18) 40%, rgba(157, 124, 216, 0.08) 60%, transparent 78%);
+  box-shadow: none;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+  font-family: var(--font-serif);
+  text-shadow: 0 2px 8px #000, 0 0 3px #000;
 }
 .crucible-pool {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  max-height: 160px;
+  gap: 10px;
+  max-height: 175px;
   overflow-y: auto;
+  justify-content: center;
 }
 .crucible-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(212, 162, 74, 0.3);
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 0;
+  clip-path: none;
+  background: transparent;
   color: var(--paper-light);
-  font-size: 11.5px;
+  font-family: var(--font-serif);
+  font-size: 12px;
+  text-shadow: 0 2px 8px #000;
   cursor: pointer;
+  transition: transform 0.14s ease, background 0.18s ease, color 0.16s ease;
 }
-.crucible-chip:hover { border-color: var(--bronze-bright); background: rgba(212, 162, 74, 0.14); }
-.crucible-chip.selected { border-color: #c4a6f5; background: rgba(126, 82, 189, 0.32); }
+.crucible-chip:hover {
+  transform: translateY(-2px);
+  background: radial-gradient(ellipse at 50% 55%, rgba(212, 162, 74, 0.22) 0%, rgba(94, 234, 212, 0.10) 48%, transparent 78%);
+  color: #fff8e6;
+}
+.crucible-chip.selected {
+  background: radial-gradient(ellipse at 50% 55%, rgba(94, 234, 212, 0.28) 0%, rgba(157, 124, 216, 0.20) 48%, transparent 78%);
+  color: #e6fffb;
+  text-shadow: 0 2px 8px #000, 0 0 12px rgba(94, 234, 212, 0.65);
+}
 
-/* ==================== 五域天下舆图 (.world-map-board) ==================== */
+/* ==================== 五域天下舆图 (.world-map-board，无框水墨暗角古卷) ==================== */
 .world-map-board {
   position: relative;
   width: 100%;
   height: 350px;
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at 20% 55%, rgba(200, 155, 60, 0.14), transparent 40%),
-    radial-gradient(circle at 75% 40%, rgba(78, 140, 106, 0.14), transparent 42%),
-    radial-gradient(circle at 88% 70%, rgba(157, 124, 216, 0.16), transparent 40%),
-    linear-gradient(180deg, #252019 0%, #14110e 100%);
-  border: 1.5px solid var(--border-gold);
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.65);
+    radial-gradient(circle at 20% 55%, rgba(200, 155, 60, 0.16), transparent 44%),
+    radial-gradient(circle at 75% 40%, rgba(78, 140, 106, 0.16), transparent 46%),
+    radial-gradient(circle at 88% 70%, rgba(157, 124, 216, 0.16), transparent 44%),
+    radial-gradient(ellipse at 50% 50%, rgba(36, 30, 24, 0.62) 0%, rgba(14, 12, 10, 0.24) 72%, transparent 100%);
+  border: none;
+  box-shadow: none;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 66%, transparent 100%);
+  mask-image: radial-gradient(ellipse at 50% 50%, #000 66%, transparent 100%);
 }
 .world-map-svg {
   position: absolute;
@@ -2699,24 +2912,37 @@ html, body {
 .region-submaps-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 10px;
-  background: rgba(14, 12, 10, 0.75);
-  border: 1px solid rgba(200, 155, 60, 0.24);
-  border-radius: 6px;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 4px;
+  background: linear-gradient(90deg, transparent 6%, rgba(212, 162, 74, 0.22) 50%, transparent 94%) 0 0 / 100% 1px no-repeat;
+  border: none;
+  border-radius: 0;
 }
 .submap-pill {
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: rgba(200, 155, 60, 0.12);
-  border: 1px solid rgba(200, 155, 60, 0.35);
+  padding: 5px 12px;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid rgba(200, 155, 60, 0.32);
   color: var(--paper-light);
-  font-size: 11.5px;
-  font-weight: 600;
+  font-family: var(--font-serif);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-shadow: 0 2px 6px #000;
   cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.submap-pill:hover { background: rgba(200, 155, 60, 0.28); }
-.submap-pill.current { background: rgba(181, 58, 46, 0.3); border-color: var(--vermilion-bright); }
+.submap-pill:hover {
+  background: radial-gradient(ellipse at 50% 60%, rgba(200, 155, 60, 0.22) 0%, transparent 74%);
+  border-bottom-color: var(--bronze-bright);
+}
+.submap-pill.current {
+  background: radial-gradient(ellipse at 50% 60%, rgba(181, 58, 46, 0.26) 0%, transparent 74%);
+  border-bottom-color: var(--vermilion-bright);
+  color: #ffe8e0;
+}
 
 /* 古董与志怪图鉴网格（去框化细底线） */
 .col-grid {
@@ -2823,6 +3049,7 @@ html, body {
     padding: 0;
     background: rgba(6, 5, 4, 0.88);
   }
+  #modal-box,
   .modal-box {
     width: 100%;
     max-width: 100vw;
@@ -2831,8 +3058,10 @@ html, body {
     max-height: 100dvh;
     border-radius: 0;
     border: none;
+    clip-path: none;
     background:
-      radial-gradient(ellipse at 50% 0%, rgba(212, 162, 74, 0.10), transparent 46%),
+      radial-gradient(ellipse at 18% 0%, rgba(212, 162, 74, 0.14), transparent 48%),
+      radial-gradient(ellipse at 86% 96%, rgba(79, 209, 197, 0.12), transparent 46%),
       linear-gradient(180deg, rgba(22, 18, 15, 0.97) 0%, rgba(12, 10, 9, 0.99) 100%);
   }
   .modal-header {
@@ -2863,10 +3092,15 @@ html, body {
   .hero-portrait-battle,
   .battle-hero-fighter { width: 145px; height: 165px; }
   .fighter-shadow { width: 115px; height: 18px; }
-  .battle-commands { grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .bat-cmd { min-height: 44px; padding: 8px 6px; font-size: 12px; }
+  .battle-commands {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 16px;
+  }
+  .bat-cmd { min-height: 44px; padding: 6px 8px 8px; font-size: 15px; letter-spacing: 2px; }
 
-  /* 底部居中浮空功能坞（可横向轻滑，按钮 >= 44px） */
+  /* 底部居中无框浮空功能坞（可横向轻滑，按钮 >= 44px） */
   .ink-dock {
     bottom: calc(8px + env(safe-area-inset-bottom));
     width: calc(100vw - 16px);
@@ -2875,13 +3109,16 @@ html, body {
     overscroll-behavior-x: contain;
     justify-content: flex-start;
     gap: 4px;
-    padding: 4px 6px;
-    border-radius: 16px;
+    padding: 2px 4px;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
   }
-  .dock-tab { flex: 1 0 58px; min-width: 58px; min-height: 44px; padding: 4px 4px; border-radius: 12px; }
+  .dock-tab { flex: 1 0 54px; min-width: 54px; min-height: 44px; padding: 4px 2px; border-radius: 0; border: none; }
   .dock-ico { width: 20px; height: 20px; }
   .dock-ico .cyber-ink-ico { width: 19px; height: 19px; }
-  .dock-tab small { font-size: 9.5px; }
+  .dock-tab small { font-size: 10px; }
 
   /* 弹窗内网格收拢 */
   .equip-slot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2915,43 +3152,125 @@ html, body {
   }
   .dpad-cross { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); opacity: 0.85; }
   .dpad-btn { width: 44px; height: 44px; font-size: 14px; }
-  .interact-btn { min-height: 44px; height: 44px; }
-  .ink-action-btn { min-height: 44px; height: 44px; }
+  .interact-btn,
+  #btn-interact {
+    min-height: 44px;
+    height: 44px;
+    max-width: 145px;
+    padding: 0 10px;
+    font-size: 11px;
+    gap: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ink-action-btn { min-height: 44px; height: 44px; padding: 0 8px; font-size: 11px; }
   .dialog-opt-btn { min-height: 44px; }
-  .bat-cmd { min-height: 44px; }
 
+  /* 底部功能坞化作无框浮空纯图标列，略微偏左避开右侧交互键与左侧十字键 */
   .ink-dock {
-    bottom: calc(6px + env(safe-area-inset-bottom));
-    padding: 3px 8px;
+    left: 44%;
+    transform: translateX(-50%);
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    max-width: 290px;
+    padding: 2px 4px;
+    gap: 2px;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    justify-content: center;
+    overflow: visible;
   }
-  .dock-tab { flex-direction: row; gap: 5px; min-height: 44px; padding: 4px 8px; }
-  .dock-ico { width: 18px; height: 18px; }
-  .dock-ico .cyber-ink-ico { width: 17px; height: 17px; }
+  .ink-dock .dock-tab {
+    flex: 0 0 auto;
+    min-width: 36px;
+    width: 36px;
+    min-height: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 0;
+    border: none;
+    gap: 0;
+  }
+  .ink-dock .dock-tab small {
+    display: none;
+  }
+  .dock-ico { width: 22px; height: 22px; }
+  .dock-ico .cyber-ink-ico { width: 20px; height: 20px; }
 
-  .battle-enemy-visual { width: 130px; height: 135px; }
+  /* 横屏战斗紧凑布局：绝不让参战立绘与顶部血槽重叠 */
+  .rpg-battle-overlay {
+    padding:
+      calc(6px + env(safe-area-inset-top))
+      calc(14px + env(safe-area-inset-right))
+      calc(6px + env(safe-area-inset-bottom))
+      calc(14px + env(safe-area-inset-left));
+  }
+  .battle-arena { padding: 0 10vw 8px; }
+  .battle-enemy-visual { width: 126px; height: 130px; }
   .hero-portrait-battle,
-  .battle-hero-fighter { width: 120px; height: 130px; }
-}
+  .battle-hero-fighter { width: 118px; height: 126px; }
+  .battle-log { font-size: 12.5px; margin-bottom: 4px; min-height: 16px; }
+  .battle-commands { gap: 16px; }
+  .bat-cmd { min-height: 36px; padding: 4px 8px 6px; font-size: 14.5px; letter-spacing: 2px; }
 
-/* ==================== 安卓横屏极窄视口精调 (<=460px height) ==================== */
-@media (max-height: 460px) and (orientation: landscape) {
-  .ink-dock {
-    padding: 3px 6px !important;
-    gap: 2px !important;
-    max-width: 440px !important;
+  /* 横屏绝学/丹药子面板：单行横向滑动紧凑刀刃条 */
+  #bat-subpanel,
+  .battle-subpanel {
+    max-height: 82px;
+    margin-bottom: 5px;
+    padding: 2px 0;
+    overflow-y: hidden;
   }
-  .dock-tab {
-    min-width: 52px !important;
-    padding: 3px 4px !important;
+  .skill-branch-tabs {
+    gap: 10px;
+    margin-bottom: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
   }
-  .dock-tab small {
-    font-size: 9.5px !important;
+  .skill-branch-tab {
+    padding: 2px 4px 4px;
+    font-size: 11px;
+    white-space: nowrap;
   }
-  .rpg-battle-overlay:has(#bat-subpanel:not(.hidden)) .battle-sprite-hero,
-  .rpg-battle-overlay:has(#bat-subpanel:not(.hidden)) .battle-enemy-img {
-    max-height: 112px !important;
+  .battle-subgrid {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    gap: 6px;
+    padding-bottom: 2px;
   }
+  .bat-skill-btn,
+  .bat-item-btn {
+    flex: 0 0 156px;
+    padding: 4px 10px 4px 8px;
+  }
+  .bat-skill-head { font-size: 11.5px; }
+  .bat-skill-desc {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
   .rpg-battle-overlay:has(#bat-subpanel:not(.hidden)) .battle-arena {
-    padding-bottom: 4px !important;
+    padding-bottom: 2px;
+  }
+  .rpg-battle-overlay:has(#bat-subpanel:not(.hidden)) .battle-enemy-visual {
+    width: 98px;
+    height: 94px;
+  }
+  .rpg-battle-overlay:has(#bat-subpanel:not(.hidden)) .hero-portrait-battle,
+  .rpg-battle-overlay:has(#bat-subpanel:not(.hidden)) .battle-hero-fighter {
+    width: 92px;
+    height: 90px;
+  }
+  .rpg-battle-overlay:has(#bat-subpanel:not(.hidden)) .fighter-shadow {
+    height: 12px;
+    margin-top: -8px;
   }
 }
