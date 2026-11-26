@@ -9,10 +9,15 @@ const NOTE = {
   C6: 1046.50, D6: 1174.66, E6: 1318.51
 };
 
+const AUDIO_SETTINGS_KEY = 'motu_audio_settings_v1';
+
 class SoundEngine {
   constructor() {
     this.ctx = null;
     this.muted = false;
+
+    // 独立音频设置（持久化至 localStorage）
+    this.settings = this._loadSettings();
 
     // 总线节点
     this.masterGain = null;
@@ -31,6 +36,94 @@ class SoundEngine {
     this._unlockBound = false;
     this._onUserGesture = this._handleUserGesture.bind(this);
     this._bindUnlockListeners();
+  }
+
+  _loadSettings() {
+    const defaults = {
+      bgmMuted: false,
+      sfxMuted: false,
+      footstepsEnabled: true,
+      bgmVolume: 0.75,
+      sfxVolume: 0.85
+    };
+    if (typeof window === 'undefined' || !window.localStorage) return defaults;
+    try {
+      const raw = window.localStorage.getItem(AUDIO_SETTINGS_KEY);
+      if (!raw) return defaults;
+      const parsed = JSON.parse(raw);
+      return {
+        bgmMuted: typeof parsed.bgmMuted === 'boolean' ? parsed.bgmMuted : defaults.bgmMuted,
+        sfxMuted: typeof parsed.sfxMuted === 'boolean' ? parsed.sfxMuted : defaults.sfxMuted,
+        footstepsEnabled: typeof parsed.footstepsEnabled === 'boolean' ? parsed.footstepsEnabled : defaults.footstepsEnabled,
+        bgmVolume: Number.isFinite(Number(parsed.bgmVolume))
+          ? Math.max(0, Math.min(1, Number(parsed.bgmVolume)))
+          : defaults.bgmVolume,
+        sfxVolume: Number.isFinite(Number(parsed.sfxVolume))
+          ? Math.max(0, Math.min(1, Number(parsed.sfxVolume)))
+          : defaults.sfxVolume
+      };
+    } catch (_) {
+      return defaults;
+    }
+  }
+
+  _saveSettings() {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(this.settings));
+    } catch (_) {}
+  }
+
+  getSettings() {
+    return { ...this.settings };
+  }
+
+  updateSettings(partial = {}) {
+    if (!partial || typeof partial !== 'object') return this.getSettings();
+    if (typeof partial.bgmMuted === 'boolean') this.settings.bgmMuted = partial.bgmMuted;
+    if (typeof partial.sfxMuted === 'boolean') this.settings.sfxMuted = partial.sfxMuted;
+    if (typeof partial.footstepsEnabled === 'boolean') this.settings.footstepsEnabled = partial.footstepsEnabled;
+    if (partial.bgmVolume !== undefined && Number.isFinite(Number(partial.bgmVolume))) {
+      this.settings.bgmVolume = Math.max(0, Math.min(1, Number(partial.bgmVolume)));
+    }
+    if (partial.sfxVolume !== undefined && Number.isFinite(Number(partial.sfxVolume))) {
+      this.settings.sfxVolume = Math.max(0, Math.min(1, Number(partial.sfxVolume)));
+    }
+    this._saveSettings();
+    this._applyBusGains(0.08);
+
+    // 若取消 BGM 静音且存在目标曲目，平滑恢复
+    if (!this.muted && !this.settings.bgmMuted) {
+      const target = (this.pendingTrack && this.pendingTrack !== 'none')
+        ? this.pendingTrack
+        : this.currentTrack;
+      if (target && target !== 'none' && !this.activeSession && this.ctx && this.ctx.state === 'running') {
+        this.pendingTrack = null;
+        this._startBgmSession(target, 0.7);
+      }
+    }
+    return this.getSettings();
+  }
+
+  _applyBusGains(rampSec = 0.06) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const bgmTarget = this.settings.bgmMuted ? 0 : this.settings.bgmVolume * 0.56;
+    const sfxTarget = this.settings.sfxMuted ? 0 : this.settings.sfxVolume;
+
+    if (this.bgmMaster) {
+      const g = this.bgmMaster.gain;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(bgmTarget, now + rampSec);
+    }
+    if (this.sfxMaster) {
+      const g = this.sfxMaster.gain;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(sfxTarget, now + rampSec);
+    }
   }
 
   // -------------------- 上下文与总线初始化 --------------------
@@ -95,12 +188,12 @@ class SoundEngine {
 
     // SFX Bus
     this.sfxMaster = ctx.createGain();
-    this.sfxMaster.gain.value = 1.0;
+    this.sfxMaster.gain.value = this.settings.sfxMuted ? 0 : this.settings.sfxVolume;
     this.sfxMaster.connect(this.masterGain);
 
     // BGM Bus (适中电平，让音效清晰穿透)
     this.bgmMaster = ctx.createGain();
-    this.bgmMaster.gain.value = 0.42;
+    this.bgmMaster.gain.value = this.settings.bgmMuted ? 0 : this.settings.bgmVolume * 0.56;
     this.bgmMaster.connect(this.masterGain);
 
     // 轻量国风山谷回声总线 (Stereo/Filtered Feedback Delay)
@@ -181,6 +274,7 @@ class SoundEngine {
   // ==================== 原有 SFX 音效（100% 保留兼容） ====================
 
   playTone(freq, duration = 0.1, type = 'sine', gainVal = 0.08, delay = 0) {
+    if (this.settings.sfxMuted) return;
     const ctx = this.ensureCtx();
     if (!ctx) return;
     const now = ctx.currentTime + delay;
@@ -240,6 +334,470 @@ class SoundEngine {
   ending() {
     const notes = [523, 659, 784, 1046];
     notes.forEach((f, i) => this.playTone(f, 0.28, 'triangle', 0.09, i * 0.11));
+  }
+
+  /**
+   * 地形感知脚步声（轻柔自然、左右脚微差音高，贴合轩辕剑三质感）
+   * @param {'stone'|'wood'|'dirt'|'swamp'} surface
+   * @param {number} stepIndex
+   */
+  footstep(surface = 'stone', stepIndex = 0) {
+    if (this.muted || this.settings.sfxMuted || !this.settings.footstepsEnabled) return;
+    const ctx = this.ensureCtx();
+    if (!ctx || ctx.state !== 'running') return;
+
+    const now = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    const alt = (stepIndex % 2 === 0) ? 1.0 : 0.91;
+    const pitch = alt * (0.96 + Math.random() * 0.08);
+
+    if (surface === 'wood') {
+      // 室内木板：温润中空木地板轻踏声
+      const osc = ctx.createOscillator();
+      const bodyGain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(158 * pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(78 * pitch, now + 0.065);
+      bodyGain.gain.setValueAtTime(0.0001, now);
+      bodyGain.gain.linearRampToValueAtTime(0.062, now + 0.006);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+      osc.connect(bodyGain);
+      bodyGain.connect(dest);
+      osc.start(now);
+      osc.stop(now + 0.085);
+
+      // 木腔共鸣轻击
+      const res = ctx.createOscillator();
+      const resGain = ctx.createGain();
+      res.type = 'sine';
+      res.frequency.setValueAtTime(340 * pitch, now);
+      res.frequency.exponentialRampToValueAtTime(220 * pitch, now + 0.045);
+      resGain.gain.setValueAtTime(0.022, now);
+      resGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+      res.connect(resGain);
+      resGain.connect(dest);
+      res.start(now);
+      res.stop(now + 0.06);
+
+      if (this.noiseBuffer) {
+        const src = ctx.createBufferSource();
+        src.buffer = this.noiseBuffer;
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(720 * pitch, now);
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.024, now);
+        ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.038);
+        src.connect(lp);
+        lp.connect(ng);
+        ng.connect(dest);
+        src.start(now, Math.random() * 1.2, 0.05);
+      }
+      return;
+    }
+
+    if (surface === 'dirt') {
+      // 废土/沙砾/废墟：干爽细沙碎石摩擦声
+      if (this.noiseBuffer) {
+        const src1 = ctx.createBufferSource();
+        src1.buffer = this.noiseBuffer;
+        const bp1 = ctx.createBiquadFilter();
+        bp1.type = 'bandpass';
+        bp1.frequency.setValueAtTime(1450 * pitch, now);
+        bp1.Q.value = 1.4;
+        const g1 = ctx.createGain();
+        g1.gain.setValueAtTime(0.0001, now);
+        g1.gain.linearRampToValueAtTime(0.052, now + 0.008);
+        g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.072);
+        src1.connect(bp1);
+        bp1.connect(g1);
+        g1.connect(dest);
+        src1.start(now, Math.random() * 1.2, 0.085);
+
+        // 细碎砾石尾粒
+        const src2 = ctx.createBufferSource();
+        src2.buffer = this.noiseBuffer;
+        const bp2 = ctx.createBiquadFilter();
+        bp2.type = 'bandpass';
+        bp2.frequency.setValueAtTime(2550 * pitch, now + 0.016);
+        bp2.Q.value = 2.1;
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.0001, now + 0.016);
+        g2.gain.linearRampToValueAtTime(0.028, now + 0.024);
+        g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.068);
+        src2.connect(bp2);
+        bp2.connect(g2);
+        g2.connect(dest);
+        src2.start(now + 0.016, Math.random() * 1.2, 0.06);
+      }
+      // 轻落脚底沉音
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(112 * pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(62 * pitch, now + 0.045);
+      og.gain.setValueAtTime(0.026, now);
+      og.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+      osc.connect(og);
+      og.connect(dest);
+      osc.start(now);
+      osc.stop(now + 0.058);
+      return;
+    }
+
+    if (surface === 'swamp') {
+      // 沼泽泥泞：潮湿闷踏 + 水泥轻溅
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(106 * pitch, now);
+      osc.frequency.exponentialRampToValueAtTime(52 * pitch, now + 0.085);
+      og.gain.setValueAtTime(0.0001, now);
+      og.gain.linearRampToValueAtTime(0.046, now + 0.01);
+      og.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
+      osc.connect(og);
+      og.connect(dest);
+      osc.start(now);
+      osc.stop(now + 0.105);
+
+      if (this.noiseBuffer) {
+        const src = ctx.createBufferSource();
+        src.buffer = this.noiseBuffer;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(920 * pitch, now);
+        bp.frequency.exponentialRampToValueAtTime(320 * pitch, now + 0.095);
+        bp.Q.value = 3.6;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.0001, now);
+        ng.gain.linearRampToValueAtTime(0.048, now + 0.014);
+        ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.105);
+        src.connect(bp);
+        bp.connect(ng);
+        ng.connect(dest);
+        src.start(now, Math.random() * 1.2, 0.12);
+      }
+      return;
+    }
+
+    // 默认 'stone'（青石板/金库/洞窟）：清脆中低频石面轻叩 + 微石韵
+    if (this.noiseBuffer) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuffer;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(1080 * pitch, now);
+      bp.Q.value = 1.9;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.0001, now);
+      ng.gain.linearRampToValueAtTime(0.048, now + 0.004);
+      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.046);
+      src.connect(bp);
+      bp.connect(ng);
+      ng.connect(dest);
+      src.start(now, Math.random() * 1.2, 0.055);
+    }
+
+    const tap = ctx.createOscillator();
+    const tapGain = ctx.createGain();
+    tap.type = 'triangle';
+    tap.frequency.setValueAtTime(205 * pitch, now);
+    tap.frequency.exponentialRampToValueAtTime(108 * pitch, now + 0.042);
+    tapGain.gain.setValueAtTime(0.04, now);
+    tapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.048);
+    tap.connect(tapGain);
+    tapGain.connect(dest);
+    tap.start(now);
+    tap.stop(now + 0.055);
+  }
+
+  /**
+   * 细腻竹木/墨韵 UI 轻点音（悬停与确认触感）
+   */
+  uiTick() {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx || ctx.state !== 'running') return;
+
+    const now = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    // 轻巧竹木扣音
+    const wood = ctx.createOscillator();
+    const wg = ctx.createGain();
+    wood.type = 'triangle';
+    wood.frequency.setValueAtTime(760, now);
+    wood.frequency.exponentialRampToValueAtTime(520, now + 0.032);
+    wg.gain.setValueAtTime(0.034, now);
+    wg.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+    wood.connect(wg);
+    wg.connect(dest);
+    wood.start(now);
+    wood.stop(now + 0.048);
+
+    // 一抹清润玉磬高泛音
+    const chime = ctx.createOscillator();
+    const cg = ctx.createGain();
+    chime.type = 'sine';
+    chime.frequency.setValueAtTime(NOTE.D6, now + 0.006);
+    cg.gain.setValueAtTime(0.0001, now + 0.006);
+    cg.gain.linearRampToValueAtTime(0.022, now + 0.012);
+    cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
+    chime.connect(cg);
+    cg.connect(dest);
+    chime.start(now + 0.006);
+    chime.stop(now + 0.105);
+  }
+
+  /**
+   * 四大流派专属战斗音效（古武 / 军火 / 机甲 / 奇术）
+   * @param {'martial'|'firearm'|'mecha'|'mystic'} branch
+   * @param {boolean} isHeavy
+   */
+  playCombatSfx(branch = 'martial', isHeavy = false) {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    if (branch === 'firearm') {
+      // 1) 现代军火：清脆枪击爆裂 + 重炮/霰弹轰鸣
+      if (this.noiseBuffer) {
+        const crack = ctx.createBufferSource();
+        crack.buffer = this.noiseBuffer;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(isHeavy ? 1400 : 2100, now);
+        bp.frequency.exponentialRampToValueAtTime(isHeavy ? 280 : 620, now + (isHeavy ? 0.24 : 0.11));
+        bp.Q.value = 1.1;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(isHeavy ? 0.24 : 0.17, now);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.26 : 0.12));
+        crack.connect(bp);
+        bp.connect(g);
+        g.connect(dest);
+        crack.start(now, Math.random() * 0.8, isHeavy ? 0.28 : 0.14);
+      }
+
+      // 枪膛冲击低频脉冲
+      const punch = ctx.createOscillator();
+      const pg = ctx.createGain();
+      punch.type = 'triangle';
+      punch.frequency.setValueAtTime(isHeavy ? 165 : 360, now);
+      punch.frequency.exponentialRampToValueAtTime(isHeavy ? 34 : 68, now + (isHeavy ? 0.28 : 0.085));
+      pg.gain.setValueAtTime(isHeavy ? 0.26 : 0.14, now);
+      pg.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.32 : 0.095));
+      punch.connect(pg);
+      pg.connect(dest);
+      punch.start(now);
+      punch.stop(now + (isHeavy ? 0.34 : 0.11));
+
+      if (isHeavy && this.noiseBuffer) {
+        // 重炮/坦克轰击低频爆炸余震
+        const boom = ctx.createBufferSource();
+        boom.buffer = this.noiseBuffer;
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(520, now + 0.02);
+        lp.frequency.exponentialRampToValueAtTime(95, now + 0.52);
+        const bg = ctx.createGain();
+        bg.gain.setValueAtTime(0.0001, now + 0.02);
+        bg.gain.linearRampToValueAtTime(0.24, now + 0.045);
+        bg.gain.exponentialRampToValueAtTime(0.0001, now + 0.54);
+        boom.connect(lp);
+        lp.connect(bg);
+        bg.connect(dest);
+        boom.start(now + 0.02, Math.random() * 0.6, 0.58);
+      }
+      return;
+    }
+
+    if (branch === 'mecha') {
+      // 2) 科幻机甲：下扫等离子/激光束 + 机械伺服微鸣 + 重型轨炮/导弹爆破
+      const beam = ctx.createOscillator();
+      const beamSub = ctx.createOscillator();
+      const bp = ctx.createBiquadFilter();
+      const bg = ctx.createGain();
+
+      beam.type = 'sawtooth';
+      beam.frequency.setValueAtTime(isHeavy ? 1950 : 2300, now);
+      beam.frequency.exponentialRampToValueAtTime(isHeavy ? 140 : 280, now + (isHeavy ? 0.34 : 0.2));
+
+      beamSub.type = 'sine';
+      beamSub.frequency.setValueAtTime(isHeavy ? 980 : 1150, now);
+      beamSub.frequency.exponentialRampToValueAtTime(isHeavy ? 72 : 150, now + (isHeavy ? 0.34 : 0.2));
+
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(1600, now);
+      bp.frequency.exponentialRampToValueAtTime(340, now + (isHeavy ? 0.34 : 0.2));
+      bp.Q.value = 2.4;
+
+      bg.gain.setValueAtTime(0.0001, now);
+      bg.gain.linearRampToValueAtTime(isHeavy ? 0.17 : 0.13, now + 0.012);
+      bg.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.36 : 0.22));
+
+      beam.connect(bp);
+      beamSub.connect(bp);
+      bp.connect(bg);
+      bg.connect(dest);
+      beam.start(now);
+      beamSub.start(now);
+      beam.stop(now + (isHeavy ? 0.38 : 0.24));
+      beamSub.stop(now + (isHeavy ? 0.38 : 0.24));
+
+      // 机械伺服短鸣
+      const servo = ctx.createOscillator();
+      const sg = ctx.createGain();
+      servo.type = 'triangle';
+      servo.frequency.setValueAtTime(190, now);
+      servo.frequency.linearRampToValueAtTime(360, now + 0.08);
+      sg.gain.setValueAtTime(0.055, now);
+      sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
+      servo.connect(sg);
+      sg.connect(dest);
+      servo.start(now);
+      servo.stop(now + 0.11);
+
+      if (isHeavy) {
+        // 导弹/轨炮高能爆裂共振
+        const det = ctx.createOscillator();
+        const dg = ctx.createGain();
+        det.type = 'sine';
+        det.frequency.setValueAtTime(150, now + 0.08);
+        det.frequency.exponentialRampToValueAtTime(38, now + 0.44);
+        dg.gain.setValueAtTime(0.0001, now + 0.08);
+        dg.gain.linearRampToValueAtTime(0.22, now + 0.1);
+        dg.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+        det.connect(dg);
+        dg.connect(dest);
+        det.start(now + 0.08);
+        det.stop(now + 0.5);
+
+        if (this.noiseBuffer) {
+          const n = ctx.createBufferSource();
+          n.buffer = this.noiseBuffer;
+          const lp = ctx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.setValueAtTime(980, now + 0.08);
+          lp.frequency.exponentialRampToValueAtTime(180, now + 0.46);
+          const ng = ctx.createGain();
+          ng.gain.setValueAtTime(0.16, now + 0.08);
+          ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+          n.connect(lp);
+          lp.connect(ng);
+          ng.connect(dest);
+          n.start(now + 0.08, Math.random() * 0.7, 0.44);
+        }
+      }
+      return;
+    }
+
+    if (branch === 'mystic') {
+      // 3) 奇术道法：空灵五声道钟/玉磬 + 霹雳电弧爆裂
+      const bellNotes = isHeavy ? [NOTE.D5, NOTE.A5, NOTE.D6] : [NOTE.D5, NOTE.A5];
+      bellNotes.forEach((f, idx) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, now + idx * 0.035);
+        g.gain.setValueAtTime(0.0001, now + idx * 0.035);
+        g.gain.linearRampToValueAtTime(isHeavy ? 0.095 : 0.075, now + idx * 0.035 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.035 + (isHeavy ? 0.52 : 0.34));
+        osc.connect(g);
+        g.connect(dest);
+        osc.start(now + idx * 0.035);
+        osc.stop(now + idx * 0.035 + (isHeavy ? 0.55 : 0.38));
+      });
+
+      // 雷电/符箓爆裂脆响
+      if (this.noiseBuffer) {
+        const bursts = isHeavy ? [0.02, 0.08, 0.14] : [0.02, 0.075];
+        bursts.forEach((offset, i) => {
+          const src = ctx.createBufferSource();
+          src.buffer = this.noiseBuffer;
+          const bp = ctx.createBiquadFilter();
+          bp.type = 'bandpass';
+          bp.frequency.setValueAtTime(2800 - i * 450, now + offset);
+          bp.Q.value = 3.2;
+          const ng = ctx.createGain();
+          ng.gain.setValueAtTime(isHeavy ? 0.13 : 0.09, now + offset);
+          ng.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.085);
+          src.connect(bp);
+          bp.connect(ng);
+          ng.connect(dest);
+          src.start(now + offset, Math.random() * 0.9, 0.1);
+        });
+      }
+
+      if (isHeavy) {
+        // 重奇术低沉天雷余韵
+        const thunder = ctx.createOscillator();
+        const tg = ctx.createGain();
+        thunder.type = 'triangle';
+        thunder.frequency.setValueAtTime(118, now + 0.04);
+        thunder.frequency.exponentialRampToValueAtTime(42, now + 0.45);
+        tg.gain.setValueAtTime(0.16, now + 0.04);
+        tg.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+        thunder.connect(tg);
+        tg.connect(dest);
+        thunder.start(now + 0.04);
+        thunder.stop(now + 0.5);
+      }
+      return;
+    }
+
+    // 4) 默认 'martial'（古武刀剑）：凌厉破空斩风 + 清冽金铁剑鸣
+    if (this.noiseBuffer) {
+      const whoosh = ctx.createBufferSource();
+      whoosh.buffer = this.noiseBuffer;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(3600, now);
+      bp.frequency.exponentialRampToValueAtTime(780, now + (isHeavy ? 0.2 : 0.13));
+      bp.Q.value = 1.6;
+      const wg = ctx.createGain();
+      wg.gain.setValueAtTime(0.0001, now);
+      wg.gain.linearRampToValueAtTime(isHeavy ? 0.16 : 0.12, now + 0.015);
+      wg.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.22 : 0.15));
+      whoosh.connect(bp);
+      bp.connect(wg);
+      wg.connect(dest);
+      whoosh.start(now, Math.random() * 0.9, isHeavy ? 0.24 : 0.17);
+    }
+
+    // 金属剑锋清鸣
+    const ringFreqs = isHeavy ? [1960, 2940, 4120] : [2240, 3420];
+    ringFreqs.forEach((f, idx) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = idx === 0 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(f, now + 0.025);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.96, now + (isHeavy ? 0.28 : 0.18));
+      g.gain.setValueAtTime(0.0001, now + 0.025);
+      g.gain.linearRampToValueAtTime(idx === 0 ? 0.065 : 0.038, now + 0.035);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.3 : 0.2));
+      osc.connect(g);
+      g.connect(dest);
+      osc.start(now + 0.025);
+      osc.stop(now + (isHeavy ? 0.32 : 0.22));
+    });
+
+    if (isHeavy) {
+      // 重斩震地劲气
+      const impact = ctx.createOscillator();
+      const ig = ctx.createGain();
+      impact.type = 'sine';
+      impact.frequency.setValueAtTime(160, now + 0.03);
+      impact.frequency.exponentialRampToValueAtTime(52, now + 0.22);
+      ig.gain.setValueAtTime(0.16, now + 0.03);
+      ig.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+      impact.connect(ig);
+      ig.connect(dest);
+      impact.start(now + 0.03);
+      impact.stop(now + 0.26);
+    }
   }
 
   // ==================== 老年饼工作室开场音 (~4.8s) ====================

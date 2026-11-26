@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moshitu-rpg-v5';
+const CACHE_NAME = 'moshitu-rpg-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -19,6 +19,7 @@ const ASSETS = [
   './assets/bg_interior.jpg',
   './assets/bg_cave.jpg',
   './assets/bg_battle.jpg',
+  './assets/bg_crucible.jpg',
   './assets/portrait_hero.jpg',
   './assets/portrait_laohuang.jpg',
   './assets/portrait_yinshi.jpg',

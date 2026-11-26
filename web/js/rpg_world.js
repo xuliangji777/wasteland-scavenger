@@ -1,4 +1,5 @@
 import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js';
+import { sfx } from './audio.js?v=6';
 
 // ==================== 工具函数 ====================
 function clamp(v, min, max) {
@@ -134,6 +135,8 @@ export class InkWorldEngine {
       facing: 'down', // 'down' | 'up' | 'left' | 'right'
       lastSide: 1,    // 1 右, -1 左
       walkPhase: 0,
+      stepIndex: 0,
+      _lastHalfStep: 0,
       moving: false,
       targetX: null,
       targetY: null,
@@ -148,8 +151,9 @@ export class InkWorldEngine {
     // 输入状态
     this.keys = { up: false, down: false, left: false, right: false };
 
-    // 地面点击墨纹标记
+    // 地面点击墨纹标记 & 脚步扬尘粒子
     this.clickRipples = [];
+    this.footDust = [];
 
     // 地图动态实体
     this.lootNodes = [];
@@ -231,6 +235,8 @@ export class InkWorldEngine {
     this.hero.targetX = null;
     this.hero.targetY = null;
     this.hero.moving = false;
+    this.hero.walkPhase = 0;
+    this.hero._lastHalfStep = 0;
     this.hero._stuckFrames = 0;
     this._clearKeys();
 
@@ -270,6 +276,7 @@ export class InkWorldEngine {
     }
 
     this.clickRipples = [];
+    this.footDust = [];
     this.savePoint = this._computeSavePoint(map);
     this.nearestTarget = null;
     this.cb.onNearestChange?.(null);
@@ -710,6 +717,20 @@ export class InkWorldEngine {
       }
     }
 
+    // 脚步墨尘粒子更新
+    for (let i = this.footDust.length - 1; i >= 0; i--) {
+      const d = this.footDust[i];
+      d.age += dt;
+      if (d.age >= d.maxAge) {
+        this.footDust.splice(i, 1);
+        continue;
+      }
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      d.vx *= 0.92;
+      d.vy *= 0.92;
+    }
+
     if (!this.paused) {
       this._updateHero(dt);
       this._updateGuardian(dt);
@@ -780,6 +801,16 @@ export class InkWorldEngine {
       if (h.moving) {
         h.walkPhase += dt * 11.5;
         h._stuckFrames = 0;
+
+        // 精确半周期落脚同步：触发地形脚步音效 + 足跟墨尘
+        const halfStep = Math.floor(h.walkPhase / Math.PI);
+        if (halfStep > h._lastHalfStep) {
+          h._lastHalfStep = halfStep;
+          h.stepIndex += 1;
+          const surface = this._getSurfaceType();
+          sfx.footstep?.(surface, h.stepIndex);
+          this._spawnFootDust(surface, h.stepIndex);
+        }
       } else if (h.targetX !== null) {
         h._stuckFrames += 1;
         if (h._stuckFrames > 14) {
@@ -791,6 +822,49 @@ export class InkWorldEngine {
     } else {
       h.moving = false;
       h.walkPhase *= 0.84;
+      if (h.walkPhase < 0.04) h.walkPhase = 0;
+      h._lastHalfStep = Math.floor(h.walkPhase / Math.PI);
+    }
+  }
+
+  _getSurfaceType() {
+    const id = this.map?.id || '';
+    if (id.startsWith('interior_') || this.map?.sceneType === 'interior') return 'wood';
+    if (id === 'swamp') return 'swamp';
+    if (id === 'wasteland' || id === 'ruins' || id === 'arsenal') return 'dirt';
+    return 'stone';
+  }
+
+  _spawnFootDust(surface, stepIndex) {
+    const h = this.hero;
+    const count = 2 + (stepIndex % 2);
+    const sideOffset = (stepIndex % 2 === 0 ? -4.5 : 4.5);
+    const heelX = h.x - (h.dirX || 0) * 6 + sideOffset;
+    const heelY = h.y - (h.dirY || 0) * 3 + 2;
+
+    const palette = surface === 'swamp'
+      ? [118, 162, 132]
+      : surface === 'dirt'
+        ? [194, 170, 132]
+        : surface === 'wood'
+          ? [210, 188, 154]
+          : [216, 206, 188];
+
+    for (let i = 0; i < count; i++) {
+      const spread = (Math.random() - 0.5) * 24;
+      this.footDust.push({
+        x: heelX + (Math.random() - 0.5) * 6,
+        y: heelY + (Math.random() - 0.5) * 3,
+        vx: -(h.dirX || 0) * (16 + Math.random() * 14) + spread,
+        vy: -(h.dirY || 0) * (8 + Math.random() * 8) - (8 + Math.random() * 12),
+        r: 2.1 + Math.random() * 2.1,
+        age: 0,
+        maxAge: 0.34 + Math.random() * 0.22,
+        rgb: palette
+      });
+    }
+    if (this.footDust.length > 36) {
+      this.footDust.splice(0, this.footDust.length - 36);
     }
   }
 
@@ -1203,13 +1277,35 @@ export class InkWorldEngine {
       this._drawSavePointGroundRune(ctx, this.savePoint, t);
     }
 
-    // 建筑门前光晕门槛
+    // 建筑门前光晕门槛（主城叠加温暖摇曳灯笼光池）
+    const isTown = map.id === 'town';
     for (const b of map.buildings || []) {
       const dx = b.doorX ?? (b.x + b.w * 0.5);
       const dy = b.doorY ?? (b.y + b.h + 18);
       const near = dist(this.hero.x, this.hero.y, dx, dy) <= 95;
       const pulse = 0.45 + 0.35 * Math.sin(t * 3.5);
       ctx.save();
+
+      if (isTown) {
+        // 温暖灯笼摇曳光池（多频微颤模拟烛火）
+        const flicker = 0.82
+          + 0.11 * Math.sin(t * 5.8 + dx * 0.07)
+          + 0.07 * Math.sin(t * 13.4 + dy * 0.11);
+        const poolR = (near ? 64 : 50) * (0.96 + flicker * 0.06);
+        ctx.save();
+        ctx.translate(dx, dy);
+        ctx.scale(1, 0.54);
+        const lanternGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, poolR);
+        lanternGrad.addColorStop(0, `rgba(255, 206, 118, ${(near ? 0.34 : 0.24) * flicker})`);
+        lanternGrad.addColorStop(0.55, `rgba(232, 152, 62, ${(near ? 0.16 : 0.11) * flicker})`);
+        lanternGrad.addColorStop(1, 'rgba(212, 120, 42, 0)');
+        ctx.fillStyle = lanternGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, poolR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       ctx.fillStyle = near
         ? `rgba(212, 154, 58, ${0.28 + pulse * 0.22})`
         : `rgba(200, 155, 60, ${0.12 + pulse * 0.08})`;
@@ -1220,6 +1316,21 @@ export class InkWorldEngine {
         ctx.strokeStyle = `rgba(235, 195, 110, ${0.55 + pulse * 0.35})`;
         ctx.lineWidth = 1.6;
         ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 脚步足跟墨尘粒子
+    if (this.footDust.length > 0) {
+      ctx.save();
+      for (const d of this.footDust) {
+        const p = d.age / d.maxAge;
+        const alpha = (1 - p) * (1 - p) * 0.52;
+        const rad = d.r * (0.75 + p * 0.95);
+        ctx.fillStyle = `rgba(${d.rgb[0]}, ${d.rgb[1]}, ${d.rgb[2]}, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(d.x, d.y, rad * 1.25, rad * 0.78, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.restore();
     }
@@ -1557,18 +1668,34 @@ export class InkWorldEngine {
       ctx.stroke();
     }
 
-    // 环绕上升的玉金墨气灵点
-    for (let i = 0; i < 4; i++) {
-      const phase = (t * 0.85 + i * 0.25) % 1;
-      const angle = t * 1.7 + i * Math.PI * 0.5;
-      const wx = Math.cos(angle) * (22 - phase * 8);
-      const wy = -10 - phase * 86;
-      const alpha = Math.sin(phase * Math.PI) * 0.85;
-      ctx.fillStyle = i % 2 === 0
-        ? `rgba(116, 236, 180, ${alpha})`
-        : `rgba(232, 194, 102, ${alpha})`;
+    // 环绕上升的玉金墨气灵点与柔光尾晕
+    for (let i = 0; i < 6; i++) {
+      const phase = (t * 0.78 + i / 6) % 1;
+      const angle = t * 1.65 + i * (Math.PI / 3);
+      const wx = Math.cos(angle) * (24 - phase * 9);
+      const wy = -8 - phase * 92;
+      const flicker = 0.78 + 0.22 * Math.sin(t * 9.2 + i * 2.1);
+      const alpha = Math.sin(phase * Math.PI) * 0.85 * flicker;
+      const isJade = i % 2 === 0;
+      const rCore = 2.4 * (1 - phase * 0.32);
+
+      // 柔和外光晕
+      const wispGlow = ctx.createRadialGradient(wx, wy, 0.5, wx, wy, rCore * 4.2);
+      wispGlow.addColorStop(0, isJade
+        ? `rgba(132, 244, 192, ${(alpha * 0.55).toFixed(3)})`
+        : `rgba(244, 206, 118, ${(alpha * 0.55).toFixed(3)})`);
+      wispGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = wispGlow;
       ctx.beginPath();
-      ctx.arc(wx, wy, 2.3 * (1 - phase * 0.35), 0, Math.PI * 2);
+      ctx.arc(wx, wy, rCore * 4.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 灵点核心
+      ctx.fillStyle = isJade
+        ? `rgba(176, 255, 218, ${alpha.toFixed(3)})`
+        : `rgba(255, 232, 168, ${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(wx, wy, rCore, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -1671,7 +1798,10 @@ export class InkWorldEngine {
       spriteType: 'merchant'
     };
     const t = this._elapsed;
-    const breath = Math.sin(t * 2.4 + npcRef.x * 0.02) * 1.4;
+    const breathWave = Math.sin(t * 2.4 + npcRef.x * 0.02);
+    const breathScaleY = 1 + breathWave * 0.015;
+    const breathScaleX = 1 - breathWave * 0.006;
+    const breath = breathWave * 1.0;
     const spriteKey = this._getNpcSpriteKey(npcRef, npc);
     const sprite = this._getSprite(spriteKey);
     const drawH = 92;
@@ -1688,8 +1818,9 @@ export class InkWorldEngine {
     if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
       const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
       ctx.save();
-      if (npcRef.facing === 'left') ctx.scale(-1, 1);
-      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 5 + breath, drawW, drawH);
+      ctx.translate(0, 5);
+      ctx.scale((npcRef.facing === 'left' ? -1 : 1) * breathScaleX, breathScaleY);
+      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH, drawW, drawH);
       ctx.restore();
     } else {
       ctx.fillStyle = npc.robeColor || '#4c3e32';
@@ -1725,7 +1856,11 @@ export class InkWorldEngine {
     const tpl = en.data || ENEMIES.rat;
     const isBoss = Boolean(tpl.isBoss);
     const t = this._elapsed;
-    const bob = Math.abs(Math.sin(en.phase)) * (isBoss ? 4.5 : 3);
+    const isIdle = en.aiPause > 0;
+    const bob = isIdle ? 0 : Math.abs(Math.sin(en.phase)) * (isBoss ? 4.5 : 3);
+    const idleBreathWave = Math.sin(t * 2.6 + en.homeX * 0.03);
+    const idleScaleY = isIdle ? (1 + idleBreathWave * 0.015) : 1;
+    const idleScaleX = isIdle ? (1 - idleBreathWave * 0.006) : 1;
     const accent = tpl.accent || '#d9483b';
     const spriteKey = this._getEnemySpriteKey(tpl.spriteType);
     const sprite = this._getSprite(spriteKey);
@@ -1766,14 +1901,15 @@ export class InkWorldEngine {
       ctx.stroke();
     }
 
-    // 透明 PNG 精灵绘制（按朝向翻转）
+    // 透明 PNG 精灵绘制（按朝向翻转 + 静止呼吸缩放）
     ctx.save();
-    ctx.translate(0, -bob);
-    if (en.facing < 0) ctx.scale(-1, 1);
+    ctx.translate(0, 6 - bob);
+    ctx.scale((en.facing < 0 ? -1 : 1) * idleScaleX, idleScaleY);
     if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
       const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
-      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 6, drawW, drawH);
+      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH, drawW, drawH);
     } else {
+      ctx.translate(0, -6);
       ctx.scale(tpl.scale || 1, tpl.scale || 1);
       this._drawEnemySilhouette(ctx, tpl.spriteType, tpl.color || '#332d29', accent, t);
     }
@@ -2024,12 +2160,26 @@ export class InkWorldEngine {
     ctx.restore();
   }
 
-  // ==================== 主角「沈砚」手绘透明精灵渲染 ====================
+  // ==================== 主角「沈砚」手绘透明精灵渲染（分体双足迈步 + 朱砂墨巾飘动） ====================
 
   _drawHero(ctx) {
     const h = this.hero;
-    const bob = h.moving ? Math.abs(Math.sin(h.walkPhase)) * 2.4 : Math.sin(this._elapsed * 2.6) * 1.1;
-    const lean = h.moving ? Math.sin(h.walkPhase) * 0.045 : 0;
+    const t = this._elapsed;
+    const moveBlend = h.moving ? 1 : clamp(h.walkPhase / 0.55, 0, 1);
+    const strideL = Math.sin(h.walkPhase) * moveBlend;
+    const strideR = -strideL;
+    const liftL = Math.max(0, Math.cos(h.walkPhase)) * 5 * moveBlend;
+    const liftR = Math.max(0, -Math.cos(h.walkPhase)) * 5 * moveBlend;
+    const tiltL = strideL * 0.14;
+    const tiltR = strideR * 0.14;
+
+    const bob = h.moving
+      ? Math.abs(Math.sin(h.walkPhase)) * 2.5
+      : 0;
+    const idleWave = Math.sin(t * 2.6);
+    const idleBreathY = h.moving ? 1 : (1 + idleWave * 0.015);
+    const idleBreathX = h.moving ? 1 : (1 - idleWave * 0.006);
+    const forwardLean = h.moving ? (0.045 + Math.sin(h.walkPhase * 2) * 0.014) : 0;
     const flipX = h.facing === 'left' ? -1 : (h.facing === 'right' ? 1 : h.lastSide);
     const sprite = this._getSprite('hero');
     const drawH = 96;
@@ -2037,19 +2187,77 @@ export class InkWorldEngine {
     ctx.save();
     ctx.translate(h.x, h.y);
 
-    // 脚下椭圆墨影
+    // 脚下动态椭圆墨影（随支撑脚微移并呼吸缩放）
+    const shadowShiftX = (strideR - strideL) * 1.5 * flipX;
+    const shadowScale = (1 - bob * 0.028) * (h.moving ? 1 : (1 - idleWave * 0.025));
     ctx.fillStyle = 'rgba(10, 8, 6, 0.5)';
     ctx.beginPath();
-    ctx.ellipse(0, 3, 21, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(shadowShiftX, 3, 21 * shadowScale, 7 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
-      const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
+      const img = sprite.img;
+      const sw = img.naturalWidth;
+      const sh = img.naturalHeight;
+      const drawW = (sw / sh) * drawH;
+      const splitRatio = 0.72;
+      const splitSrcY = Math.round(sh * splitRatio);
+      const lowerSrcH = sh - splitSrcY;
+      const halfSrcW = sw * 0.5;
+      const splitDstY = drawH * splitRatio;
+      const lowerDstH = drawH - splitDstY;
+      const halfDstW = drawW * 0.5;
+      const topY = -drawH + 5;
+      const hipY = topY + splitDstY;
+
       ctx.save();
-      ctx.translate(0, -bob);
-      ctx.rotate(lean * flipX);
       ctx.scale(flipX, 1);
-      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 5, drawW, drawH);
+
+      // 移动时背后飘动的朱砂墨巾尾带
+      if (moveBlend > 0.05) {
+        this._drawHeroScarfWisp(ctx, -4, topY + drawH * 0.28 - bob, t, h.walkPhase, moveBlend);
+      }
+
+      // 绘制左右独立足靴（先画后摆/抬起腿，再画前迈支撑腿增强层次）
+      const drawBoot = (isLeft) => {
+        const stride = isLeft ? strideL : strideR;
+        const lift = isLeft ? liftL : liftR;
+        const tilt = isLeft ? tiltL : tiltR;
+        const srcX = isLeft ? 0 : halfSrcW;
+        const dstXOffset = isLeft ? -halfDstW : 0;
+        const pivotX = isLeft ? -halfDstW * 0.35 : halfDstW * 0.35;
+
+        ctx.save();
+        ctx.translate(pivotX + stride * 6.5, hipY - lift - bob * 0.25);
+        ctx.rotate(tilt);
+        ctx.drawImage(
+          img,
+          srcX, splitSrcY, halfSrcW, lowerSrcH,
+          dstXOffset - pivotX, -0.5, halfDstW, lowerDstH + 0.5
+        );
+        ctx.restore();
+      };
+
+      if (strideL < strideR) {
+        drawBoot(true);
+        drawBoot(false);
+      } else {
+        drawBoot(false);
+        drawBoot(true);
+      }
+
+      // 上半身/斗篷：行进时前倾 + 双频步幅起伏；站立时柔和呼吸缩放
+      ctx.save();
+      ctx.translate(0, hipY - bob);
+      ctx.rotate(forwardLean);
+      ctx.scale(idleBreathX, idleBreathY);
+      ctx.drawImage(
+        img,
+        0, 0, sw, splitSrcY + 1,
+        -halfDstW, -splitDstY, drawW, splitDstY + 1.2
+      );
+      ctx.restore();
+
       ctx.restore();
     } else {
       // 精灵加载前回退剪影
@@ -2062,6 +2270,45 @@ export class InkWorldEngine {
       ctx.stroke();
     }
 
+    ctx.restore();
+  }
+
+  _drawHeroScarfWisp(ctx, anchorX, anchorY, t, walkPhase, intensity) {
+    const wave1 = Math.sin(t * 12.5) * 4.5 * intensity;
+    const wave2 = Math.cos(walkPhase * 1.5 - 0.8) * 6.0 * intensity;
+    const tailLen = (20 + Math.sin(t * 8.2) * 3.5) * intensity;
+
+    ctx.save();
+    // 主朱砂飘带
+    const grad = ctx.createLinearGradient(anchorX, anchorY, anchorX - tailLen, anchorY + wave2);
+    grad.addColorStop(0, `rgba(181, 58, 46, ${(0.88 * intensity).toFixed(3)})`);
+    grad.addColorStop(0.6, `rgba(214, 78, 58, ${(0.62 * intensity).toFixed(3)})`);
+    grad.addColorStop(1, 'rgba(181, 58, 46, 0)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 4.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(anchorX, anchorY);
+    ctx.quadraticCurveTo(
+      anchorX - tailLen * 0.52,
+      anchorY + 3 + wave1,
+      anchorX - tailLen,
+      anchorY + 5 + wave2
+    );
+    ctx.stroke();
+
+    // 细金墨副丝尾
+    ctx.strokeStyle = `rgba(232, 186, 102, ${(0.42 * intensity).toFixed(3)})`;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(anchorX, anchorY + 2);
+    ctx.quadraticCurveTo(
+      anchorX - tailLen * 0.45,
+      anchorY + 6 - wave1 * 0.6,
+      anchorX - tailLen * 0.88,
+      anchorY + 8 - wave2 * 0.45
+    );
+    ctx.stroke();
     ctx.restore();
   }
 

@@ -26,8 +26,8 @@ import {
   TEAM_TASK_TPL,
   SIDE_QUESTS
 } from './data.js';
-import { InkWorldEngine } from './rpg_world.js';
-import { sfx } from './audio.js';
+import { InkWorldEngine } from './rpg_world.js?v=6';
+import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';
 
@@ -154,7 +154,13 @@ function createInitialState() {
       { uid: 'init_2', itemId: 20, quality: 'common' },
       { uid: 'init_3', itemId: 21, quality: 'common' },
       { uid: 'init_4', itemId: 22, quality: 'common' },
-      { uid: 'init_5', itemId: 22, quality: 'common' }
+      { uid: 'init_5', itemId: 22, quality: 'common' },
+      { uid: 'init_6', itemId: 2, quality: 'common' },
+      { uid: 'init_7', itemId: 3, quality: 'common' },
+      { uid: 'init_8', itemId: 5, quality: 'common' },
+      { uid: 'init_9', itemId: 14, quality: 'fine' },
+      { uid: 'init_10', itemId: 17, quality: 'fine' },
+      { uid: 'init_11', itemId: 23, quality: 'common' }
     ],
     // 炼化丹药：{ elixir_jiuzhuan: n, elixir_ration: n }
     elixirs: {},
@@ -168,7 +174,7 @@ function createInitialState() {
     equipBag: [],
 
     // 墨壶收妖与护驾
-    capturedSpirits: {}, // { enemyId: count }
+    capturedSpirits: { rat: 1 }, // { enemyId: count }
     unlockedGuardians: [],
     activeGuardianId: null,
 
@@ -245,6 +251,7 @@ let battle = null;
 let currentDialog = null;
 let crucibleSlots = [null, null];
 let crucibleTab = 'forge';
+let crucibleFilter = 'all';
 let bagTab = 'equip';
 let questTab = 'main';
 let collectionTab = 'antiques';
@@ -252,8 +259,42 @@ let saveModalTab = 'slots';
 let prologueIndex = 0;
 let battleSubMode = null; // 'skills' | 'items' | null
 let battleSkillBranch = 'martial';
+let settingsModalTab = 'settings';
 let hazardTimer = null;
 let saveDebounceTimer = null;
+let sceneTransitionToken = 0;
+let sceneTransitionTimer = null;
+let sceneBannerTimer = null;
+let lastNearestTargetKey = null;
+
+// 游戏本地偏好设置（与 audio.js 的音频设置协同持久化）
+const GAME_SETTINGS_KEY = 'motu_game_settings_v1';
+function loadGameSettings() {
+  try {
+    const raw = localStorage.getItem(GAME_SETTINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      screenShakeEnabled: parsed.screenShakeEnabled !== false
+    };
+  } catch {
+    return { screenShakeEnabled: true };
+  }
+}
+let gameSettings = loadGameSettings();
+function saveGameSettings(patch = {}) {
+  gameSettings = { ...gameSettings, ...patch };
+  try {
+    localStorage.setItem(GAME_SETTINGS_KEY, JSON.stringify(gameSettings));
+  } catch { /* ignore */ }
+}
+
+function getEquippedWeaponBranch() {
+  const genre = state.equipped?.weapon?.genre || 'wuxia';
+  if (genre === 'military') return 'firearm';
+  if (genre === 'scifi') return 'mecha';
+  if (genre === 'mythic') return 'mystic';
+  return 'martial';
+}
 
 // ==================== 角色属性与计算 ====================
 function getHeroStats() {
@@ -275,7 +316,7 @@ function getHeroStats() {
     bonusDmg: 0,
     immuneTide: false,
     proc: null,
-    bagMax: 10 + (state.skills[2] || 0) * 3,
+    bagMax: 16 + (state.skills[2] || 0) * 3,
     moveSpeed: 220 + (state.skills[0] || 0) * 26
   };
 
@@ -617,15 +658,48 @@ function isStudioSplashActive() {
   return !sp.classList.contains('hidden') && !sp.classList.contains('splash-done') && sp.style.display !== 'none';
 }
 
-function enterMap(mapId, spawnX = null, spawnY = null) {
-  const target = MAPS_BY_ID[mapId];
-  if (!target) return;
-
-  if (!isRegionUnlocked(target.regionId)) {
-    const ok = tryUnlockRegion(target.regionId);
-    if (!ok) return;
+function ensureSceneTransitionEls() {
+  const host = document.querySelector('.rpg-stage-wrap') || document.body;
+  let curtain = $('scene-ink-curtain');
+  if (!curtain) {
+    curtain = document.createElement('div');
+    curtain.id = 'scene-ink-curtain';
+    curtain.className = 'scene-ink-curtain';
+    curtain.setAttribute('aria-hidden', 'true');
+    host.appendChild(curtain);
   }
+  let banner = $('scene-title-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'scene-title-banner';
+    banner.className = 'scene-title-banner';
+    banner.setAttribute('aria-hidden', 'true');
+    banner.innerHTML = '<div class="scene-banner-sub"></div><div class="scene-banner-title"></div><div class="scene-banner-rule"></div>';
+    host.appendChild(banner);
+  }
+  return { curtain, banner };
+}
 
+function showSceneTitleBanner(mapName, regionName) {
+  if (isStudioSplashActive() || ($('opening-prologue') && !$('opening-prologue').classList.contains('hidden'))) {
+    return;
+  }
+  const { banner } = ensureSceneTransitionEls();
+  const titleEl = banner.querySelector('.scene-banner-title');
+  const subEl = banner.querySelector('.scene-banner-sub');
+  if (titleEl) titleEl.textContent = mapName;
+  if (subEl) subEl.textContent = regionName || '';
+
+  if (sceneBannerTimer) clearTimeout(sceneBannerTimer);
+  banner.classList.remove('is-visible');
+  void banner.offsetWidth;
+  banner.classList.add('is-visible');
+  sceneBannerTimer = setTimeout(() => {
+    banner.classList.remove('is-visible');
+  }, 1150);
+}
+
+function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true) {
   closeDialog();
   state.mapId = target.id;
   const sx = spawnX ?? target.spawn?.x ?? target.width * 0.5;
@@ -660,12 +734,45 @@ function enterMap(mapId, spawnX = null, spawnY = null) {
         : 'WASD / 方向键行走 · E / 空格 交互 · 点击地面寻路';
   }
 
+  if (showBanner) {
+    showSceneTitleBanner(target.name, region.name);
+  }
   showToast(`抵达「${target.name}」`, 'info');
   if (!isStudioSplashActive() && !battle && $('opening-prologue')?.classList.contains('hidden')) {
     sfx.playBgm?.(getBgmTrackForMap(target.id));
   }
   updateHUD();
   scheduleSave();
+}
+
+function enterMap(mapId, spawnX = null, spawnY = null) {
+  const target = MAPS_BY_ID[mapId];
+  if (!target) return;
+
+  if (!isRegionUnlocked(target.regionId)) {
+    const ok = tryUnlockRegion(target.regionId);
+    if (!ok) return;
+  }
+
+  // 首次初始化加载地图直接进入；后续切图启用两段式水墨幕布过渡 + 书法地标横幅
+  if (!world?.map) {
+    applyEnterMap(target, spawnX, spawnY, false);
+    return;
+  }
+
+  const token = ++sceneTransitionToken;
+  if (sceneTransitionTimer) clearTimeout(sceneTransitionTimer);
+  const { curtain } = ensureSceneTransitionEls();
+  sfx.uiTick?.();
+  curtain.classList.add('is-active');
+
+  sceneTransitionTimer = setTimeout(() => {
+    if (token !== sceneTransitionToken) return;
+    applyEnterMap(target, spawnX, spawnY, true);
+    requestAnimationFrame(() => {
+      curtain.classList.remove('is-active');
+    });
+  }, 150);
 }
 
 function refreshCurrentMapLoot() {
@@ -951,9 +1058,12 @@ function handleWorldInteract(target) {
 }
 
 // ==================== NPC 底部水墨对话框 ====================
-function closeDialog() {
+function closeDialog(silent = false) {
+  const box = $('rpg-dialog-box');
+  const wasOpen = Boolean(currentDialog || (box && !box.classList.contains('hidden')));
   currentDialog = null;
-  $('rpg-dialog-box')?.classList.add('hidden');
+  box?.classList.add('hidden');
+  if (wasOpen && !silent) sfx.uiTick?.();
   if (world && !battle && $('modal-backdrop')?.classList.contains('hidden')) {
     world.paused = false;
   }
@@ -964,6 +1074,7 @@ function openNpcDialog(npcId) {
   if (!npc) return;
   currentDialog = npc;
   if (world) world.paused = true;
+  sfx.uiTick?.();
 
   advanceQuestTrigger(`talk_${npcId}`);
 
@@ -1229,52 +1340,93 @@ function triggerBattleLunge(isHero) {
   }
 }
 
-function spawnBattleSlashVfx(target = 'enemy', variant = 'physical') {
+function spawnBattleSlashVfx(target = 'enemy', variant = 'martial', isCrit = false) {
   const container = getBattleVfxContainer();
   if (!container) return;
   const { x, y } = getBattleTargetPos(target, container, 0, 8);
+  const branch = variant === 'physical' ? 'martial' : variant;
   const fxEl = document.createElement('div');
-  fxEl.className = `bat-slash-fx slash-${variant}`;
+  fxEl.className = `bat-slash-fx slash-${branch}${isCrit ? ' is-crit-vfx' : ''}`;
   fxEl.style.left = `${Math.round(x)}px`;
   fxEl.style.top = `${Math.round(y)}px`;
 
-  if (variant === 'capture') {
+  if (branch === 'capture') {
     fxEl.innerHTML = `
-      <svg viewBox="0 0 120 120" width="128" height="128" fill="none" aria-hidden="true">
-        <circle cx="60" cy="60" r="44" stroke="#c084fc" stroke-width="4" stroke-dasharray="18 10" opacity="0.92"/>
-        <circle cx="60" cy="60" r="28" stroke="#e9d5ff" stroke-width="2.5" stroke-dasharray="10 8" opacity="0.85"/>
-        <path d="M60 12 L68 52 L108 60 L68 68 L60 108 L52 68 L12 60 L52 52 Z" fill="rgba(192,132,252,0.32)" stroke="#f3e8ff" stroke-width="2"/>
+      <svg viewBox="0 0 120 120" width="136" height="136" fill="none" aria-hidden="true">
+        <circle cx="60" cy="60" r="46" stroke="#c084fc" stroke-width="4" stroke-dasharray="18 10" opacity="0.95"/>
+        <circle cx="60" cy="60" r="30" stroke="#e9d5ff" stroke-width="2.5" stroke-dasharray="10 8" opacity="0.88"/>
+        <path d="M60 10 L69 51 L110 60 L69 69 L60 110 L51 69 L10 60 L51 51 Z" fill="rgba(192,132,252,0.36)" stroke="#f3e8ff" stroke-width="2"/>
       </svg>`;
-  } else if (variant === 'mystic' || variant === 'mecha') {
+  } else if (branch === 'martial') {
+    // 古武：黑墨飞白剑气弧 + 朱砂锋刃 + 墨点飞溅
     fxEl.innerHTML = `
-      <svg viewBox="0 0 140 140" width="144" height="144" fill="none" aria-hidden="true">
-        <path d="M18 112 Q64 26 124 22 Q78 66 24 122 Z" fill="rgba(94,234,212,0.45)" stroke="#5eead4" stroke-width="3"/>
-        <path d="M26 28 Q84 56 122 114" stroke="#99f6e4" stroke-width="4" stroke-linecap="round"/>
-        <circle cx="72" cy="68" r="18" stroke="#2dd4bf" stroke-width="2.5" stroke-dasharray="6 5" opacity="0.9"/>
+      <svg viewBox="0 0 160 160" width="168" height="168" fill="none" aria-hidden="true">
+        <path d="M16 132 Q66 36 144 16 Q98 78 34 142 Z" fill="rgba(18,15,13,0.88)" stroke="#b53a2e" stroke-width="3.2"/>
+        <path d="M22 126 Q72 42 140 20 Q92 70 30 134 Z" fill="rgba(217,76,61,0.52)" stroke="#fca5a5" stroke-width="2"/>
+        <path d="M34 114 Q80 48 134 26" stroke="#fff2e2" stroke-width="2.8" stroke-linecap="round"/>
+        <circle cx="136" cy="34" r="4" fill="#181512" stroke="#d94c3d" stroke-width="1.2"/>
+        <circle cx="118" cy="18" r="2.8" fill="#d94c3d"/>
+        <circle cx="44" cy="138" r="3.4" fill="#181512"/>
+        <circle cx="24" cy="116" r="2.2" fill="#e5bb5c"/>
       </svg>`;
-  } else if (variant === 'crit') {
+  } else if (branch === 'mystic') {
+    // 奇术：道家八卦符阵光环 + 紫青雷霆裂空
     fxEl.innerHTML = `
-      <svg viewBox="0 0 150 150" width="158" height="158" fill="none" aria-hidden="true">
-        <path d="M16 126 Q72 34 138 16 Q88 76 28 136 Z" fill="rgba(251,191,36,0.58)" stroke="#fef08a" stroke-width="3.5"/>
-        <path d="M22 28 Q82 62 134 126 Q74 88 14 40 Z" fill="rgba(249,115,22,0.42)" stroke="#fde047" stroke-width="2.5"/>
+      <svg viewBox="0 0 160 160" width="168" height="168" fill="none" aria-hidden="true">
+        <polygon points="80,14 126,33 146,80 126,127 80,146 34,127 14,80 34,33" fill="rgba(157,124,216,0.16)" stroke="#c084fc" stroke-width="2.6" stroke-dasharray="10 5"/>
+        <circle cx="80" cy="80" r="44" stroke="#5eead4" stroke-width="2.2" stroke-dasharray="14 6" opacity="0.92"/>
+        <circle cx="80" cy="80" r="22" stroke="#e9d5ff" stroke-width="1.8" opacity="0.85"/>
+        <path d="M88 12 L68 58 L92 64 L54 118 L74 114 L64 148" stroke="#5eead4" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M88 12 L68 58 L92 64 L54 118 L74 114 L64 148" stroke="#f5f3ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M24 52 L56 68 L44 82 L134 106" stroke="#c084fc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
       </svg>`;
-  } else if (variant === 'enemy') {
+  } else if (branch === 'firearm') {
+    // 现代军火：炽焰琥珀枪口爆闪 + 高速穿甲弹道拖尾 + 金属破片火花
     fxEl.innerHTML = `
-      <svg viewBox="0 0 130 130" width="132" height="132" fill="none" aria-hidden="true">
+      <svg viewBox="0 0 170 150" width="176" height="156" fill="none" aria-hidden="true">
+        <polygon points="78,74 96,24 104,62 154,48 112,78 156,102 106,90 94,132 80,88 38,108 66,76 34,46" fill="rgba(249,115,22,0.72)" stroke="#fef08a" stroke-width="2.2"/>
+        <circle cx="92" cy="76" r="16" fill="#fff7ed" opacity="0.95"/>
+        <line x1="164" y1="36" x2="12" y2="96" stroke="#fbbf24" stroke-width="4.5" stroke-linecap="round"/>
+        <line x1="160" y1="38" x2="26" y2="90" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="158" y1="68" x2="18" y2="118" stroke="#f97316" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+        <line x1="146" y1="22" x2="48" y2="60" stroke="#fde047" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M62 40 L48 24 M118 116 L136 132 M42 74 L20 68 M126 32 L144 18" stroke="#fed7aa" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>`;
+  } else if (branch === 'mecha') {
+    // 科幻机甲：全息青色瞄准锁敌十字 + 穿透等离子激光束 + 重炮过载爆闪
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 170 150" width="176" height="156" fill="none" aria-hidden="true">
+        <circle cx="85" cy="75" r="46" stroke="#22d3ee" stroke-width="2.4" stroke-dasharray="16 8" opacity="0.92"/>
+        <circle cx="85" cy="75" r="28" stroke="#5eead4" stroke-width="1.8" opacity="0.9"/>
+        <path d="M32 42 L48 42 L48 28 M138 42 L122 42 L122 28 M32 108 L48 108 L48 122 M138 108 L122 108 L122 122" stroke="#5eead4" stroke-width="2.8"/>
+        <line x1="8" y1="92" x2="164" y2="58" stroke="rgba(34,211,238,0.55)" stroke-width="18" stroke-linecap="round"/>
+        <line x1="12" y1="91" x2="160" y2="59" stroke="#67e8f9" stroke-width="8" stroke-linecap="round"/>
+        <line x1="16" y1="90" x2="156" y2="60" stroke="#ecfeff" stroke-width="3" stroke-linecap="round"/>
+        <polygon points="85,48 93,67 112,75 93,83 85,102 77,83 58,75 77,67" fill="rgba(94,234,212,0.72)" stroke="#ffffff" stroke-width="1.6"/>
+      </svg>`;
+  } else if (branch === 'crit') {
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 150 150" width="164" height="164" fill="none" aria-hidden="true">
+        <path d="M16 126 Q72 34 138 16 Q88 76 28 136 Z" fill="rgba(251,191,36,0.62)" stroke="#fef08a" stroke-width="3.5"/>
+        <path d="M22 28 Q82 62 134 126 Q74 88 14 40 Z" fill="rgba(249,115,22,0.46)" stroke="#fde047" stroke-width="2.5"/>
+      </svg>`;
+  } else if (branch === 'enemy') {
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 130 130" width="136" height="136" fill="none" aria-hidden="true">
         <path d="M22 24 Q72 64 112 108" stroke="#ef4444" stroke-width="7" stroke-linecap="round"/>
         <path d="M40 16 Q84 56 118 92" stroke="#fca5a5" stroke-width="3.5" stroke-linecap="round"/>
         <path d="M14 44 Q58 78 96 116" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
       </svg>`;
   } else {
     fxEl.innerHTML = `
-      <svg viewBox="0 0 140 140" width="140" height="140" fill="none" aria-hidden="true">
+      <svg viewBox="0 0 140 140" width="144" height="144" fill="none" aria-hidden="true">
         <path d="M18 118 Q68 34 126 18 Q84 72 28 126 Z" fill="rgba(232,76,61,0.48)" stroke="#fca5a5" stroke-width="3"/>
         <path d="M30 106 Q74 44 118 30" stroke="#fef2f2" stroke-width="2.5" stroke-linecap="round"/>
       </svg>`;
   }
 
   container.appendChild(fxEl);
-  setTimeout(() => fxEl.remove(), 460);
+  setTimeout(() => fxEl.remove(), 480);
 }
 
 function spawnBattleDmgNum(target = 'enemy', text, styleType = 'physical', opts = {}) {
@@ -1318,6 +1470,7 @@ function setBattleButtonsEnabled(enabled) {
     const capBtn = $('bat-btn-capture');
     if (capBtn) capBtn.disabled = !battle.tpl.capturable;
   }
+  $('rpg-battle-overlay')?.classList.toggle('enemy-turn', !enabled);
 }
 
 function updateBattleUI() {
@@ -1420,7 +1573,7 @@ function startBattle(worldEnemy) {
 
   const enemyVisual = $('bat-enemy-visual');
   if (enemyVisual) {
-    enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right');
+    enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'is-captured');
     enemyVisual.innerHTML = buildEnemySvg(tpl);
   }
   const heroBatImg = $('bat-hero-portrait');
@@ -1430,7 +1583,8 @@ function startBattle(worldEnemy) {
     heroBatImg.style.background = 'transparent';
     heroBatImg.classList.remove('hit', 'hit-flash', 'lunge-left');
   }
-  $('rpg-battle-overlay').classList.remove('hidden');
+  const battleOverlay = $('rpg-battle-overlay');
+  battleOverlay?.classList.remove('hidden', 'enemy-turn', 'screen-shake');
 
   logBattle(tpl.introLine || `遭遇「${tpl.name}」！凝神戒备，准备迎战！`);
   setBattleButtonsEnabled(true);
@@ -1461,6 +1615,9 @@ function triggerHitAnim(isEnemy, strong = false) {
   const dur = strong ? 320 : 260;
   triggerClassAnim(el, 'hit-flash', dur);
   triggerClassAnim(el, 'hit', dur);
+  if (strong && gameSettings.screenShakeEnabled) {
+    triggerClassAnim($('rpg-battle-overlay'), 'screen-shake', 340);
+  }
 }
 
 function calcDamageToEnemy(mult = 1, opts = {}) {
@@ -1581,7 +1738,13 @@ function handleBattleVictory(captured = false) {
     }
   }
 
-  sfx.ending();
+  const enemyVisual = $('bat-enemy-visual');
+  if (enemyVisual) {
+    enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'is-captured');
+    enemyVisual.classList.add(captured ? 'is-captured' : 'is-defeated');
+  }
+
+  setTimeout(() => sfx.ending(), 200);
   logBattle((captured ? `收妖成功！${tpl.spiritName}已入天工墨壶！` : (tpl.defeatLine || `击败「${tpl.name}」！`)) + ` 获 +${expGain} 经验、+${goldGain} 币！${extraMsg}`);
   gainExp(expGain);
 
@@ -1801,12 +1964,20 @@ function battlePlayerAttack() {
 
   const stats = getHeroStats();
   const { dmg, isCrit, lifesteal } = calcDamageToEnemy(1, {});
+  const branch = getEquippedWeaponBranch();
+  const wType = state.equipped?.weapon?.weaponType || '';
+  const isHeavy = Boolean(isCrit || wType === 'cannon' || wType === 'heavy' || wType === 'railgun');
   battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
   triggerBattleLunge(true);
-  triggerHitAnim(true, isCrit);
-  spawnBattleSlashVfx('enemy', isCrit ? 'crit' : 'physical');
-  spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, isCrit ? 'crit' : 'physical');
-  sfx.disassemble(true, isCrit);
+  triggerHitAnim(true, isHeavy);
+  spawnBattleSlashVfx('enemy', branch, isCrit);
+  const dmgStyle = isCrit ? 'crit' : (branch === 'martial' ? 'physical' : branch);
+  spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
+  if (typeof sfx.playCombatSfx === 'function') {
+    sfx.playCombatSfx(branch, isHeavy);
+  } else {
+    sfx.disassemble(true, isCrit);
+  }
 
   const logs = [`沈砚挥兵直击，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`];
   if (lifesteal > 0) {
@@ -1884,15 +2055,25 @@ function battleUseSkill(skill) {
       isSkill: true
     });
     battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
-    const isMysticOrMecha = skill.category === 'mystic' || skill.category === 'mecha';
-    const dmgStyle = isCrit ? 'crit' : (isMysticOrMecha ? skill.category : (skill.category === 'firearm' ? 'firearm' : 'physical'));
-    const slashVariant = isCrit ? 'crit' : (isMysticOrMecha ? skill.category : 'physical');
+    const branch = skill.branch || skill.category || 'martial';
+    const isHeavy = Boolean(
+      (skill.mpCost || 0) >= 22 ||
+      skill.isArtillery ||
+      /cannon|railgun|missile|artillery/i.test(skill.id || '') ||
+      (skill.mult || 1) >= 2.2
+    );
+    const isMysticOrMecha = branch === 'mystic' || branch === 'mecha';
+    const dmgStyle = isCrit ? 'crit' : (isMysticOrMecha ? branch : (branch === 'firearm' ? 'firearm' : 'physical'));
 
     triggerBattleLunge(true);
-    triggerHitAnim(true, isCrit || (skill.mult || 1) >= 2.2);
-    spawnBattleSlashVfx('enemy', slashVariant);
+    triggerHitAnim(true, isCrit || isHeavy);
+    spawnBattleSlashVfx('enemy', branch, isCrit);
     spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
-    sfx.disassemble(true, true);
+    if (typeof sfx.playCombatSfx === 'function') {
+      sfx.playCombatSfx(branch, isHeavy);
+    } else {
+      sfx.disassemble(true, true);
+    }
     logs.push(`${flavorPrefix}施展【${skill.name}】，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`);
 
     if (lifesteal > 0) {
@@ -2018,6 +2199,209 @@ function battleAttemptRun() {
   }
 }
 
+function renderSkillIcon(skill) {
+  const id = skill?.id || '';
+  const cat = skill?.category || 'martial';
+
+  // 分支配色方案（暗墨底圆徽 + 分支辉光外环）
+  const palettes = {
+    martial: { bg1: '#2a1f16', bg2: '#120d0a', rim: '#e5b85c', glow: 'rgba(229,184,92,0.58)' },
+    firearm: { bg1: '#2c1814', bg2: '#140b09', rim: '#f97316', glow: 'rgba(249,115,22,0.58)' },
+    mecha:   { bg1: '#0f2234', bg2: '#09121c', rim: '#38bdf8', glow: 'rgba(56,189,248,0.62)' },
+    mystic:  { bg1: '#112a24', bg2: '#081613', rim: '#5eead4', glow: 'rgba(94,234,212,0.58)' }
+  };
+  const pal = palettes[cat] || palettes.martial;
+
+  let art = '';
+  switch (id) {
+    // ---- 1. 古武门派 (martial) ----
+    case 'sk_slash': // 青城破风剑诀：寒光墨剑 + 青金破风弧
+      art = `
+        <path d="M9 31c6-12 18-19 30-20" fill="none" stroke="#5eead4" stroke-width="2.4" stroke-linecap="round" opacity="0.72"/>
+        <path d="M12 37c9-5 19-12 27-23" fill="none" stroke="#fde68a" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>
+        <polygon points="38,9 33,19 18,34 14,30 29,15" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.2"/>
+        <line x1="17" y1="31" x2="35" y2="13" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="11" y1="26" x2="21" y2="36" stroke="#e5b85c" stroke-width="3.2" stroke-linecap="round"/>
+        <line x1="8" y1="39" x2="15" y2="32" stroke="#7c2d12" stroke-width="3.4" stroke-linecap="round"/>
+        <circle cx="37" cy="11" r="2.2" fill="#fef08a"/>
+      `;
+      break;
+    case 'sk_palm': // 降龙墨掌劲：金墨龙掌 + 震波环
+      art = `
+        <circle cx="24" cy="24" r="16" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.75"/>
+        <circle cx="24" cy="24" r="11" fill="none" stroke="#fde68a" stroke-width="1.2" opacity="0.6"/>
+        <path d="M17 34v-9l-3-6a1.7 1.7 0 0 1 3-1.4l2 4.4V13a1.7 1.7 0 0 1 3.4 0v7.5V11.5a1.8 1.8 0 0 1 3.6 0v9V13a1.7 1.7 0 0 1 3.4 0v8.5l1.6-4.2a1.7 1.7 0 0 1 3.1 1.3l-2.6 8.9c-.8 3.2-3 6.5-6.5 6.5h-4.5c-2.5 0-3.5-1.5-3.5-3z" fill="#f59e0b" stroke="#fef3c7" stroke-width="1.4" stroke-linejoin="round"/>
+        <circle cx="24" cy="26" r="3.2" fill="#fef08a"/>
+      `;
+      break;
+    case 'sk_shatter': // 断钢裂甲枪：赤缨龙枪 + 破甲金芒
+      art = `
+        <path d="M29 12l9-2-2 9-4-3z" fill="#fde047" stroke="#f59e0b" stroke-width="1"/>
+        <line x1="9" y1="39" x2="33" y2="15" stroke="#b45309" stroke-width="3.2" stroke-linecap="round"/>
+        <polygon points="40,8 34,20 28,14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.3"/>
+        <path d="M26 16c-2 4-1 7 2 8-4 0-7-2-7-6z" fill="#ef4444"/>
+        <path d="M24 19c1 4 4 6 8 5-3 2-7 1-9-2z" fill="#f87171"/>
+        <path d="M14 13l4 4M35 28l4 4M17 20l-5-1" stroke="#fde047" stroke-width="1.8" stroke-linecap="round"/>
+      `;
+      break;
+    case 'sk_storm': // 万墨归宗剑：五剑归宗光阵
+      art = `
+        <circle cx="24" cy="24" r="15" fill="none" stroke="#e5b85c" stroke-width="1.4" opacity="0.7"/>
+        <polygon points="24,6 26.5,24 24,29 21.5,24" fill="#fef08a" stroke="#f59e0b" stroke-width="1"/>
+        <polygon points="39,14 27,26 23,25 25,21" fill="#e2e8f0" stroke="#38bdf8" stroke-width="1"/>
+        <polygon points="9,14 23,21 25,25 21,26" fill="#e2e8f0" stroke="#38bdf8" stroke-width="1"/>
+        <polygon points="36,36 25,27 25,23 29,24" fill="#cbd5e1" stroke="#e5b85c" stroke-width="1"/>
+        <polygon points="12,36 19,24 23,23 23,27" fill="#cbd5e1" stroke="#e5b85c" stroke-width="1"/>
+        <circle cx="24" cy="25" r="4" fill="#fde047" stroke="#ffffff" stroke-width="1.2"/>
+      `;
+      break;
+
+    // ---- 2. 现代军火 (firearm) ----
+    case 'sk_burst': // 火神加特林扫射：六管转轮机枪 + 炽烈曳光弹
+      art = `
+        <rect x="7" y="18" width="13" height="12" rx="2.5" fill="#475569" stroke="#e5b85c" stroke-width="1.5"/>
+        <rect x="19" y="19" width="15" height="2.4" rx="1" fill="#cbd5e1"/>
+        <rect x="19" y="23" width="15" height="2.4" rx="1" fill="#f8fafc"/>
+        <rect x="19" y="27" width="15" height="2.4" rx="1" fill="#94a3b8"/>
+        <rect x="29" y="18" width="3" height="12" rx="1" fill="#d49a3a"/>
+        <polygon points="35,24 43,17 40,23 44,25 39,27 42,32 35,26" fill="#fde047" stroke="#f97316" stroke-width="1"/>
+        <line x1="12" y1="30" x2="10" y2="37" stroke="#b45309" stroke-width="3.2" stroke-linecap="round"/>
+      `;
+      break;
+    case 'sk_shotgun': // 散弹墨霰：双管霰弹 + 灼热铁霰扇面
+      art = `
+        <path d="M7 33l8-6h13v4H18l-4 5z" fill="#92400e" stroke="#f3ce7a" stroke-width="1.3"/>
+        <rect x="13" y="21" width="17" height="4" rx="1" fill="#64748b" stroke="#cbd5e1" stroke-width="1"/>
+        <rect x="15" y="25" width="14" height="3" rx="1" fill="#475569"/>
+        <path d="M31 23l10-9M31 24l11-2M31 25l10 6M31 26l7 10" stroke="#fb923c" stroke-width="1.7" stroke-linecap="round"/>
+        <circle cx="38" cy="16" r="2" fill="#fde047"/>
+        <circle cx="41" cy="22" r="2.2" fill="#fef08a"/>
+        <circle cx="39" cy="29" r="2" fill="#f97316"/>
+        <circle cx="35" cy="34" r="1.7" fill="#ef4444"/>
+      `;
+      break;
+    case 'sk_snipe': // 反器材穿甲狙杀：猩红战术瞄准镜 + 十字准星
+      art = `
+        <circle cx="24" cy="24" r="14" fill="none" stroke="#ef4444" stroke-width="2"/>
+        <circle cx="24" cy="24" r="7.5" fill="none" stroke="#fca5a5" stroke-width="1.2" stroke-dasharray="3 2"/>
+        <line x1="24" y1="6" x2="24" y2="16" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
+        <line x1="24" y1="32" x2="24" y2="42" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
+        <line x1="6" y1="24" x2="16" y2="24" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
+        <line x1="32" y1="24" x2="42" y2="24" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="24" cy="24" r="2.8" fill="#ef4444" stroke="#fef08a" stroke-width="1"/>
+      `;
+      break;
+    case 'sk_airstrike': // 武装战隼空袭：俯冲战隼剪影 + 航弹火球
+      art = `
+        <polygon points="24,8 28,17 40,21 28,23 26,28 22,28 20,23 8,21 20,17" fill="#cbd5e1" stroke="#f97316" stroke-width="1.3" stroke-linejoin="round"/>
+        <polygon points="24,29 27,34 24,39 21,34" fill="#fde047" stroke="#ef4444" stroke-width="1.2"/>
+        <path d="M13 36c3-3 7-4 11-4s8 1 11 4" fill="none" stroke="#f97316" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="16" cy="34" r="2" fill="#fb923c"/>
+        <circle cx="32" cy="34" r="2" fill="#fb923c"/>
+      `;
+      break;
+
+    // ---- 3. 科幻墨甲 (mecha) ----
+    case 'sk_cannon': // 重炮覆盖轰炸：双联飞弹齐射 + 爆裂尾焰
+      art = `
+        <path d="M11 35l10-10" stroke="#f97316" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M17 39l11-11" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+        <polygon points="34,11 29,21 23,15" fill="#e2e8f0" stroke="#38bdf8" stroke-width="1.3"/>
+        <polygon points="39,18 34,27 29,22" fill="#fde047" stroke="#f97316" stroke-width="1.3"/>
+        <rect x="19" y="18" width="9" height="4.5" rx="1.5" transform="rotate(-45 23.5 20.2)" fill="#64748b" stroke="#bae6fd" stroke-width="1"/>
+        <rect x="25" y="24" width="9" height="4.5" rx="1.5" transform="rotate(-45 29.5 26.2)" fill="#64748b" stroke="#fde68a" stroke-width="1"/>
+        <circle cx="12" cy="34" r="3" fill="#fde047"/>
+      `;
+      break;
+    case 'sk_bits': // 浮游炮齐射：四翼墨家浮游炮 + 汇聚激光束
+      art = `
+        <line x1="12" y1="12" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
+        <line x1="36" y1="12" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
+        <line x1="12" y1="36" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
+        <line x1="36" y1="36" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
+        <polygon points="10,9 16,11 12,16" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
+        <polygon points="38,9 32,11 36,16" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
+        <polygon points="10,39 16,37 12,32" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
+        <polygon points="38,39 32,37 36,32" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
+        <circle cx="24" cy="24" r="5.5" fill="#0ea5e9" stroke="#e0f2fe" stroke-width="1.8"/>
+        <circle cx="24" cy="24" r="2.2" fill="#ffffff"/>
+      `;
+      break;
+    case 'sk_overdrive': // 量子护盾超载：六边形量子盾 + 超载核心
+      art = `
+        <polygon points="24,7 38,15 38,33 24,41 10,33 10,15" fill="rgba(14,165,233,0.22)" stroke="#38bdf8" stroke-width="2.2"/>
+        <polygon points="24,13 33,18 33,30 24,35 15,30 15,18" fill="none" stroke="#7dd3fc" stroke-width="1.3" stroke-dasharray="4 2"/>
+        <circle cx="24" cy="24" r="5" fill="#f97316" stroke="#fde047" stroke-width="1.6"/>
+        <circle cx="24" cy="24" r="2" fill="#ffffff"/>
+      `;
+      break;
+    case 'sk_railgun': // 轨道电磁炮：双轨电磁线圈 + 贯穿光束
+      art = `
+        <line x1="6" y1="32" x2="40" y2="14" stroke="#38bdf8" stroke-width="7" stroke-linecap="round" opacity="0.38"/>
+        <line x1="6" y1="32" x2="41" y2="13" stroke="#e0f2fe" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M13 23l5 9M21 19l5 9M29 15l5 9" stroke="#7dd3fc" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="40" cy="14" r="3.2" fill="#ffffff" stroke="#38bdf8" stroke-width="1.4"/>
+        <circle cx="11" cy="29" r="3.5" fill="#f97316" stroke="#fde047" stroke-width="1.3"/>
+      `;
+      break;
+
+    // ---- 4. 神仙妖怪 · 墨土奇术 (mystic) ----
+    case 'sk_shield': // 玄墨金钟罩：青铜金钟 + 玉色护体符环
+      art = `
+        <circle cx="24" cy="24" r="15.5" fill="none" stroke="#5eead4" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.75"/>
+        <path d="M14 33c0-11 3-18 10-18s10 7 10 18z" fill="#b45309" stroke="#fde68a" stroke-width="1.8" stroke-linejoin="round"/>
+        <rect x="21" y="10" width="6" height="5" rx="1.5" fill="#e5b85c" stroke="#fef3c7" stroke-width="1.1"/>
+        <line x1="12" y1="33" x2="36" y2="33" stroke="#fde047" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="24" cy="25" r="3" fill="#5eead4"/>
+      `;
+      break;
+    case 'sk_fire': // 赤焰焚墨：朱砂业火莲焰
+      art = `
+        <path d="M24 8c4 6 11 10 11 19a11 11 0 0 1-22 0c0-6 4-10 6-13 0 4 2 5 3 5 0-5 2-8 2-11z" fill="#ea580c" stroke="#fde047" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M24 17c3 4 6 7 6 12a6 6 0 0 1-12 0c0-4 3-7 6-12z" fill="#facc15"/>
+        <circle cx="24" cy="30" r="2.6" fill="#fffbeb"/>
+      `;
+      break;
+    case 'sk_heal': // 回春青莲诀：翠玉青莲 + 灵露光点
+      art = `
+        <path d="M24 10c4 5 5 11 0 18-5-7-4-13 0-18z" fill="#34d399" stroke="#d1fae5" stroke-width="1.3"/>
+        <path d="M13 18c6 1 10 5 11 12-7-1-11-5-11-12z" fill="#10b981" stroke="#a7f3d0" stroke-width="1.3"/>
+        <path d="M35 18c-6 1-10 5-11 12 7-1 11-5 11-12z" fill="#10b981" stroke="#a7f3d0" stroke-width="1.3"/>
+        <path d="M10 29c5-2 10-1 14 4-6 1-11 0-14-4z" fill="#059669" stroke="#6ee7b7" stroke-width="1.2"/>
+        <path d="M38 29c-5-2-10-1-14 4 6 1 11 0 14-4z" fill="#059669" stroke="#6ee7b7" stroke-width="1.2"/>
+        <circle cx="24" cy="27" r="2.8" fill="#fef08a"/>
+        <circle cx="16" cy="12" r="1.4" fill="#a7f3d0"/><circle cx="32" cy="12" r="1.4" fill="#a7f3d0"/>
+      `;
+      break;
+    case 'sk_crucible': // 墨壶镇魂印：天工墨壶 + 紫金九天雷印
+      art = `
+        <path d="M13 15l5 5-3 3 6 6" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M35 15l-5 5 3 3-6 6" fill="none" stroke="#fde047" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="20" y="9" width="8" height="4" rx="1.2" fill="#e5b85c"/>
+        <path d="M19 13h10l-1.5 5c4.5 2 6.5 6.5 6.5 11a10 10 0 0 1-20 0c0-4.5 2-9 6.5-11z" fill="#2e1f3a" stroke="#e5b85c" stroke-width="1.8"/>
+        <circle cx="24" cy="28" r="4.5" fill="#a855f7" stroke="#f3e8ff" stroke-width="1.2"/>
+        <circle cx="24" cy="28" r="1.8" fill="#fde047"/>
+      `;
+      break;
+
+    default:
+      art = `
+        <circle cx="24" cy="24" r="11" fill="none" stroke="${pal.rim}" stroke-width="2"/>
+        <polygon points="24,11 28,21 38,24 28,27 24,37 20,27 10,24 20,21" fill="${pal.rim}" opacity="0.9"/>
+      `;
+  }
+
+  return `
+    <span class="bat-skill-icon branch-${cat}" style="--sk-glow:${pal.glow};">
+      <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="22" fill="${pal.bg2}" stroke="${pal.rim}" stroke-width="1.8" opacity="0.94"/>
+        <circle cx="24" cy="24" r="19" fill="${pal.bg1}" opacity="0.72"/>
+        ${art}
+      </svg>
+    </span>
+  `;
+}
+
 function renderBattleSubpanel() {
   const panel = $('bat-subpanel');
   if (!battleSubMode || !battle) {
@@ -2035,13 +2419,12 @@ function renderBattleSubpanel() {
     const cardsHtml = list.map((s) => {
       const locked = state.level < s.unlockLv;
       const noMp = state.energy < s.mpCost;
+      const stateCls = locked ? ' is-locked' : (noMp ? ' is-nomp' : '');
       return `
-        <button class="bat-skill-btn" data-skill-id="${s.id}" ${locked || noMp ? 'disabled' : ''}>
-          <div class="bat-skill-head">
-            <span>【${s.seal}】${escapeHtml(s.name)}</span>
-            <span class="bat-skill-cost">${locked ? `Lv.${s.unlockLv}解锁` : `${s.mpCost}内息`}</span>
-          </div>
-          <div class="bat-skill-desc">${escapeHtml(s.desc)}</div>
+        <button class="bat-skill-btn${stateCls}" data-skill-id="${s.id}" title="${escapeHtml(s.desc)}" ${locked || noMp ? 'disabled' : ''}>
+          ${renderSkillIcon(s)}
+          <span class="bat-skill-name">${escapeHtml(s.name)}</span>
+          <span class="bat-skill-cost">${locked ? `Lv.${s.unlockLv}` : `${s.mpCost}内息`}</span>
         </button>
       `;
     }).join('');
@@ -2049,6 +2432,7 @@ function renderBattleSubpanel() {
     panel.innerHTML = `<div class="skill-branch-tabs">${tabsHtml}</div><div class="battle-subgrid">${cardsHtml}</div>`;
     panel.querySelectorAll('.skill-branch-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
+        sfx.uiTick?.();
         battleSkillBranch = btn.dataset.branch;
         renderBattleSubpanel();
       });
@@ -2068,9 +2452,10 @@ function renderBattleSubpanel() {
       if (cnt <= 0 || !ELIXIRS[eid]) continue;
       const e = ELIXIRS[eid];
       rows.push(`
-        <button class="bat-item-btn" data-kind="elixir" data-key="${eid}">
-          <div class="bat-skill-head"><span>【${e.seal}】${escapeHtml(e.name)}</span><span class="bat-skill-cost">×${cnt}</span></div>
-          <div class="bat-skill-desc">${escapeHtml(e.desc)}</div>
+        <button class="bat-item-btn" data-kind="elixir" data-key="${eid}" title="${escapeHtml(e.desc)}">
+          <span class="bat-item-icon">${renderVisualThumb('elixir', e, 40)}</span>
+          <span class="bat-skill-name">${escapeHtml(e.name)}</span>
+          <span class="bat-skill-cost">×${cnt}</span>
         </button>
       `);
     }
@@ -2082,9 +2467,10 @@ function renderBattleSubpanel() {
     for (const [idStr, cnt] of Object.entries(counts)) {
       const it = ITEMS[Number(idStr)];
       rows.push(`
-        <button class="bat-item-btn" data-kind="item" data-key="${it.id}">
-          <div class="bat-skill-head"><span>【${it.seal}】${escapeHtml(it.name)}</span><span class="bat-skill-cost">×${cnt}</span></div>
-          <div class="bat-skill-desc">${escapeHtml(it.desc)}</div>
+        <button class="bat-item-btn" data-kind="item" data-key="${it.id}" title="${escapeHtml(it.desc)}">
+          <span class="bat-item-icon">${renderVisualThumb('item', it, 40)}</span>
+          <span class="bat-skill-name">${escapeHtml(it.name)}</span>
+          <span class="bat-skill-cost">×${cnt}</span>
         </button>
       `);
     }
@@ -2104,16 +2490,24 @@ function renderBattleSubpanel() {
 
 // ==================== 通用古卷弹窗控制 ====================
 function openModal(title, bodyHtml, footerHtml = '') {
+  const backdrop = $('modal-backdrop');
+  const wasClosed = !backdrop || backdrop.classList.contains('hidden');
   if (world) world.paused = true;
+  $('modal-box')?.classList.remove('modal-crucible-full');
   $('modal-title').textContent = title;
   $('modal-body').innerHTML = bodyHtml;
   $('modal-footer').innerHTML = footerHtml || '<button class="btn btn-secondary" id="modal-default-close">合上卷轴</button>';
-  $('modal-backdrop').classList.remove('hidden');
-  $('modal-default-close')?.addEventListener('click', closeModal);
+  backdrop?.classList.remove('hidden');
+  if (wasClosed) sfx.uiTick?.();
+  $('modal-default-close')?.addEventListener('click', () => closeModal());
 }
 
-function closeModal() {
-  $('modal-backdrop')?.classList.add('hidden');
+function closeModal(silent = false) {
+  const backdrop = $('modal-backdrop');
+  const wasOpen = Boolean(backdrop && !backdrop.classList.contains('hidden'));
+  $('modal-box')?.classList.remove('modal-crucible-full');
+  backdrop?.classList.add('hidden');
+  if (wasOpen && !silent) sfx.uiTick?.();
   if (world && !battle && !currentDialog) {
     world.paused = false;
   }
@@ -2696,12 +3090,89 @@ function executeCrucibleFuse() {
   openCrucible();
 }
 
+const WUXING_LIST = ['金', '木', '水', '火', '土'];
+const WUXING_META = {
+  金: { key: 'metal', color: '#f3ce7a', glow: 'rgba(243, 206, 122, 0.72)' },
+  木: { key: 'wood',  color: '#5eead4', glow: 'rgba(94, 234, 212, 0.72)' },
+  水: { key: 'water', color: '#60a5fa', glow: 'rgba(96, 165, 250, 0.72)' },
+  火: { key: 'fire',  color: '#f87171', glow: 'rgba(248, 113, 113, 0.72)' },
+  土: { key: 'earth', color: '#d9a05b', glow: 'rgba(217, 160, 91, 0.72)' }
+};
+
+function getCrucibleElement(entry) {
+  if (!entry) return '土';
+  if (entry.kind === 'spirit') {
+    const id = String(entry.id || '');
+    if (['flame_mech', 'heavy_mech', 'fox_nine', 'dog', 'cyber_rakshasa'].includes(id)) return '火';
+    if (['drone', 'guard', 'auto_turret', 'bronze_spirit', 'mech_taotie', 'raider', 'raider_shield'].includes(id)) return '金';
+    if (['slime', 'mire_wisp', 'corpse_king'].includes(id)) return '木';
+    return '水';
+  }
+  if (entry.kind === 'equip') {
+    const eq = entry.eq || EQUIPMENT[entry.id];
+    if (!eq) return '金';
+    if (eq.slot === 'weapon') {
+      if (eq.proc === 'burn' || ['pistol', 'cannon', 'railgun'].includes(eq.weaponType)) return '火';
+      return '金';
+    }
+    if (eq.slot === 'mech') return '金';
+    return '土';
+  }
+  const id = Number(entry.id);
+  if ([2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 15, 16, 18, 19].includes(id)) return '金';
+  if ([1, 17, 22].includes(id)) return '木';
+  if ([0, 21, 23].includes(id)) return '水';
+  if ([7, 10, 14, 24].includes(id)) return '火';
+  if (id === 20) return '土';
+  const it = ITEMS[id];
+  if (it?.category === 'tech') return '金';
+  if (it?.category === 'consumable') return '水';
+  return '土';
+}
+
+function getCrucibleCategory(entry) {
+  if (!entry) return 'material';
+  if (entry.kind === 'spirit') return 'spirit';
+  if (entry.kind === 'equip') return 'equip';
+  const it = ITEMS[Number(entry.id)];
+  if (it?.isConsumable) return 'consumable';
+  return 'material';
+}
+
+function getWuXingOmen(a, b, match) {
+  if (!a && !b) return '阴阳未济 · 纳灵入阵以启玄机';
+  if (a && !b) return `阴仪初动 · ${getCrucibleElement(a)}灵入坤`;
+  if (!a && b) return `阳仪初动 · ${getCrucibleElement(b)}灵入乾`;
+  const elA = getCrucibleElement(a);
+  const elB = getCrucibleElement(b);
+  const pair = [elA, elB].sort().join('');
+  const omens = {
+    金水: '金水相生 · 灵器通玄',
+    木水: '水木清华 · 丹韵自成',
+    木火: '木火通明 · 灵焰升腾',
+    土火: '火土相融 · 丹鼎凝胎',
+    土金: '土金相生 · 铸兵之象',
+    火金: '火炼真金 · 铸兵之象',
+    木金: '金刃伐木 · 破煞化形',
+    土木: '木破玄土 · 地脉生灵',
+    土水: '土镇玄水 · 凝魂聚魄',
+    水火: '水火既济 · 阴阳化生',
+    金金: '双金共鸣 · 锋芒淬刃',
+    木木: '双木成林 · 生机勃发',
+    水水: '双水汇渊 · 玄灵归元',
+    火火: '双火炎上 · 烈焰淬魂',
+    土土: '厚土载物 · 镇岳成形'
+  };
+  const baseOmen = omens[pair] || '阴阳合璧 · 万象化生';
+  return match ? `${baseOmen} · 丹方感应` : baseOmen;
+}
+
 function openCrucible() {
   const tabsHtml = `
-    <div class="modal-tabs">
-      <button class="modal-tab-btn${crucibleTab === 'forge' ? ' active' : ''}" data-ctab="forge">炼化炉台</button>
-      <button class="modal-tab-btn${crucibleTab === 'guardians' ? ' active' : ''}" data-ctab="guardians">护驾出战 (${state.unlockedGuardians.length}/${Object.keys(GUARDIANS).length})</button>
-      <button class="modal-tab-btn${crucibleTab === 'recipes' ? ' active' : ''}" data-ctab="recipes">墨壶图谱 (${RECIPES.length})</button>
+    <div class="crucible-tabs-bar">
+      <button class="crucible-tab-btn${crucibleTab === 'forge' ? ' active' : ''}" data-ctab="forge">炼化炉台</button>
+      <button class="crucible-tab-btn${crucibleTab === 'guardians' ? ' active' : ''}" data-ctab="guardians">护驾出战 <small>(${state.unlockedGuardians.length}/${Object.keys(GUARDIANS).length})</small></button>
+      <button class="crucible-tab-btn${crucibleTab === 'recipes' ? ' active' : ''}" data-ctab="recipes">墨壶图谱 <small>(${RECIPES.length})</small></button>
     </div>
   `;
 
@@ -2710,81 +3181,120 @@ function openCrucible() {
     const pool = getCruciblePoolEntries();
     const [a, b] = crucibleSlots;
     const match = findMatchingRecipe(a, b);
-    const previewHtml = match
-      ? `${renderVisualThumb(match.resultType, match.resultId, 76)}
-         <strong style="font-family:var(--font-serif);color:${QUALITY[match.quality]?.color || '#e5bb5c'};font-size:13px;letter-spacing:1.5px;text-shadow:0 2px 10px #000;line-height:1.2;max-width:128px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(match.name)}</strong>`
-      : (a && b)
-        ? `${renderVisualThumb('mystery', null, 68)}
-           <strong style="font-family:var(--font-serif);color:#c4a6f5;font-size:13px;letter-spacing:1.5px;text-shadow:0 2px 10px #000;line-height:1.2;">天工未知炼化</strong>`
-        : `${renderVisualThumb('crucible', null, 58)}
-           <small style="font-family:var(--font-serif);color:rgba(240,232,216,0.72);font-size:12px;letter-spacing:2px;text-shadow:0 2px 8px #000;">待启炼化</small>`;
+    const activeElements = new Set();
+    if (a) activeElements.add(getCrucibleElement(a));
+    if (b) activeElements.add(getCrucibleElement(b));
 
-    const recipeHintHtml = match
-      ? `<div class="modal-item-desc" style="text-align:center;color:#e5bb5c;font-family:var(--font-serif);letter-spacing:1px;text-shadow:0 2px 8px #000;">已感应丹方 · ${escapeHtml(match.desc)}</div>`
-      : (a && b)
-        ? `<div class="modal-item-desc" style="text-align:center;color:#c4a6f5;font-family:var(--font-serif);letter-spacing:1px;text-shadow:0 2px 8px #000;">阴阳化生 · 万物皆可入壶（凝炼灵韵异纹神兵 / 丹药 / 护驾）</div>`
-        : '';
+    const wuxingHtml = WUXING_LIST.map((el) => {
+      const meta = WUXING_META[el];
+      const lit = activeElements.has(el);
+      return `<span class="wuxing-rune${lit ? ' lit' : ''}" data-el="${meta.key}" style="--wx-color:${meta.color};--wx-glow:${meta.glow};">${el}</span>`;
+    }).join('<span class="wuxing-dot" aria-hidden="true">·</span>');
 
-    const renderSlotInner = (slotObj, emptyTitle) => {
+    const omenText = getWuXingOmen(a, b, match);
+    const previewTitle = match
+      ? escapeHtml(match.name)
+      : (a && b)
+        ? '天工未知化生'
+        : '太极天枢';
+    const previewColor = match
+      ? (QUALITY[match.quality]?.color || '#f3ce7a')
+      : (a && b)
+        ? '#5eead4'
+        : 'rgba(240, 232, 216, 0.72)';
+
+    const previewVisual = match
+      ? renderVisualThumb(match.resultType, match.resultId, 68)
+      : (a && b)
+        ? renderVisualThumb('mystery', null, 62)
+        : renderVisualThumb('crucible', null, 50);
+
+    const renderPedestal = (slotObj, glyph, label, hint) => {
       if (!slotObj) {
-        return `<span style="font-family:var(--font-serif);font-size:14px;font-weight:700;letter-spacing:2px;color:var(--bronze-bright);text-shadow:0 2px 10px #000;">${emptyTitle}</span>
-                <small style="font-family:var(--font-serif);opacity:0.68;font-size:11px;letter-spacing:1px;text-shadow:0 2px 8px #000;">点击下方素材纳灵</small>`;
+        return `
+          <span class="crucible-empty-glyph">${glyph}</span>
+          <span class="crucible-empty-hint">${hint}</span>
+          <span class="crucible-pedestal-label">${label}</span>
+        `;
       }
-      const thumb = renderVisualThumb(slotObj.kind, slotObj.kind === 'equip' ? slotObj.eq : slotObj.id, 76);
-      return `${thumb}
-              <strong style="font-family:var(--font-serif);font-size:13px;letter-spacing:1.5px;color:#f5ecd8;text-shadow:0 2px 10px #000;line-height:1.2;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(slotObj.name)}</strong>`;
+      const el = getCrucibleElement(slotObj);
+      const meta = WUXING_META[el];
+      const thumb = renderVisualThumb(slotObj.kind, slotObj.kind === 'equip' ? slotObj.eq : slotObj.id, 66);
+      return `
+        <span class="crucible-slot-wx" style="color:${meta.color};text-shadow:0 0 10px ${meta.glow};">${el}</span>
+        <div class="crucible-slot-entity">${thumb}</div>
+        <strong class="crucible-slot-name">${escapeHtml(slotObj.name)}</strong>
+        <span class="crucible-pedestal-label">${label}</span>
+      `;
     };
 
-    const slotMistStyle = (filled) =>
-      `width:132px;height:126px;padding:4px;border:none;border-radius:0;box-shadow:none;background:${
-        filled
-          ? 'radial-gradient(ellipse at 50% 62%, rgba(157,124,216,0.34), rgba(94,234,212,0.12) 45%, transparent 74%)'
-          : 'radial-gradient(ellipse at 50% 65%, rgba(212,162,74,0.16), rgba(94,234,212,0.05) 45%, transparent 72%)'
-      };`;
+    const filteredPool = crucibleFilter === 'all'
+      ? pool
+      : pool.filter((p) => getCrucibleCategory(p) === crucibleFilter);
 
-    const poolHtml = pool.length
-      ? pool.map((p) => {
+    const filters = [
+      { id: 'all', label: '全部' },
+      { id: 'spirit', label: '妖魂' },
+      { id: 'material', label: '灵材' },
+      { id: 'consumable', label: '丹药' },
+      { id: 'equip', label: '兵甲' }
+    ];
+    const filterPillsHtml = filters.map((f) =>
+      `<button class="crucible-filter-pill${crucibleFilter === f.id ? ' active' : ''}" data-cfilter="${f.id}">${f.label}</button>`
+    ).join('');
+
+    const poolHtml = filteredPool.length
+      ? filteredPool.map((p) => {
         const isSel = (a && a.key === p.key) || (b && b.key === p.key);
-        const thumb = renderVisualThumb(p.kind, p.kind === 'equip' ? p.eq : p.id, 52);
+        const el = getCrucibleElement(p);
+        const meta = WUXING_META[el];
+        const thumb = renderVisualThumb(p.kind, p.kind === 'equip' ? p.eq : p.id, 46);
         return `
-          <button class="crucible-chip${isSel ? ' selected' : ''}" data-pkey="${escapeHtml(p.key)}" title="${escapeHtml(p.name)} ×${p.count}"
-            style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:90px;min-height:88px;padding:6px 4px;clip-path:none;border:none;border-radius:10px;box-shadow:none;position:relative;text-align:center;background:${
-              isSel
-                ? 'radial-gradient(circle at 50% 45%, rgba(157,124,216,0.38), rgba(94,234,212,0.12) 52%, transparent 76%)'
-                : 'radial-gradient(circle at 50% 48%, rgba(212,162,74,0.08), transparent 72%)'
-            };">
-            ${thumb}
-            <span style="font-family:var(--font-serif);font-size:12px;letter-spacing:1px;line-height:1.2;color:${isSel ? '#f3ce7a' : '#ede4d2'};text-shadow:0 2px 8px #000;max-width:82px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.name)}</span>
-            <span style="position:absolute;top:2px;right:6px;font-size:11px;font-weight:800;color:#f3ce7a;text-shadow:0 1px 6px #000;">×${p.count}</span>
+          <button class="crucible-chip${isSel ? ' selected' : ''}" data-pkey="${escapeHtml(p.key)}" title="${escapeHtml(p.name)}（${el}）×${p.count}">
+            <span class="chip-wx" style="color:${meta.color};text-shadow:0 0 8px ${meta.glow};">${el}</span>
+            <span class="chip-count">×${p.count}</span>
+            <span class="chip-thumb">${thumb}</span>
+            <span class="chip-name">${escapeHtml(p.name)}</span>
           </button>`;
       }).join('')
-      : '<div class="modal-item-desc">暂无可用妖魂或物资，去野外战斗收妖或拾荒吧！</div>';
+      : '<div class="crucible-vault-empty">此匣暂无对应灵物，可切换分类或前往荒原收妖拾荒。</div>';
 
     contentHtml = `
-      <div class="crucible-workbench" style="border:none;padding:8px 4px 12px;gap:10px;background:radial-gradient(ellipse at 50% 34%, rgba(94,234,212,0.14), rgba(157,124,216,0.14) 38%, transparent 74%);">
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;margin-bottom:-4px;">
-          <img src="assets/app_icon.png" alt="天工墨壶" style="width:94px;height:94px;object-fit:contain;display:block;-webkit-mask-image:radial-gradient(circle, #000 54%, transparent 74%);mask-image:radial-gradient(circle, #000 54%, transparent 74%);filter:drop-shadow(0 0 18px rgba(94,234,212,0.52)) drop-shadow(0 0 28px rgba(157,124,216,0.42));">
-          <div style="font-family:var(--font-serif);font-size:12px;letter-spacing:4px;color:rgba(243,206,122,0.88);text-shadow:0 2px 10px #000;">天工墨壶 · 纳灵炼化坛</div>
-        </div>
-        <div class="crucible-slots" style="gap:10px;">
-          <div class="crucible-slot${a ? ' filled' : ''}" id="crucible-slot-0" title="${a ? '点击卸下' : '槽位一'}" style="${slotMistStyle(!!a)}">
-            ${renderSlotInner(a, '阵眼一')}
+      <div class="crucible-sanctuary">
+        <div class="crucible-altar-triad">
+          <div class="crucible-slot crucible-slot-yin${a ? ' filled' : ''}" id="crucible-slot-0" title="${a ? '点击卸下阴位灵物' : '阴位 · 坤（点击下方灵物纳灵）'}">
+            ${renderPedestal(a, '阴', '阴位 · 坤', '纳灵入坤')}
           </div>
-          <div class="crucible-plus" style="font-family:var(--font-serif);font-size:20px;opacity:0.85;">＋</div>
-          <div class="crucible-slot${b ? ' filled' : ''}" id="crucible-slot-1" title="${b ? '点击卸下' : '槽位二'}" style="${slotMistStyle(!!b)}">
-            ${renderSlotInner(b, '阵眼二')}
+
+          <div class="crucible-taiji-nexus">
+            <div class="wuxing-bar" aria-label="五行灵枢">${wuxingHtml}</div>
+            <div class="wuxing-omen${a && b ? ' ignited' : ''}">${escapeHtml(omenText)}</div>
+            <div class="crucible-result-preview${match ? ' matched' : (a && b ? ' active' : '')}" title="${match ? escapeHtml(match.desc) : '阴阳化生预览'}">
+              <div class="crucible-preview-entity">${previewVisual}</div>
+              <strong class="crucible-preview-title" style="color:${previewColor};">${previewTitle}</strong>
+            </div>
+            <div class="crucible-actions">
+              <button class="crucible-act-btn clear" id="btn-crucible-clear">清空阵眼</button>
+              <button class="crucible-act-btn fuse" id="btn-crucible-fuse" ${a && b ? '' : 'disabled'}>开炉炼化</button>
+            </div>
           </div>
-          <div class="crucible-arrow" style="font-family:var(--font-serif);font-size:20px;opacity:0.85;">⟶</div>
-          <div class="crucible-result-preview" title="${match ? escapeHtml(match.desc) : '炼化产物预览'}" style="width:138px;height:126px;padding:4px;border:none;border-radius:0;box-shadow:none;background:radial-gradient(ellipse at 50% 60%, rgba(94,234,212,0.24), rgba(212,162,74,0.08) 46%, transparent 74%);">${previewHtml}</div>
-        </div>
-        ${recipeHintHtml}
-        <div style="display:flex;justify-content:center;gap:12px;margin-top:2px;">
-          <button class="btn btn-secondary btn-sm" id="btn-crucible-clear">清空阵眼</button>
-          <button class="btn btn-purple" id="btn-crucible-fuse" ${a && b ? '' : 'disabled'}>开炉炼化</button>
+
+          <div class="crucible-slot crucible-slot-yang${b ? ' filled' : ''}" id="crucible-slot-1" title="${b ? '点击卸下阳位灵物' : '阳位 · 乾（点击下方灵物纳灵）'}">
+            ${renderPedestal(b, '阳', '阳位 · 乾', '纳灵入乾')}
+          </div>
         </div>
       </div>
-      <div class="modal-item-title" style="font-family:var(--font-serif);letter-spacing:2px;">可选素材（妖魂 / 物资 / 闲置装备）</div>
-      <div class="crucible-pool" style="max-height:215px;gap:10px;justify-content:flex-start;">${poolHtml}</div>
+
+      <section class="crucible-vault" aria-label="百宝灵匣">
+        <div class="crucible-vault-head">
+          <div class="crucible-vault-title-group">
+            <span class="crucible-vault-title">百宝灵匣</span>
+            <span class="crucible-vault-count">共 ${filteredPool.length} 项</span>
+          </div>
+          <div class="crucible-filter-bar">${filterPillsHtml}</div>
+        </div>
+        <div class="crucible-vault-grid">${poolHtml}</div>
+      </section>
     `;
   } else if (crucibleTab === 'guardians') {
     const cards = Object.values(GUARDIANS).map((g) => {
@@ -2805,7 +3315,7 @@ function openCrucible() {
         </div>
       `;
     }).join('');
-    contentHtml = `<div style="display:flex;flex-direction:column;gap:8px;">${cards}</div>`;
+    contentHtml = `<div class="crucible-scroll-pane">${cards}</div>`;
   } else {
     const rows = RECIPES.map((r) => {
       const nameA = r.matA.kind === 'spirit' ? (ENEMIES[r.matA.id]?.spiritName || r.matA.id) : (ITEMS[r.matA.id]?.name || r.matA.id);
@@ -2826,10 +3336,11 @@ function openCrucible() {
         </div>
       `;
     }).join('');
-    contentHtml = `<div style="display:flex;flex-direction:column;gap:7px;">${rows}</div>`;
+    contentHtml = `<div class="crucible-scroll-pane">${rows}</div>`;
   }
 
   openModal('天工墨壶 · 跨界炼妖铸兵', tabsHtml + contentHtml);
+  $('modal-box')?.classList.add('modal-crucible-full');
 
   $('modal-body').querySelectorAll('[data-ctab]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -2844,6 +3355,12 @@ function openCrucible() {
     $('crucible-slot-1')?.addEventListener('click', () => { crucibleSlots[1] = null; openCrucible(); });
     $('btn-crucible-clear')?.addEventListener('click', () => { crucibleSlots = [null, null]; openCrucible(); });
     $('btn-crucible-fuse')?.addEventListener('click', executeCrucibleFuse);
+    $('modal-body').querySelectorAll('[data-cfilter]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        crucibleFilter = btn.dataset.cfilter || 'all';
+        openCrucible();
+      });
+    });
     $('modal-body').querySelectorAll('[data-pkey]').forEach((chip) => {
       chip.addEventListener('click', () => {
         const entry = pool.find((p) => p.key === chip.dataset.pkey);
@@ -2902,14 +3419,31 @@ function renderEquipCard(eq, actionsHtml) {
     `<span class="affix-tag ${idx === 0 ? 'affix-prefix' : 'affix-suffix'}">${escapeHtml(af.name)}：${escapeHtml(af.desc)}</span>`
   ).join('');
 
+  const isTechOrMil = eq.genre === 'military' || eq.genre === 'scifi';
+  let conditionBadge = '';
+  let conditionCls = '';
+  if (q.key === 'legend') {
+    conditionBadge = '<span class="cond-tag cond-legend">绝世</span>';
+    conditionCls = ' cond-pristine-card';
+  } else if (q.key === 'rare') {
+    conditionBadge = '<span class="cond-tag cond-pristine">完好精品</span>';
+    conditionCls = ' cond-pristine-card';
+  } else if (isTechOrMil && q.key === 'common') {
+    conditionBadge = '<span class="cond-tag cond-worn">锈损</span>';
+    conditionCls = ' cond-worn-card';
+  } else if (isTechOrMil && q.key === 'fine') {
+    conditionBadge = '<span class="cond-tag cond-worn">战损</span>';
+    conditionCls = ' cond-worn-card';
+  }
+
   return `
-    <div class="equip-card q-${q.key}">
+    <div class="equip-card q-${q.key}${conditionCls}">
       <div style="display:flex;align-items:center;gap:10px;">
         ${renderVisualThumb('equip', eq, 44)}
         <div style="flex:1;min-width:0;">
           <div class="equip-head">
             <span class="equip-name" style="color:${q.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(eq.name)}</span>
-            <span class="genre-tag ${g.cls}">${g.label}</span>
+            <span class="equip-badges">${conditionBadge}<span class="genre-tag ${g.cls}">${g.label}</span></span>
           </div>
           <div class="modal-item-desc">${escapeHtml(SLOT_NAMES[eq.slot] || eq.slot)} · ${statBits.join(' / ') || escapeHtml(eq.desc)}</div>
         </div>
@@ -3827,16 +4361,196 @@ function switchUserProfile(username) {
   enterMap(state.mapId, state.heroX, state.heroY);
 }
 
-function openHelpModal() {
-  openModal(
-    '墨土江湖指南',
-    `
-      <div class="modal-list-item"><div class="modal-item-desc"><strong>移动与交互</strong>：桌面使用 WASD/方向键或点击地面寻路，E/空格键交互；手机端使用左下角四向十字键与右下角主交互键。</div></div>
+function replayStudioSplashAndPrologue() {
+  closeModal(true);
+  const splashEl = $('studio-splash');
+  if (!splashEl) {
+    openOpeningPrologue(false);
+    return;
+  }
+  if (world) world.paused = true;
+  splashEl.style.display = '';
+  splashEl.classList.remove('hidden', 'splash-done', 'splash-fading');
+  // 重新触发 SVG 与印章入场动画
+  const stage = splashEl.querySelector('.splash-stage');
+  if (stage) {
+    const clone = stage.cloneNode(true);
+    stage.replaceWith(clone);
+  }
+  sfx.playStudioJingle?.();
+
+  let finished = false;
+  let fadeTimer = null;
+  let doneTimer = null;
+  const finishReplaySplash = () => {
+    if (finished) return;
+    finished = true;
+    if (fadeTimer) clearTimeout(fadeTimer);
+    if (doneTimer) clearTimeout(doneTimer);
+    splashEl.classList.add('splash-fading');
+    setTimeout(() => {
+      splashEl.classList.add('splash-done');
+      openOpeningPrologue(false);
+    }, 600);
+  };
+
+  const skipBtn = $('btn-skip-splash');
+  const onSkip = (e) => {
+    e?.stopPropagation?.();
+    sfx.uiTick?.();
+    finishReplaySplash();
+  };
+  skipBtn?.addEventListener('click', onSkip, { once: true });
+  splashEl.addEventListener('click', onSkip, { once: true });
+  fadeTimer = setTimeout(finishReplaySplash, 4400);
+}
+
+function getMergedAudioSettings() {
+  const raw = typeof sfx.getSettings === 'function' ? (sfx.getSettings() || {}) : {};
+  return {
+    bgmMuted: Boolean(raw.bgmMuted),
+    sfxMuted: Boolean(raw.sfxMuted),
+    footstepsEnabled: raw.footstepsEnabled !== false,
+    bgmVolume: typeof raw.bgmVolume === 'number' ? raw.bgmVolume : 0.65,
+    sfxVolume: typeof raw.sfxVolume === 'number' ? raw.sfxVolume : 0.8
+  };
+}
+
+function openHelpModal(tab = null) {
+  if (tab) settingsModalTab = tab;
+  const audioCfg = getMergedAudioSettings();
+  const bgmPct = Math.round(clamp(audioCfg.bgmVolume, 0, 1) * 100);
+  const sfxPct = Math.round(clamp(audioCfg.sfxVolume, 0, 1) * 100);
+
+  const tabsHtml = `
+    <div class="modal-tabs">
+      <button class="modal-tab-btn${settingsModalTab === 'settings' ? ' active' : ''}" data-stab="settings">⚙️ 游戏设置</button>
+      <button class="modal-tab-btn${settingsModalTab === 'guide' ? ' active' : ''}" data-stab="guide">📜 江湖指南</button>
+    </div>
+  `;
+
+  let bodyHtml = '';
+  if (settingsModalTab === 'settings') {
+    bodyHtml = `
+      <div class="settings-panel">
+        <div class="settings-row">
+          <div class="settings-label-col">
+            <div class="settings-title">背景音乐 (BGM)</div>
+            <div class="settings-sub">城镇古筝笛韵、荒原风沙与战鼓配乐</div>
+          </div>
+          <div class="settings-ctrl-col">
+            <label class="settings-switch">
+              <input type="checkbox" id="set-bgm-enabled" ${audioCfg.bgmMuted ? '' : 'checked'} />
+              <span class="settings-switch-track"></span>
+            </label>
+          </div>
+        </div>
+        <div class="settings-slider-row">
+          <span class="settings-slider-label">音乐音量</span>
+          <input type="range" id="set-bgm-vol" class="settings-range" min="0" max="100" value="${bgmPct}" />
+          <span class="settings-slider-val" id="set-bgm-vol-val">${bgmPct}%</span>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-label-col">
+            <div class="settings-title">战斗与交互音效 (SFX)</div>
+            <div class="settings-sub">古武剑气、军火枪炮、机甲激光、奇术雷鸣与界面清音</div>
+          </div>
+          <div class="settings-ctrl-col">
+            <label class="settings-switch">
+              <input type="checkbox" id="set-sfx-enabled" ${audioCfg.sfxMuted ? '' : 'checked'} />
+              <span class="settings-switch-track"></span>
+            </label>
+          </div>
+        </div>
+        <div class="settings-slider-row">
+          <span class="settings-slider-label">音效音量</span>
+          <input type="range" id="set-sfx-vol" class="settings-range" min="0" max="100" value="${sfxPct}" />
+          <span class="settings-slider-val" id="set-sfx-vol-val">${sfxPct}%</span>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-label-col">
+            <div class="settings-title">行走脚步声</div>
+            <div class="settings-sub">探索城镇石板与野外废土时的轻缓步履回响</div>
+          </div>
+          <div class="settings-ctrl-col">
+            <label class="settings-switch">
+              <input type="checkbox" id="set-footsteps" ${audioCfg.footstepsEnabled ? 'checked' : ''} />
+              <span class="settings-switch-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-label-col">
+            <div class="settings-title">战斗震屏特效</div>
+            <div class="settings-sub">暴击、重炮轰击与首领绝招时的画面震颤反馈</div>
+          </div>
+          <div class="settings-ctrl-col">
+            <label class="settings-switch">
+              <input type="checkbox" id="set-screenshake" ${gameSettings.screenShakeEnabled ? 'checked' : ''} />
+              <span class="settings-switch-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-amber" id="btn-replay-intro">🎬 重播「老年饼工作室」片头与序章</button>
+        </div>
+      </div>
+    `;
+  } else {
+    bodyHtml = `
+      <div class="modal-list-item"><div class="modal-item-desc"><strong>移动与交互</strong>：桌面使用 WASD/方向键或点击地面寻路，E/空格键交互，Esc 关闭卷轴/对话；手机端使用左下角四向十字键与右下角主交互键。</div></div>
       <div class="modal-list-item"><div class="modal-item-desc"><strong>五域 21 图</strong>：点击「天下舆图」可纵览五大区域与全部 21 张无缝地图（城镇/室内/荒原/秘境洞窟）。</div></div>
       <div class="modal-list-item"><div class="modal-item-desc"><strong>收妖与天工墨壶</strong>：战斗中将荒原妖邪血量压至 ≤40%，点击「收妖」收入墨壶；在「天工墨壶」中放入任意 2 件妖魂/物资，阴阳化生即可炼成护驾灵兽、稀世丹药与异纹神兵！</div></div>
-      <div class="modal-list-item"><div class="modal-item-desc"><strong>四大流派</strong>：古武门派、现代军火、科幻墨甲、仙妖奇术 16 项主动技能随等级自动解锁。</div></div>
-    `
-  );
+      <div class="modal-list-item"><div class="modal-item-desc"><strong>四大流派</strong>：古武门派、现代军火、科幻墨甲、仙妖奇术 16 项主动技能随等级自动解锁，各有专属战斗视效与音效。</div></div>
+    `;
+  }
+
+  openModal('⚙️ 游戏设置 · 江湖指南', tabsHtml + bodyHtml);
+
+  document.querySelectorAll('.modal-tab-btn[data-stab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      sfx.uiTick?.();
+      settingsModalTab = btn.dataset.stab;
+      openHelpModal();
+    });
+  });
+
+  if (settingsModalTab === 'settings') {
+    $('set-bgm-enabled')?.addEventListener('change', (e) => {
+      sfx.updateSettings?.({ bgmMuted: !e.target.checked });
+      sfx.uiTick?.();
+    });
+    $('set-bgm-vol')?.addEventListener('input', (e) => {
+      const pct = Number(e.target.value) || 0;
+      if ($('set-bgm-vol-val')) $('set-bgm-vol-val').textContent = `${pct}%`;
+      sfx.updateSettings?.({ bgmVolume: pct / 100 });
+    });
+    $('set-sfx-enabled')?.addEventListener('change', (e) => {
+      sfx.updateSettings?.({ sfxMuted: !e.target.checked });
+      if (e.target.checked) sfx.uiTick?.();
+    });
+    $('set-sfx-vol')?.addEventListener('input', (e) => {
+      const pct = Number(e.target.value) || 0;
+      if ($('set-sfx-vol-val')) $('set-sfx-vol-val').textContent = `${pct}%`;
+      sfx.updateSettings?.({ sfxVolume: pct / 100 });
+    });
+    $('set-footsteps')?.addEventListener('change', (e) => {
+      sfx.updateSettings?.({ footstepsEnabled: Boolean(e.target.checked) });
+      sfx.uiTick?.();
+    });
+    $('set-screenshake')?.addEventListener('change', (e) => {
+      saveGameSettings({ screenShakeEnabled: Boolean(e.target.checked) });
+      sfx.uiTick?.();
+    });
+    $('btn-replay-intro')?.addEventListener('click', () => {
+      sfx.uiTick?.();
+      replayStudioSplashAndPrologue();
+    });
+  }
 }
 
 // ==================== 10. 开篇四幕水墨序章过场 ====================
@@ -3957,10 +4671,20 @@ function init() {
       const lbl = $('interact-label');
       if (!btn || !lbl) return;
       if (target) {
+        const nextKey = `${target.type || ''}:${target.id || target.label || ''}`;
+        const isNewTarget = nextKey !== lastNearestTargetKey;
+        lastNearestTargetKey = nextKey;
         btn.disabled = false;
         lbl.textContent = target.label || '交互';
+        if (isNewTarget) {
+          btn.classList.remove('interact-pulse');
+          void btn.offsetWidth;
+          btn.classList.add('interact-pulse');
+        }
       } else {
+        lastNearestTargetKey = null;
         btn.disabled = true;
+        btn.classList.remove('interact-pulse');
         lbl.textContent = '探索周围';
       }
     },
@@ -3980,11 +4704,19 @@ function init() {
 
   // 顶部系统按钮
   $('btn-account')?.addEventListener('click', openAccountModal);
-  $('btn-sound')?.addEventListener('click', () => {
-    const muted = sfx.toggleMute();
-    $('btn-sound').textContent = muted ? '🔇' : '🔊';
-  });
-  $('btn-help')?.addEventListener('click', openHelpModal);
+  const btnSound = $('btn-sound');
+  if (btnSound) {
+    const initMuted = Boolean(sfx.muted);
+    btnSound.classList.toggle('is-muted', initMuted);
+    btnSound.setAttribute('aria-pressed', String(initMuted));
+    btnSound.addEventListener('click', () => {
+      const muted = sfx.toggleMute();
+      btnSound.classList.toggle('is-muted', muted);
+      btnSound.setAttribute('aria-pressed', String(muted));
+      if (!muted) sfx.uiTick?.();
+    });
+  }
+  $('btn-help')?.addEventListener('click', () => openHelpModal('settings'));
   $('btn-reset')?.addEventListener('click', () => {
     if (!confirm('确定要重开本账号周目吗？当前进度将被清空！')) return;
     storage.clearSave(currentUser);
@@ -3994,22 +4726,41 @@ function init() {
   });
 
   // 对话框与弹窗关闭
-  $('dialog-close-btn')?.addEventListener('click', closeDialog);
-  $('modal-close')?.addEventListener('click', closeModal);
+  $('dialog-close-btn')?.addEventListener('click', () => closeDialog());
+  $('modal-close')?.addEventListener('click', () => closeModal());
   $('modal-backdrop')?.addEventListener('click', (e) => {
     if (e.target === $('modal-backdrop')) closeModal();
+  });
+
+  // Escape 键关闭弹窗 / 对话框 / 战斗子面板
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if ($('modal-backdrop') && !$('modal-backdrop').classList.contains('hidden')) {
+      e.preventDefault();
+      closeModal();
+    } else if ($('rpg-dialog-box') && !$('rpg-dialog-box').classList.contains('hidden')) {
+      e.preventDefault();
+      closeDialog();
+    } else if (battle && battleSubMode) {
+      e.preventDefault();
+      battleSubMode = null;
+      renderBattleSubpanel();
+      sfx.uiTick?.();
+    }
   });
 
   // 战斗指令按钮
   $('bat-btn-atk')?.addEventListener('click', battlePlayerAttack);
   $('bat-btn-skills')?.addEventListener('click', () => {
     if (!battle || battle.busy) return;
+    sfx.uiTick?.();
     battleSubMode = battleSubMode === 'skills' ? null : 'skills';
     renderBattleSubpanel();
   });
   $('bat-btn-capture')?.addEventListener('click', battleAttemptCapture);
   $('bat-btn-item')?.addEventListener('click', () => {
     if (!battle || battle.busy) return;
+    sfx.uiTick?.();
     battleSubMode = battleSubMode === 'items' ? null : 'items';
     renderBattleSubpanel();
   });
@@ -4027,6 +4778,7 @@ function init() {
   };
   document.querySelectorAll('.dock-tab[data-action]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      sfx.uiTick?.();
       if (battle) {
         showToast('战斗中无法打开卷轴面板！', 'warn');
         return;
