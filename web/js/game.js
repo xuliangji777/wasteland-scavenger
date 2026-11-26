@@ -132,8 +132,8 @@ function createInitialState() {
     prologueSeen: false,
     day: 1,
     mapId: 'town',
-    heroX: 800,
-    heroY: 515,
+    heroX: 780,
+    heroY: 615,
     level: 1,
     exp: 0,
     hp: 120,
@@ -1147,72 +1147,152 @@ function handleNpcOption(npc, idx, opt) {
 }
 
 // ==================== 《轩辕剑三》回合制战斗系统 ====================
-function buildEnemySvg(tpl) {
-  const col = tpl.color || '#332c28';
-  const acc = tpl.accent || '#d49a3a';
-  const seal = (tpl.name || '妖').slice(0, 1);
-  const isMech = ['drone', 'flame_mech', 'guard', 'auto_turret', 'heavy_mech', 'mech_taotie', 'boss_zhurong', 'boss_tianshu'].includes(tpl.spriteType);
-  const isBeast = ['rat', 'dog', 'fox_nine', 'boss_ratking'].includes(tpl.spriteType);
-  const isSpirit = ['slime', 'mire_wisp', 'bronze_spirit', 'painted_phantom', 'thunder_remnant', 'boss_lotus_bane'].includes(tpl.spriteType);
+function getEnemySpritePath(tpl) {
+  const st = tpl?.spriteType || 'rat';
+  if (['rat', 'dog', 'boss_ratking', 'slime'].includes(st)) {
+    return 'assets/sprites/enemy_beast.png';
+  }
+  if (['drone', 'flame_mech', 'guard', 'auto_turret', 'heavy_mech', 'mech_taotie', 'boss_zhurong', 'raider', 'raider_shield', 'boss_duangang'].includes(st)) {
+    return 'assets/sprites/enemy_mech.png';
+  }
+  return 'assets/sprites/enemy_demon.png';
+}
 
-  let bodyPath = '';
-  if (isMech) {
-    bodyPath = `
-      <rect x="46" y="42" width="68" height="58" rx="8" fill="${col}" stroke="${acc}" stroke-width="2.5"/>
-      <polygon points="34,54 46,44 46,84 30,78" fill="${col}" stroke="${acc}" stroke-width="2"/>
-      <polygon points="126,54 114,44 114,84 130,78" fill="${col}" stroke="${acc}" stroke-width="2"/>
-      <rect x="58" y="24" width="44" height="22" rx="5" fill="${col}" stroke="${acc}" stroke-width="2"/>
-      <rect x="64" y="31" width="32" height="7" rx="3" fill="${acc}"/>
-      <rect x="54" y="100" width="18" height="28" rx="4" fill="${col}" stroke="${acc}" stroke-width="2"/>
-      <rect x="88" y="100" width="18" height="28" rx="4" fill="${col}" stroke="${acc}" stroke-width="2"/>
-    `;
-  } else if (isBeast) {
-    bodyPath = `
-      <path d="M36,105 Q42,58 76,52 Q112,48 124,78 Q134,104 112,118 L48,118 Z" fill="${col}" stroke="${acc}" stroke-width="2.5"/>
-      <polygon points="48,60 40,34 62,48" fill="${col}" stroke="${acc}" stroke-width="2"/>
-      <polygon points="94,54 108,30 112,56" fill="${col}" stroke="${acc}" stroke-width="2"/>
-      <circle cx="66" cy="70" r="5" fill="${acc}"/>
-      <circle cx="94" cy="70" r="5" fill="${acc}"/>
-      <path d="M122,86 Q146,66 138,44" fill="none" stroke="${acc}" stroke-width="4" stroke-linecap="round"/>
-    `;
-  } else if (isSpirit) {
-    bodyPath = `
-      <path d="M80,22 C112,26 128,58 118,92 C110,114 96,126 80,124 C64,126 50,114 42,92 C32,58 48,26 80,22 Z" fill="${col}" stroke="${acc}" stroke-width="2.5"/>
-      <path d="M32,82 Q80,108 128,82" fill="none" stroke="${acc}" stroke-width="2" stroke-dasharray="5 4" opacity="0.8"/>
-      <ellipse cx="66" cy="64" rx="6" ry="4" fill="${acc}"/>
-      <ellipse cx="94" cy="64" rx="6" ry="4" fill="${acc}"/>
-    `;
+function buildEnemySvg(tpl) {
+  const src = getEnemySpritePath(tpl);
+  const acc = tpl.accent || '#d49a3a';
+  const isBoss = Boolean(tpl.isBoss);
+  return `<img class="battle-enemy-img${isBoss ? ' is-boss' : ''}" src="${src}" alt="${escapeHtml(tpl.name)}" draggable="false" style="--boss-accent:${acc}" />`;
+}
+
+function triggerClassAnim(el, cls, durationMs = 260) {
+  if (!el) return;
+  if (!el._animTimers) el._animTimers = {};
+  if (el._animTimers[cls]) {
+    clearTimeout(el._animTimers[cls]);
+    delete el._animTimers[cls];
+  }
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+  el._animTimers[cls] = setTimeout(() => {
+    el.classList.remove(cls);
+    delete el._animTimers[cls];
+  }, durationMs);
+}
+
+function getBattleVfxContainer() {
+  return $('bat-vfx-layer') || $('float-layer');
+}
+
+function getBattleTargetPos(target, container, offsetX = 0, offsetY = 0) {
+  const isEnemy = target === 'enemy';
+  const targetEl = isEnemy ? $('bat-enemy-visual') : $('bat-hero-portrait');
+  const cRect = container.getBoundingClientRect();
+  const jitterX = (Math.random() - 0.5) * 26;
+  const jitterY = (Math.random() - 0.5) * 14;
+
+  if (targetEl && cRect.width > 0 && cRect.height > 0) {
+    const tRect = targetEl.getBoundingClientRect();
+    if (tRect.width > 0 && tRect.height > 0) {
+      return {
+        x: (tRect.left + tRect.width * 0.5) - cRect.left + offsetX + jitterX,
+        y: (tRect.top + tRect.height * 0.36) - cRect.top + offsetY + jitterY
+      };
+    }
+  }
+  return {
+    x: (cRect.width || window.innerWidth) * (isEnemy ? 0.27 : 0.73) + offsetX + jitterX,
+    y: (cRect.height || window.innerHeight) * 0.44 + offsetY + jitterY
+  };
+}
+
+function triggerBattleLunge(isHero) {
+  if (isHero) {
+    triggerClassAnim($('bat-hero-portrait'), 'lunge-left', 240);
   } else {
-    bodyPath = `
-      <circle cx="80" cy="36" r="18" fill="${col}" stroke="${acc}" stroke-width="2.5"/>
-      <path d="M44,122 L54,58 L106,58 L116,122 Z" fill="${col}" stroke="${acc}" stroke-width="2.5"/>
-      <line x1="28" y1="92" x2="132" y2="42" stroke="${acc}" stroke-width="3.5" stroke-linecap="round"/>
-      <circle cx="74" cy="34" r="3" fill="${acc}"/>
-      <circle cx="86" cy="34" r="3" fill="${acc}"/>
-    `;
+    triggerClassAnim($('bat-enemy-visual'), 'lunge-right', 240);
+  }
+}
+
+function spawnBattleSlashVfx(target = 'enemy', variant = 'physical') {
+  const container = getBattleVfxContainer();
+  if (!container) return;
+  const { x, y } = getBattleTargetPos(target, container, 0, 8);
+  const fxEl = document.createElement('div');
+  fxEl.className = `bat-slash-fx slash-${variant}`;
+  fxEl.style.left = `${Math.round(x)}px`;
+  fxEl.style.top = `${Math.round(y)}px`;
+
+  if (variant === 'capture') {
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 120 120" width="128" height="128" fill="none" aria-hidden="true">
+        <circle cx="60" cy="60" r="44" stroke="#c084fc" stroke-width="4" stroke-dasharray="18 10" opacity="0.92"/>
+        <circle cx="60" cy="60" r="28" stroke="#e9d5ff" stroke-width="2.5" stroke-dasharray="10 8" opacity="0.85"/>
+        <path d="M60 12 L68 52 L108 60 L68 68 L60 108 L52 68 L12 60 L52 52 Z" fill="rgba(192,132,252,0.32)" stroke="#f3e8ff" stroke-width="2"/>
+      </svg>`;
+  } else if (variant === 'mystic' || variant === 'mecha') {
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 140 140" width="144" height="144" fill="none" aria-hidden="true">
+        <path d="M18 112 Q64 26 124 22 Q78 66 24 122 Z" fill="rgba(94,234,212,0.45)" stroke="#5eead4" stroke-width="3"/>
+        <path d="M26 28 Q84 56 122 114" stroke="#99f6e4" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="72" cy="68" r="18" stroke="#2dd4bf" stroke-width="2.5" stroke-dasharray="6 5" opacity="0.9"/>
+      </svg>`;
+  } else if (variant === 'crit') {
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 150 150" width="158" height="158" fill="none" aria-hidden="true">
+        <path d="M16 126 Q72 34 138 16 Q88 76 28 136 Z" fill="rgba(251,191,36,0.58)" stroke="#fef08a" stroke-width="3.5"/>
+        <path d="M22 28 Q82 62 134 126 Q74 88 14 40 Z" fill="rgba(249,115,22,0.42)" stroke="#fde047" stroke-width="2.5"/>
+      </svg>`;
+  } else if (variant === 'enemy') {
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 130 130" width="132" height="132" fill="none" aria-hidden="true">
+        <path d="M22 24 Q72 64 112 108" stroke="#ef4444" stroke-width="7" stroke-linecap="round"/>
+        <path d="M40 16 Q84 56 118 92" stroke="#fca5a5" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M14 44 Q58 78 96 116" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+      </svg>`;
+  } else {
+    fxEl.innerHTML = `
+      <svg viewBox="0 0 140 140" width="140" height="140" fill="none" aria-hidden="true">
+        <path d="M18 118 Q68 34 126 18 Q84 72 28 126 Z" fill="rgba(232,76,61,0.48)" stroke="#fca5a5" stroke-width="3"/>
+        <path d="M30 106 Q74 44 118 30" stroke="#fef2f2" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>`;
   }
 
-  const bossRing = tpl.isBoss
-    ? `<circle cx="80" cy="76" r="64" fill="none" stroke="${acc}" stroke-width="2" stroke-dasharray="10 6" opacity="0.65"/>`
-    : '';
+  container.appendChild(fxEl);
+  setTimeout(() => fxEl.remove(), 460);
+}
 
-  return `
-    <svg viewBox="0 0 160 144" width="160" height="144" aria-label="${escapeHtml(tpl.name)}">
-      <defs>
-        <radialGradient id="inkAura" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="${acc}" stop-opacity="0.32"/>
-          <stop offset="100%" stop-color="${col}" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <circle cx="80" cy="76" r="66" fill="url(#inkAura)"/>
-      ${bossRing}
-      ${bodyPath}
-      <g transform="translate(120, 14)">
-        <rect x="0" y="0" width="26" height="26" rx="4" fill="#98291f" stroke="#e5bb5c" stroke-width="1.5"/>
-        <text x="13" y="18" text-anchor="middle" fill="#fff3de" font-size="14" font-weight="900" font-family="serif">${escapeHtml(seal)}</text>
-      </g>
-    </svg>
-  `;
+function spawnBattleDmgNum(target = 'enemy', text, styleType = 'physical', opts = {}) {
+  const container = getBattleVfxContainer();
+  if (!container) return;
+  const { x, y } = getBattleTargetPos(target, container, opts.offsetX || 0, opts.offsetY || 0);
+  const el = document.createElement('div');
+  const fallbackCls = container.id === 'float-layer' ? ' float-text' : '';
+
+  const styleMap = {
+    crit:        { cls: 'is-crit',      color: '#fbbf24' },
+    mystic:      { cls: 'is-mystic',    color: '#5eead4' },
+    mecha:       { cls: 'is-mystic',    color: '#5eead4' },
+    physical:    { cls: 'is-physical',  color: '#f0543a' },
+    firearm:     { cls: 'is-physical',  color: '#f97316' },
+    'enemy-hit': { cls: 'is-enemy-hit', color: '#ef4444' },
+    heal:        { cls: 'is-heal',      color: '#4ade80' },
+    shield:      { cls: 'is-shield',    color: '#38bdf8' },
+    capture:     { cls: 'is-capture',   color: '#c084fc' }
+  };
+  const cfg = styleMap[styleType] || styleMap.physical;
+
+  el.className = `bat-dmg-num ${cfg.cls}${fallbackCls}`;
+  el.style.left = `${Math.round(x)}px`;
+  el.style.top = `${Math.round(y)}px`;
+  el.style.color = cfg.color;
+  if (styleType === 'crit') {
+    el.style.fontSize = '1.95rem';
+  }
+  el.textContent = text;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 950);
 }
 
 function setBattleButtonsEnabled(enabled) {
@@ -1321,7 +1401,21 @@ function startBattle(worldEnemy) {
 
   battleSubMode = null;
   $('bat-subpanel').classList.add('hidden');
-  $('bat-enemy-visual').innerHTML = buildEnemySvg(tpl);
+  const vfxLayer = $('bat-vfx-layer');
+  if (vfxLayer) vfxLayer.innerHTML = '';
+
+  const enemyVisual = $('bat-enemy-visual');
+  if (enemyVisual) {
+    enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right');
+    enemyVisual.innerHTML = buildEnemySvg(tpl);
+  }
+  const heroBatImg = $('bat-hero-portrait');
+  if (heroBatImg) {
+    heroBatImg.src = 'assets/sprites/hero.png';
+    heroBatImg.style.objectFit = 'contain';
+    heroBatImg.style.background = 'transparent';
+    heroBatImg.classList.remove('hit', 'hit-flash', 'lunge-left');
+  }
   $('rpg-battle-overlay').classList.remove('hidden');
 
   logBattle(tpl.introLine || `遭遇「${tpl.name}」！凝神戒备，准备迎战！`);
@@ -1333,6 +1427,8 @@ function startBattle(worldEnemy) {
 function closeBattle() {
   battle = null;
   battleSubMode = null;
+  const vfxLayer = $('bat-vfx-layer');
+  if (vfxLayer) vfxLayer.innerHTML = '';
   $('bat-subpanel')?.classList.add('hidden');
   $('rpg-battle-overlay')?.classList.add('hidden');
   if (world) {
@@ -1343,13 +1439,12 @@ function closeBattle() {
   scheduleSave();
 }
 
-function triggerHitAnim(isEnemy) {
-  const el = isEnemy ? $('bat-enemy-visual') : document.querySelector('.hero-portrait-battle');
+function triggerHitAnim(isEnemy, strong = false) {
+  const el = isEnemy ? $('bat-enemy-visual') : ($('bat-hero-portrait') || document.querySelector('.hero-portrait-battle'));
   if (!el) return;
-  el.classList.remove('hit');
-  void el.offsetWidth;
-  el.classList.add('hit');
-  setTimeout(() => el.classList.remove('hit'), 200);
+  const dur = strong ? 320 : 260;
+  triggerClassAnim(el, 'hit-flash', dur);
+  triggerClassAnim(el, 'hit', dur);
 }
 
 function calcDamageToEnemy(mult = 1, opts = {}) {
@@ -1394,23 +1489,28 @@ function applyGuardianTurn(logs) {
       battle.heroStatus.burn = 0;
       battle.heroStatus.poison = 0;
     }
+    spawnBattleDmgNum('hero', `+${guard.healHp} HP`, 'heal');
     logs.push(`护驾【${guard.name}】施展「${guard.skillName}」回复 ${guard.healHp} 气血！`);
     return;
   }
 
   if (guard.shield) {
     battle.heroShield += guard.shield;
+    spawnBattleDmgNum('hero', `护盾 +${guard.shield}`, 'shield', { offsetY: -22 });
   }
 
   const raw = (guard.baseDmg || 20) + (guard.perLvDmg ? state.level * guard.perLvDmg : 0);
   const dmg = guard.ignoreDef ? raw : Math.max(5, Math.round(raw - battle.enemy.def * 0.4));
   battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
   triggerHitAnim(true);
+  spawnBattleSlashVfx('enemy', 'mystic');
+  spawnBattleDmgNum('enemy', `-${dmg}`, 'mystic', { offsetY: -24 });
 
   if (guard.effect === 'poison') battle.enemyStatus.poison = 3;
   if (guard.effect === 'armor_break' && Math.random() < 0.35) battle.enemyStatus.def_down = 2;
   if (guard.effect === 'lifesteal' && guard.healHp) {
     state.hp = Math.min(stats.maxHp, state.hp + guard.healHp);
+    spawnBattleDmgNum('hero', `+${guard.healHp} HP`, 'heal');
   }
   logs.push(`护驾【${guard.name}】发动「${guard.skillName}」造成 ${dmg} 伤害！`);
 }
@@ -1559,6 +1659,7 @@ function checkBossMidBattleEvents(logs) {
   if (tpl.healAtHalf && !battle.healedHalf && ratio <= 0.5 && battle.enemy.hp > 0) {
     battle.healedHalf = true;
     battle.enemy.hp = Math.min(battle.enemy.maxHp, battle.enemy.hp + tpl.healAtHalf);
+    spawnBattleDmgNum('enemy', `+${tpl.healAtHalf} HP`, 'heal');
     logs.push(`${tpl.name}触发毒瘴再生，恢复 ${tpl.healAtHalf} 点气血！`);
   }
 }
@@ -1572,11 +1673,13 @@ function runEnemyTurn(prevLogs = []) {
   if (battle.enemyStatus.burn > 0) {
     battle.enemy.hp = Math.max(0, battle.enemy.hp - 22);
     battle.enemyStatus.burn -= 1;
+    spawnBattleDmgNum('enemy', '灼烧 -22', 'physical', { offsetY: -30 });
     logs.push('【灼烧】造成 22 点火焰伤害！');
   }
   if (battle.enemyStatus.poison > 0) {
     battle.enemy.hp = Math.max(0, battle.enemy.hp - 18);
     battle.enemyStatus.poison -= 1;
+    spawnBattleDmgNum('enemy', '剧毒 -18', 'heal', { offsetY: -30 });
     logs.push('【剧毒】造成 18 点毒素伤害！');
   }
   if (battle.enemyStatus.def_down > 0) battle.enemyStatus.def_down -= 1;
@@ -1605,6 +1708,7 @@ function runEnemyTurn(prevLogs = []) {
   // 敌方行动
   if (battle.enemyStatus.stun > 0) {
     battle.enemyStatus.stun -= 1;
+    spawnBattleDmgNum('enemy', '眩晕!', 'mystic', { offsetY: -18 });
     logs.push(`${battle.tpl.name}陷入【眩晕】，无法行动！`);
   } else {
     const tpl = battle.tpl;
@@ -1614,14 +1718,22 @@ function runEnemyTurn(prevLogs = []) {
     let reduce = stats.dmgReduce + (battle.dmgReduceTurns > 0 ? 0.30 : 0);
     rawDmg = Math.max(2, Math.round(rawDmg * (1 - clamp(reduce, 0, 0.78))));
 
+    let absorbed = 0;
     if (battle.heroShield > 0) {
-      const absorbed = Math.min(battle.heroShield, rawDmg);
+      absorbed = Math.min(battle.heroShield, rawDmg);
       battle.heroShield -= absorbed;
       rawDmg -= absorbed;
     }
 
     state.hp = Math.max(0, state.hp - rawDmg);
-    triggerHitAnim(false);
+    triggerBattleLunge(false);
+    triggerHitAnim(false, isSpecial);
+    spawnBattleSlashVfx('hero', 'enemy');
+    if (rawDmg > 0) {
+      spawnBattleDmgNum('hero', isSpecial ? `${tpl.specialName || '重创'} -${rawDmg}` : `-${rawDmg}`, 'enemy-hit');
+    } else if (absorbed > 0) {
+      spawnBattleDmgNum('hero', '护盾格挡!', 'shield');
+    }
     logs.push(isSpecial
       ? `${tpl.name}发动绝招【${tpl.specialName}】，造成 ${rawDmg} 点重创！`
       : `${tpl.name}发起猛攻，造成 ${rawDmg} 点伤害！`);
@@ -1637,11 +1749,13 @@ function runEnemyTurn(prevLogs = []) {
     const d = Math.round(14 * (1 - stats.radResist));
     state.hp = Math.max(0, state.hp - d);
     battle.heroStatus.burn -= 1;
+    if (d > 0) spawnBattleDmgNum('hero', `灼烧 -${d}`, 'enemy-hit', { offsetY: -28 });
   }
   if (battle.heroStatus.poison > 0) {
     const d = Math.round(14 * (1 - stats.radResist));
     state.hp = Math.max(0, state.hp - d);
     battle.heroStatus.poison -= 1;
+    if (d > 0) spawnBattleDmgNum('hero', `剧毒 -${d}`, 'enemy-hit', { offsetY: -28 });
   }
 
   if (battle.dmgReduceTurns > 0) battle.dmgReduceTurns -= 1;
@@ -1672,13 +1786,17 @@ function battlePlayerAttack() {
   const stats = getHeroStats();
   const { dmg, isCrit, lifesteal } = calcDamageToEnemy(1, {});
   battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
-  triggerHitAnim(true);
+  triggerBattleLunge(true);
+  triggerHitAnim(true, isCrit);
+  spawnBattleSlashVfx('enemy', isCrit ? 'crit' : 'physical');
+  spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, isCrit ? 'crit' : 'physical');
   sfx.disassemble(true, isCrit);
 
   const logs = [`沈砚挥兵直击，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`];
   if (lifesteal > 0) {
     const heal = Math.max(1, Math.round(dmg * lifesteal));
     state.hp = Math.min(stats.maxHp, state.hp + heal);
+    spawnBattleDmgNum('hero', `+${heal} HP`, 'heal', { offsetY: -18 });
     logs.push(`吸血回复 +${heal} 气血！`);
   }
   if (stats.proc === 'burn' && Math.random() < 0.25) {
@@ -1718,13 +1836,17 @@ function battleUseSkill(skill) {
     const sh = (skill.baseShield || 45) + state.level * (skill.perLvShield || 8);
     battle.heroShield += sh;
     battle.dmgReduceTurns = 2;
+    spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
     sfx.pick('rare');
     logs.push(`施展【${skill.name}】，获得 ${sh} 点护盾并减伤 30%！`);
   } else if (skill.selfBuff === 'overdrive') {
-    battle.heroShield += skill.baseShield || 65;
+    const sh = skill.baseShield || 65;
+    battle.heroShield += sh;
     battle.overdriveTurns = 3;
+    spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
+    spawnBattleDmgNum('hero', '狂涌 +30%', 'mystic', { offsetY: -30 });
     sfx.pick('legend');
-    logs.push(`启动【${skill.name}】，护盾 +${skill.baseShield || 65}，3 回合内攻击 +30%！`);
+    logs.push(`启动【${skill.name}】，护盾 +${sh}，3 回合内攻击 +30%！`);
   } else if (skill.selfBuff === 'heal') {
     const heal = Math.round(stats.maxHp * (skill.healPct || 0.45));
     state.hp = Math.min(stats.maxHp, state.hp + heal);
@@ -1732,6 +1854,7 @@ function battleUseSkill(skill) {
       battle.heroStatus.burn = 0;
       battle.heroStatus.poison = 0;
     }
+    spawnBattleDmgNum('hero', `+${heal} HP`, 'heal');
     sfx.pick('fine');
     logs.push(`运转【${skill.name}】，恢复 ${heal} 气血并净化负面状态！`);
   } else {
@@ -1744,15 +1867,27 @@ function battleUseSkill(skill) {
       isSkill: true
     });
     battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
-    triggerHitAnim(true);
+    const isMysticOrMecha = skill.category === 'mystic' || skill.category === 'mecha';
+    const dmgStyle = isCrit ? 'crit' : (isMysticOrMecha ? skill.category : (skill.category === 'firearm' ? 'firearm' : 'physical'));
+    const slashVariant = isCrit ? 'crit' : (isMysticOrMecha ? skill.category : 'physical');
+
+    triggerBattleLunge(true);
+    triggerHitAnim(true, isCrit || (skill.mult || 1) >= 2.2);
+    spawnBattleSlashVfx('enemy', slashVariant);
+    spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
     sfx.disassemble(true, true);
     logs.push(`施展【${skill.name}】，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`);
 
     if (lifesteal > 0) {
-      state.hp = Math.min(stats.maxHp, state.hp + Math.max(1, Math.round(dmg * lifesteal)));
+      const heal = Math.max(1, Math.round(dmg * lifesteal));
+      state.hp = Math.min(stats.maxHp, state.hp + heal);
+      spawnBattleDmgNum('hero', `+${heal} HP`, 'heal', { offsetY: -18 });
     }
     if (skill.debuff) battle.enemyStatus[skill.debuff] = 2;
-    if (skill.stun) battle.enemyStatus.stun = skill.stun;
+    if (skill.stun) {
+      battle.enemyStatus.stun = skill.stun;
+      spawnBattleDmgNum('enemy', '眩晕!', 'mystic', { offsetY: -34 });
+    }
     if (skill.captureBonus) battle.captureBonus = skill.captureBonus;
   }
 
@@ -1779,13 +1914,18 @@ function battleAttemptCapture() {
   let chance = ratio <= 0.4 ? (0.68 + (0.4 - ratio) * 0.75) : ratio <= 0.65 ? 0.30 : 0.12;
   chance = clamp(chance + (battle.captureBonus || 0), 0.1, 0.98);
 
+  spawnBattleSlashVfx('enemy', 'capture');
+
   if (Math.random() < chance) {
     const id = battle.tpl.id;
     state.capturedSpirits[id] = (state.capturedSpirits[id] || 0) + 1;
     state.stats.capture = (state.stats.capture || 0) + 1;
+    triggerHitAnim(true, true);
+    spawnBattleDmgNum('enemy', '收妖成功!', 'capture');
     advanceQuestTrigger('capture_any');
     handleBattleVictory(true);
   } else {
+    spawnBattleDmgNum('enemy', '收妖! 挣脱', 'capture');
     sfx.disassemble(false);
     const logs = [`天工墨壶青光一闪，${battle.tpl.name}挣脱了束缚！（当前血量 ${Math.round(ratio * 100)}%，压至 ≤40% 成功率极高）`];
     setTimeout(() => runEnemyTurn(logs), 360);
@@ -1826,10 +1966,19 @@ function battleUseConsumable(kind, key) {
     return;
   }
 
-  if (effect?.hp) state.hp = Math.min(stats.maxHp, state.hp + effect.hp);
-  if (effect?.energy) state.energy = Math.min(stats.maxEnergy, state.energy + effect.energy);
+  if (effect?.hp) {
+    state.hp = Math.min(stats.maxHp, state.hp + effect.hp);
+    spawnBattleDmgNum('hero', `+${effect.hp} HP`, 'heal');
+  }
+  if (effect?.energy) {
+    state.energy = Math.min(stats.maxEnergy, state.energy + effect.energy);
+    spawnBattleDmgNum('hero', `+${effect.energy} 内息`, 'mystic', { offsetY: effect?.hp ? -28 : 0 });
+  }
   if (effect?.food) state.food = Math.min(100, state.food + effect.food);
-  if (effect?.radShield) state.radShield += effect.radShield;
+  if (effect?.radShield) {
+    state.radShield += effect.radShield;
+    spawnBattleDmgNum('hero', `抗辐射护盾 +${effect.radShield}`, 'shield', { offsetY: -34 });
+  }
 
   sfx.pick('fine');
   updateBattleUI();

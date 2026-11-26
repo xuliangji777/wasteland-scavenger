@@ -25,6 +25,66 @@ function circleIntersectsRect(cx, cy, r, rx, ry, rw, rh) {
   return (dx * dx + dy * dy) < (r * r);
 }
 
+function pointInPolygon(px, py, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0];
+    const yi = poly[i][1];
+    const xj = poly[j][0];
+    const yj = poly[j][1];
+    const intersect = ((yi > py) !== (yj > py)) &&
+      (px < ((xj - xi) * (py - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function isPointInPolys(px, py, polys) {
+  for (let i = 0; i < polys.length; i++) {
+    if (pointInPolygon(px, py, polys[i])) return true;
+  }
+  return false;
+}
+
+function closestPointOnSegment(px, py, ax, ay, bx, by) {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const lenSq = abx * abx + aby * aby;
+  if (lenSq < 1e-6) return { x: ax, y: ay };
+  const t = clamp(((px - ax) * abx + (py - ay) * aby) / lenSq, 0, 1);
+  return { x: ax + abx * t, y: ay + aby * t };
+}
+
+function closestPointInPolys(px, py, polys) {
+  if (isPointInPolys(px, py, polys)) return { x: px, y: py };
+  let best = { x: px, y: py };
+  let bestD2 = Infinity;
+  for (const poly of polys) {
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      const c = closestPointOnSegment(px, py, a[0], a[1], b[0], b[1]);
+      const d2 = (px - c.x) ** 2 + (py - c.y) ** 2;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = c;
+      }
+    }
+  }
+  return best;
+}
+
+const SPRITE_PATHS = {
+  hero: 'assets/sprites/hero.png',
+  npc_merchant: 'assets/sprites/npc_merchant.png',
+  npc_hermit: 'assets/sprites/npc_hermit.png',
+  shrine: 'assets/sprites/shrine.png',
+  enemy_beast: 'assets/sprites/enemy_beast.png',
+  enemy_mech: 'assets/sprites/enemy_mech.png',
+  enemy_demon: 'assets/sprites/enemy_demon.png',
+  chest: 'assets/sprites/chest.png'
+};
+
 // ==================== 2.5D 水墨俯斜视角世界引擎 ====================
 export class InkWorldEngine {
   /**
@@ -58,9 +118,11 @@ export class InkWorldEngine {
     // 切图墨晕转场 (0..1)
     this._fadeAlpha = 0;
 
-    // 背景图缓存
+    // 背景图与透明精灵图缓存
     this._bgCache = new Map();
+    this._spriteCache = new Map();
     this._preloadBackgrounds();
+    this._preloadSprites();
 
     // 主角状态（接地坐标 x, y）
     this.hero = {
@@ -154,6 +216,18 @@ export class InkWorldEngine {
     const sy = opts.spawnY ?? map.spawn?.y ?? map.height * 0.5;
     this.hero.x = clamp(sx, 28, map.width - 28);
     this.hero.y = clamp(sy, 40, map.height - 28);
+    if (map.walkablePolys?.length && this._collidesAt(this.hero.x, this.hero.y, this.hero.r)) {
+      const fallbackX = map.spawn?.x ?? map.width * 0.5;
+      const fallbackY = map.spawn?.y ?? map.height * 0.5;
+      if (!this._collidesAt(fallbackX, fallbackY, this.hero.r)) {
+        this.hero.x = fallbackX;
+        this.hero.y = fallbackY;
+      } else {
+        const pt = closestPointInPolys(fallbackX, fallbackY, map.walkablePolys);
+        this.hero.x = pt.x;
+        this.hero.y = pt.y;
+      }
+    }
     this.hero.targetX = null;
     this.hero.targetY = null;
     this.hero.moving = false;
@@ -318,6 +392,54 @@ export class InkWorldEngine {
         this._getBgImage(path);
       }
     }
+  }
+
+  _preloadSprites() {
+    for (const [key, path] of Object.entries(SPRITE_PATHS)) {
+      this._getSprite(key, path);
+    }
+  }
+
+  _getSprite(key, explicitPath = null) {
+    const path = explicitPath || SPRITE_PATHS[key];
+    if (!path) return null;
+    let entry = this._spriteCache.get(key);
+    if (!entry) {
+      const img = new Image();
+      entry = { img, loaded: false, error: false };
+      img.onload = () => { entry.loaded = true; };
+      img.onerror = () => { entry.error = true; };
+      img.src = path;
+      this._spriteCache.set(key, entry);
+    }
+    return entry;
+  }
+
+  _getNpcSpriteKey(npcRef, npc) {
+    const id = npcRef?.id || npc?.id || '';
+    const st = npc?.spriteType || '';
+    if (
+      st === 'merchant' ||
+      st === 'smith' ||
+      id === 'laohuang' ||
+      id === 'jiubao' ||
+      id === 'tiejiang' ||
+      id === 'loan' ||
+      id === 'shopkeeper'
+    ) {
+      return 'npc_merchant';
+    }
+    return 'npc_hermit';
+  }
+
+  _getEnemySpriteKey(spriteType) {
+    if (['rat', 'dog', 'boss_ratking', 'slime'].includes(spriteType)) {
+      return 'enemy_beast';
+    }
+    if (['drone', 'flame_mech', 'guard', 'auto_turret', 'heavy_mech', 'mech_taotie', 'boss_zhurong', 'raider', 'raider_shield', 'boss_duangang'].includes(spriteType)) {
+      return 'enemy_mech';
+    }
+    return 'enemy_demon';
   }
 
   _getBgImage(path) {
@@ -493,8 +615,20 @@ export class InkWorldEngine {
 
   _collidesAt(cx, cy, r) {
     if (!this.map) return false;
-    for (const b of this.map.buildings || []) {
-      if (circleIntersectsRect(cx, cy, r, b.x, b.y, b.w, b.h)) return true;
+    const polys = this.map.walkablePolys;
+    if (Array.isArray(polys) && polys.length > 0) {
+      if (!isPointInPolys(cx, cy, polys)) return true;
+      const footR = Math.min(r * 0.5, 9);
+      for (let i = 0; i < 8; i++) {
+        const ang = (i * Math.PI) / 4;
+        if (!isPointInPolys(cx + Math.cos(ang) * footR, cy + Math.sin(ang) * footR, polys)) {
+          return true;
+        }
+      }
+    } else {
+      for (const b of this.map.buildings || []) {
+        if (circleIntersectsRect(cx, cy, r, b.x, b.y, b.w, b.h)) return true;
+      }
     }
     for (const o of this.map.obstacles || []) {
       if (circleIntersectsRect(cx, cy, r, o.x, o.y, o.w, o.h)) return true;
@@ -504,13 +638,41 @@ export class InkWorldEngine {
 
   _moveWithSlide(entity, dx, dy, r) {
     const map = this.map;
-    let nx = clamp(entity.x + dx, 24, map.width - 24);
-    if (!this._collidesAt(nx, entity.y, r)) {
+    const nx = clamp(entity.x + dx, 24, map.width - 24);
+    const ny = clamp(entity.y + dy, 36, map.height - 24);
+    if (!this._collidesAt(nx, ny, r)) {
       entity.x = nx;
-    }
-    let ny = clamp(entity.y + dy, 36, map.height - 24);
-    if (!this._collidesAt(entity.x, ny, r)) {
       entity.y = ny;
+      return;
+    }
+
+    // 尝试轴向贴墙滑动
+    let moved = false;
+    if (Math.abs(dx) > 0.01 && !this._collidesAt(nx, entity.y, r)) {
+      entity.x = nx;
+      moved = true;
+    }
+    if (Math.abs(dy) > 0.01 && !this._collidesAt(entity.x, ny, r)) {
+      entity.y = ny;
+      moved = true;
+    }
+    if (moved) return;
+
+    // 针对斜角 2.5D 多边形边界，沿偏转角尝试丝滑贴边滑行
+    const stepLen = Math.hypot(dx, dy);
+    if (stepLen > 0.05 && map.walkablePolys?.length) {
+      const baseAngle = Math.atan2(dy, dx);
+      const offsets = [0.42, -0.42, 0.84, -0.84, 1.22, -1.22];
+      for (const off of offsets) {
+        const a = baseAngle + off;
+        const tx = clamp(entity.x + Math.cos(a) * stepLen * 0.82, 24, map.width - 24);
+        const ty = clamp(entity.y + Math.sin(a) * stepLen * 0.82, 36, map.height - 24);
+        if (!this._collidesAt(tx, ty, r)) {
+          entity.x = tx;
+          entity.y = ty;
+          return;
+        }
+      }
     }
   }
 
@@ -842,11 +1004,12 @@ export class InkWorldEngine {
 
     let candidates;
     if (map.id === 'town') {
-      candidates = [
-        [780, 540],
-        [720, 540],
-        [860, 540]
-      ];
+      return {
+        type: 'save_point',
+        x: 790,
+        y: 545,
+        label: '墨石记录碑 · 存档'
+      };
     } else {
       const sx = map.spawn?.x ?? map.width * 0.5;
       const sy = map.spawn?.y ?? map.height * 0.5;
@@ -1160,200 +1323,65 @@ export class InkWorldEngine {
     return list;
   }
 
-  // ==================== 2.5D 水墨建筑绘制 ====================
+  // ==================== 2.5D 水墨建筑匾额（透出手绘底图真实建筑，绝不画方块） ====================
 
   _drawBuilding(ctx, b) {
-    const { x, y, w, h } = b;
-    const roofH = b.roofH || 74;
-    const t = this._elapsed;
+    const px = b.plaqueX ?? b.doorX ?? (b.x + b.w * 0.5);
+    const py = b.plaqueY ?? (b.y + 40);
+    const dx = b.doorX ?? (b.x + b.w * 0.5);
+    const dy = b.doorY ?? (b.y + b.h + 18);
+    const near = dist(this.hero.x, this.hero.y, dx, dy) <= 95;
+    const label = b.name || b.sign || '建筑';
 
     ctx.save();
+    ctx.font = 'bold 12.5px "Noto Serif SC", "Songti SC", serif';
+    const textW = ctx.measureText(label).width;
+    const padL = 22; // 左侧预留朱砂印点空间
+    const padR = 12;
+    const boxW = textW + padL + padR;
+    const boxH = 26;
+    const bx = px - boxW * 0.5;
+    const by = py - boxH * 0.5;
 
-    // 建筑接地浓墨投影
-    ctx.fillStyle = 'rgba(16, 13, 10, 0.42)';
+    // 淡雅投影
+    ctx.fillStyle = 'rgba(12, 9, 7, 0.55)';
     ctx.beginPath();
-    ctx.ellipse(x + w * 0.5, y + h + 4, w * 0.54, 18, 0, 0, Math.PI * 2);
+    ctx.roundRect(bx + 2, by + 3, boxW, boxH, 5);
     ctx.fill();
 
-    // 墙体立面（按建筑风格微调宣纸/灰砖/红木色调）
-    const wallPalette = {
-      timber_shop: { wall: '#4d3b2c', trim: '#c89b3c', roof: '#24211e', lantern: '#d9483b' },
-      forge:       { wall: '#3e332d', trim: '#d97736', roof: '#1e1b19', lantern: '#e86a33' },
-      clinic:      { wall: '#434b42', trim: '#6fb98f', roof: '#212924', lantern: '#e6b84c' },
-      pawnshop:    { wall: '#3c3130', trim: '#b53a2e', roof: '#201a1a', lantern: '#c93b2b' },
-      board:       { wall: '#574330', trim: '#d49a3a', roof: '#29221c', lantern: '#e08b3e' },
-      gatehouse:   { wall: '#4a4640', trim: '#c89b3c', roof: '#1d1c1a', lantern: '#d9483b' }
-    };
-    const pal = wallPalette[b.style] || wallPalette.timber_shop;
-
-    // 墙身主体
-    ctx.fillStyle = pal.wall;
-    ctx.strokeStyle = '#181411';
-    ctx.lineWidth = 2.5;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeRect(x, y, w, h);
-
-    // 墙面水墨砖木肌理与木柱
-    ctx.fillStyle = 'rgba(20, 16, 12, 0.26)';
-    ctx.fillRect(x, y, w, 14); // 屋檐下阴影带
-    ctx.fillStyle = '#261e18';
-    ctx.fillRect(x + 8, y + 6, 10, h - 6);
-    ctx.fillRect(x + w - 18, y + 6, 10, h - 6);
-
-    // 暖光木格窗
-    if (b.style !== 'board') {
-      const winW = Math.min(44, w * 0.2);
-      const winH = Math.min(36, h * 0.3);
-      const winY = y + h * 0.34;
-      const drawWin = (wx) => {
-        ctx.fillStyle = 'rgba(240, 186, 98, 0.72)';
-        ctx.fillRect(wx, winY, winW, winH);
-        ctx.strokeStyle = '#241b14';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(wx, winY, winW, winH);
-        ctx.beginPath();
-        ctx.moveTo(wx + winW * 0.5, winY);
-        ctx.lineTo(wx + winW * 0.5, winY + winH);
-        ctx.moveTo(wx, winY + winH * 0.5);
-        ctx.lineTo(wx + winW, winY + winH * 0.5);
-        ctx.stroke();
-      };
-      if (w >= 200) {
-        drawWin(x + 28);
-        drawWin(x + w - 28 - winW);
-      }
-    } else {
-      // 悬赏榜木板告示纸
-      ctx.fillStyle = '#e4d6bc';
-      for (let i = 0; i < 3; i++) {
-        ctx.fillRect(x + 22 + i * 44, y + 22, 32, 42);
-        ctx.strokeStyle = '#5c4b37';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 22 + i * 44, y + 22, 32, 42);
-      }
-    }
-
-    // 门洞（朝向 doorX / doorY）
-    const doorW = Math.min(54, w * 0.26);
-    const doorH = Math.min(62, h * 0.52);
-    const doorCx = clamp(b.doorX ?? (x + w * 0.5), x + 36, x + w - 36);
-    ctx.fillStyle = '#17120e';
+    // 轩辕剑三风格墨木底匾
+    const bgGrad = ctx.createLinearGradient(bx, by, bx, by + boxH);
+    bgGrad.addColorStop(0, near ? 'rgba(46, 35, 24, 0.94)' : 'rgba(28, 22, 17, 0.88)');
+    bgGrad.addColorStop(1, near ? 'rgba(30, 22, 16, 0.94)' : 'rgba(18, 14, 11, 0.88)');
+    ctx.fillStyle = bgGrad;
+    ctx.strokeStyle = near ? '#ebd08a' : '#c89b3c';
+    ctx.lineWidth = near ? 1.8 : 1.3;
     ctx.beginPath();
-    ctx.roundRect(doorCx - doorW * 0.5, y + h - doorH, doorW, doorH, [8, 8, 0, 0]);
-    ctx.fill();
-    ctx.strokeStyle = pal.trim;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // 门内暖光溢出
-    const nearDoor = dist(this.hero.x, this.hero.y, b.doorX ?? doorCx, b.doorY ?? (y + h + 16)) <= 90;
-    const doorGrad = ctx.createLinearGradient(0, y + h - doorH, 0, y + h);
-    doorGrad.addColorStop(0, nearDoor ? 'rgba(240, 185, 92, 0.55)' : 'rgba(220, 155, 70, 0.22)');
-    doorGrad.addColorStop(1, 'rgba(20, 14, 10, 0.1)');
-    ctx.fillStyle = doorGrad;
-    ctx.fillRect(doorCx - doorW * 0.5 + 3, y + h - doorH + 3, doorW - 6, doorH - 3);
-
-    // 2.5D 飞檐黛瓦屋顶（向 -Y 延伸 roofH）
-    ctx.fillStyle = pal.roof;
-    ctx.strokeStyle = '#12100e';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(x - 18, y + 8);
-    ctx.quadraticCurveTo(x - 6, y - roofH * 0.45, x + 24, y - roofH);
-    ctx.lineTo(x + w - 24, y - roofH);
-    ctx.quadraticCurveTo(x + w + 6, y - roofH * 0.45, x + w + 18, y + 8);
-    ctx.closePath();
+    ctx.roundRect(bx, by, boxW, boxH, 5);
     ctx.fill();
     ctx.stroke();
 
-    // 屋脊鎏金装饰线与瓦楞暗纹
-    ctx.strokeStyle = pal.trim;
-    ctx.lineWidth = 2.2;
+    // 内细金线框
+    ctx.strokeStyle = 'rgba(232, 200, 128, 0.28)';
+    ctx.lineWidth = 0.8;
     ctx.beginPath();
-    ctx.moveTo(x + 20, y - roofH + 2);
-    ctx.lineTo(x + w - 20, y - roofH + 2);
+    ctx.roundRect(bx + 2.5, by + 2.5, boxW - 5, boxH - 5, 3);
     ctx.stroke();
 
-    ctx.strokeStyle = 'rgba(232, 222, 200, 0.12)';
-    ctx.lineWidth = 1;
-    const ribCount = Math.max(4, Math.floor(w / 26));
-    for (let i = 1; i < ribCount; i++) {
-      const rx = x + (w / ribCount) * i;
-      ctx.beginPath();
-      ctx.moveTo(rx, y - roofH + 6);
-      ctx.lineTo(rx, y + 4);
-      ctx.stroke();
-    }
-
-    // 屋檐悬挂摇曳红/琥珀灯笼
-    const sway = Math.sin(t * 2.4 + x * 0.02) * 3;
-    const drawLantern = (lx, ly) => {
-      ctx.save();
-      ctx.strokeStyle = '#1c1814';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(lx, ly - 10);
-      ctx.lineTo(lx + sway, ly);
-      ctx.stroke();
-
-      // 暖光晕
-      const glow = ctx.createRadialGradient(lx + sway, ly + 8, 2, lx + sway, ly + 8, 24);
-      glow.addColorStop(0, 'rgba(245, 130, 62, 0.55)');
-      glow.addColorStop(1, 'rgba(245, 130, 62, 0)');
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(lx + sway, ly + 8, 24, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 灯笼主体
-      ctx.fillStyle = pal.lantern;
-      ctx.strokeStyle = '#e6b84c';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.ellipse(lx + sway, ly + 8, 6.5, 9, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    };
-    drawLantern(x + 6, y + 14);
-    drawLantern(x + w - 6, y + 14);
-
-    // 竖排木质匾额招牌 (b.sign || b.name)
-    const signText = b.sign || b.name;
-    const chars = [...signText].slice(0, 4);
-    const px = x + w - 34;
-    const py = y + 18;
-    const ph = Math.max(48, chars.length * 16 + 14);
-    ctx.fillStyle = '#231a14';
-    ctx.strokeStyle = '#c89b3c';
-    ctx.lineWidth = 1.8;
+    // 朱砂印章小圆点
+    ctx.fillStyle = '#b53a2e';
     ctx.beginPath();
-    ctx.roundRect(px, py, 24, ph, 3);
+    ctx.arc(bx + 11.5, py, 4.2, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#f3d48c';
+    ctx.lineWidth = 0.9;
     ctx.stroke();
 
-    ctx.fillStyle = '#f2deb4';
-    ctx.font = 'bold 12px "Noto Serif SC", "Songti SC", serif';
-    ctx.textAlign = 'center';
-    chars.forEach((ch, idx) => {
-      ctx.fillText(ch, px + 12, py + 17 + idx * 16);
-    });
-
-    // 屋顶横匾建筑全名
-    ctx.font = 'bold 12px "Noto Serif SC", "Songti SC", sans-serif';
-    const nameW = ctx.measureText(b.name).width + 20;
-    const nx = x + w * 0.5 - nameW * 0.5;
-    const ny = y - roofH * 0.58;
-    ctx.fillStyle = 'rgba(24, 20, 16, 0.88)';
-    ctx.strokeStyle = pal.trim;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.roundRect(nx, ny, nameW, 22, 4);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#f5e8ce';
-    ctx.textAlign = 'center';
-    ctx.fillText(b.name, x + w * 0.5, ny + 15);
+    // 匾额楷书名
+    ctx.fillStyle = near ? '#fff5dc' : '#f2e2c4';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, bx + padL, py + 0.5);
 
     ctx.restore();
   }
@@ -1437,42 +1465,29 @@ export class InkWorldEngine {
 
   _drawPortalArch(ctx, p) {
     const isCave = p.to?.startsWith('cave_');
-    const color = isCave ? '#b48ef0' : '#d49a3a';
+    const isInterior = p.to?.startsWith('interior_');
+    const color = isCave ? '#b48ef0' : isInterior ? '#7ce8a4' : '#d49a3a';
+    const bob = Math.sin(this._elapsed * 2.4 + p.x * 0.02) * 2.5;
     ctx.save();
     ctx.translate(p.x, p.y);
 
-    // 两侧青石门柱
-    ctx.fillStyle = '#2d2824';
-    ctx.strokeStyle = '#14110f';
-    ctx.lineWidth = 1.8;
-    ctx.fillRect(-28, -48, 9, 46);
-    ctx.strokeRect(-28, -48, 9, 46);
-    ctx.fillRect(19, -48, 9, 46);
-    ctx.strokeRect(19, -48, 9, 46);
-
-    // 横额门楣
-    ctx.fillStyle = '#231d19';
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.roundRect(-34, -56, 68, 12, 3);
-    ctx.fill();
-    ctx.stroke();
-
-    // 悬浮宣纸目的地标签
+    // 仅绘淡雅水墨悬浮路牌（去除遮挡底图的粗黑石柱牌坊）
     const label = p.label || '传送阵';
-    ctx.font = 'bold 11px "Noto Serif SC", sans-serif';
-    const tw = ctx.measureText(label).width + 16;
-    ctx.fillStyle = 'rgba(22, 18, 15, 0.86)';
+    ctx.font = 'bold 11.5px "Noto Serif SC", "Songti SC", serif';
+    const tw = ctx.measureText(label).width + 22;
+    const boxY = -44 + bob;
+    ctx.fillStyle = 'rgba(20, 16, 13, 0.86)';
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 1.3;
     ctx.beginPath();
-    ctx.roundRect(-tw * 0.5, -80, tw, 20, 4);
+    ctx.roundRect(-tw * 0.5, boxY, tw, 22, 4);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#f3e7cf';
+
+    ctx.fillStyle = '#f5e9d2';
     ctx.textAlign = 'center';
-    ctx.fillText(label, 0, -66);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, boxY + 11.5);
 
     ctx.restore();
   }
@@ -1516,82 +1531,62 @@ export class InkWorldEngine {
 
   _drawSavePoint(ctx, sp) {
     const t = this._elapsed;
-    const pulse = 0.6 + 0.4 * Math.sin(t * 3.1);
+    const sprite = this._getSprite('shrine');
+    const drawH = 108;
 
     ctx.save();
     ctx.translate(sp.x, sp.y);
 
     // 接地墨影
-    ctx.fillStyle = 'rgba(12, 10, 8, 0.48)';
+    ctx.fillStyle = 'rgba(10, 8, 6, 0.48)';
     ctx.beginPath();
-    ctx.ellipse(0, 3, 22, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3, 26, 9, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 雕花青石底座
-    ctx.fillStyle = '#33302c';
-    ctx.strokeStyle = '#151311';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(-18, -10, 36, 12, 3);
-    ctx.fill();
-    ctx.stroke();
-
-    // 水墨石碑主体（微收腰古碑轮廓）
-    ctx.fillStyle = '#252624';
-    ctx.strokeStyle = '#121110';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.moveTo(-13, -10);
-    ctx.lineTo(-11, -54);
-    ctx.quadraticCurveTo(0, -64, 11, -54);
-    ctx.lineTo(13, -10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // 碑面玉金嵌边
-    ctx.strokeStyle = `rgba(200, 165, 82, ${0.65 + 0.3 * pulse})`;
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.roundRect(-8, -50, 16, 36, 3);
-    ctx.stroke();
-
-    // 碑文发光篆印（「墨」「记」）
-    ctx.fillStyle = `rgba(116, 236, 180, ${0.72 + 0.28 * pulse})`;
-    ctx.font = 'bold 11px "Noto Serif SC", "Songti SC", serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('墨', 0, -35);
-    ctx.fillStyle = `rgba(236, 200, 110, ${0.75 + 0.25 * pulse})`;
-    ctx.fillText('记', 0, -21);
+    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+      const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
+      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 6, drawW, drawH);
+    } else {
+      // 精灵图加载前回退石碑剪影
+      ctx.fillStyle = '#252624';
+      ctx.strokeStyle = '#c89b3c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-14, -58, 28, 56, 4);
+      ctx.fill();
+      ctx.stroke();
+    }
 
     // 环绕上升的玉金墨气灵点
     for (let i = 0; i < 4; i++) {
-      const phase = (t * 0.9 + i * 0.25) % 1;
-      const angle = t * 1.8 + i * Math.PI * 0.5;
-      const wx = Math.cos(angle) * (16 - phase * 6);
-      const wy = -8 - phase * 54;
+      const phase = (t * 0.85 + i * 0.25) % 1;
+      const angle = t * 1.7 + i * Math.PI * 0.5;
+      const wx = Math.cos(angle) * (22 - phase * 8);
+      const wy = -10 - phase * 86;
       const alpha = Math.sin(phase * Math.PI) * 0.85;
       ctx.fillStyle = i % 2 === 0
         ? `rgba(116, 236, 180, ${alpha})`
         : `rgba(232, 194, 102, ${alpha})`;
       ctx.beginPath();
-      ctx.arc(wx, wy, 2.2 * (1 - phase * 0.35), 0, Math.PI * 2);
+      ctx.arc(wx, wy, 2.3 * (1 - phase * 0.35), 0, Math.PI * 2);
       ctx.fill();
     }
 
     // 碑顶淡雅名牌
-    ctx.font = 'bold 10.5px "Noto Serif SC", sans-serif';
+    ctx.font = 'bold 11px "Noto Serif SC", sans-serif';
     const label = '墨石记录碑';
     const tw = ctx.measureText(label).width + 14;
+    const tagY = -drawH - 14;
     ctx.fillStyle = 'rgba(20, 24, 22, 0.86)';
-    ctx.strokeStyle = 'rgba(116, 232, 176, 0.75)';
+    ctx.strokeStyle = 'rgba(116, 232, 176, 0.78)';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect(-tw * 0.5, -80, tw, 18, 3);
+    ctx.roundRect(-tw * 0.5, tagY, tw, 19, 3);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#d6f8e5';
-    ctx.fillText(label, 0, -67);
+    ctx.textAlign = 'center';
+    ctx.fillText(label, 0, tagY + 13);
 
     ctx.restore();
   }
@@ -1601,300 +1596,196 @@ export class InkWorldEngine {
   _drawLootNode(ctx, node) {
     const t = this._elapsed;
     const type = node.type || 'crate';
+    const isHeavy = type === 'abandoned_cannon' || type === 'mech_wreck';
     const qColor = QUALITY[node.item?.quality]?.color
-      || (type === 'abandoned_cannon' || type === 'mech_wreck' ? '#e88b33'
+      || (isHeavy ? '#e88b33'
         : type === 'vault_box' || type === 'relic_spot' ? '#d49a3a'
           : type === 'mushroom' ? '#6fb98f'
             : '#c8b48a');
+    const pulse = 0.55 + 0.45 * Math.sin(t * 3.4 + node.x * 0.05);
+    const bob = Math.sin(t * 2.6 + node.x * 0.03) * 1.5;
+    const sprite = this._getSprite('chest');
+    const drawH = isHeavy ? 66 : 54;
 
     ctx.save();
     ctx.translate(node.x, node.y);
 
     // 接地阴影
-    ctx.fillStyle = 'rgba(14, 12, 10, 0.42)';
+    ctx.fillStyle = 'rgba(12, 10, 8, 0.46)';
     ctx.beginPath();
-    ctx.ellipse(0, 2, type === 'abandoned_cannon' || type === 'mech_wreck' ? 30 : 18, 8, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3, isHeavy ? 32 : 24, isHeavy ? 10 : 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 闪烁微光环
-    const pulse = 0.55 + 0.45 * Math.sin(t * 3.6 + node.x * 0.05);
-    const glow = ctx.createRadialGradient(0, -12, 3, 0, -12, type === 'abandoned_cannon' || type === 'mech_wreck' ? 38 : 24);
-    glow.addColorStop(0, `${qColor}55`);
+    // 品质色柔光底环
+    ctx.save();
+    ctx.scale(1, 0.46);
+    const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, isHeavy ? 42 : 32);
+    glow.addColorStop(0, `${qColor}66`);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(0, -12, type === 'abandoned_cannon' || type === 'mech_wreck' ? 38 : 24, 0, Math.PI * 2);
+    ctx.arc(0, 0, isHeavy ? 42 : 32, 0, Math.PI * 2);
     ctx.fill();
 
-    if (type === 'abandoned_cannon') {
-      // 废弃防空/反装甲重炮
-      ctx.fillStyle = '#383d40';
-      ctx.strokeStyle = '#151718';
-      ctx.lineWidth = 2;
-      // 底座沙袋与履带台
-      ctx.beginPath();
-      ctx.roundRect(-24, -14, 48, 16, 5);
-      ctx.fill();
-      ctx.stroke();
-      // 旋转炮塔
-      ctx.fillStyle = '#4a5054';
-      ctx.beginPath();
-      ctx.arc(0, -20, 14, Math.PI, 0);
-      ctx.lineTo(14, -12);
-      ctx.lineTo(-14, -12);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      // 长管双联重炮筒
-      ctx.strokeStyle = '#262a2d';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.moveTo(4, -22);
-      ctx.lineTo(30, -38);
-      ctx.stroke();
-      ctx.strokeStyle = '#e88b33';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(30, -38, 3 + pulse * 1.5, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (type === 'mech_wreck') {
-      // 坠毁重装机甲残骸
-      ctx.fillStyle = '#472d26';
-      ctx.strokeStyle = '#18110e';
-      ctx.lineWidth = 2.2;
-      // 倒伏装甲胸腔
-      ctx.beginPath();
-      ctx.moveTo(-24, -4);
-      ctx.lineTo(-18, -32);
-      ctx.lineTo(16, -36);
-      ctx.lineTo(26, -8);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      // 残损肩甲与发光反应核
-      ctx.fillStyle = '#2d2624';
-      ctx.fillRect(-14, -24, 16, 12);
-      ctx.fillStyle = `rgba(255, 118, 52, ${0.55 + pulse * 0.45})`;
-      ctx.beginPath();
-      ctx.arc(6, -18, 6, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (type === 'mushroom') {
-      // 变异荧光菌丛
-      ctx.fillStyle = '#234434';
-      ctx.fillRect(-3, -18, 6, 18);
-      ctx.fillStyle = '#6fb98f';
-      ctx.strokeStyle = '#182b21';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.arc(0, -18, 13, Math.PI, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      // 菌盖微光斑点
-      ctx.fillStyle = '#b9f5d0';
-      ctx.beginPath();
-      ctx.arc(-5, -22, 2.2, 0, Math.PI * 2);
-      ctx.arc(4, -24, 1.8, 0, Math.PI * 2);
-      ctx.fill();
+    ctx.strokeStyle = qColor;
+    ctx.globalAlpha = 0.42 + pulse * 0.35;
+    ctx.lineWidth = isHeavy ? 2.2 : 1.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, isHeavy ? 32 : 24, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+      const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
+      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 6 + bob, drawW, drawH);
     } else {
-      // 古箱 / 宝箱 / 电子终端
-      const bob = Math.sin(t * 3 + node.x) * 1.5;
-      ctx.fillStyle = type === 'tech_cache' ? '#36434d' : '#573d28';
-      ctx.strokeStyle = '#1a1410';
+      ctx.fillStyle = '#573d28';
+      ctx.strokeStyle = qColor;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(-14, -20 + bob, 28, 20, 3);
+      ctx.roundRect(-16, -24 + bob, 32, 22, 4);
       ctx.fill();
       ctx.stroke();
-      // 金铜锁扣与箱盖线
-      ctx.strokeStyle = qColor;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(-14, -12 + bob);
-      ctx.lineTo(14, -12 + bob);
-      ctx.stroke();
-      ctx.fillStyle = qColor;
-      ctx.fillRect(-3, -15 + bob, 6, 6);
     }
 
     // 悬浮名称（细小清晰）
     const label = node.name || node.item?.name || '物资';
     ctx.font = 'bold 10.5px "Noto Serif SC", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(18, 15, 12, 0.78)';
-    const tw = ctx.measureText(label).width + 10;
-    ctx.fillRect(-tw * 0.5, 6, tw, 15);
+    ctx.fillStyle = 'rgba(18, 15, 12, 0.82)';
+    const tw = ctx.measureText(label).width + 12;
+    ctx.beginPath();
+    ctx.roundRect(-tw * 0.5, 8, tw, 16, 3);
+    ctx.fill();
     ctx.fillStyle = qColor;
-    ctx.fillText(label, 0, 17);
+    ctx.fillText(label, 0, 19.5);
 
     ctx.restore();
   }
 
-  // ==================== NPC 水墨绘制（无 Emoji） ====================
+  // ==================== NPC 手绘透明精灵渲染 ====================
 
   _drawNpc(ctx, npcRef) {
     const npc = this._getNpcData(npcRef.id) || {
       name: '行者',
-      spriteType: 'merchant',
-      robeColor: '#4c3e32',
-      accentColor: '#c89b3c'
+      spriteType: 'merchant'
     };
     const t = this._elapsed;
-    const breath = Math.sin(t * 2.6) * 1.5;
-    const robe = npc.robeColor || '#4c3e32';
-    const accent = npc.accentColor || '#c89b3c';
+    const breath = Math.sin(t * 2.4 + npcRef.x * 0.02) * 1.4;
+    const spriteKey = this._getNpcSpriteKey(npcRef, npc);
+    const sprite = this._getSprite(spriteKey);
+    const drawH = 92;
 
     ctx.save();
     ctx.translate(npcRef.x, npcRef.y);
 
     // 接地墨影
-    ctx.fillStyle = 'rgba(14, 12, 10, 0.45)';
+    ctx.fillStyle = 'rgba(10, 8, 6, 0.48)';
     ctx.beginPath();
-    ctx.ellipse(0, 2, 16, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3, 19, 6.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 长袍/服饰主体
-    ctx.fillStyle = robe;
-    ctx.strokeStyle = '#171411';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-13, -2);
-    ctx.lineTo(-10, -34 + breath);
-    ctx.lineTo(10, -34 + breath);
-    ctx.lineTo(13, -2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // 领口/腰带滚边
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-11, -18 + breath);
-    ctx.lineTo(11, -18 + breath);
-    ctx.moveTo(-5, -34 + breath);
-    ctx.lineTo(0, -24 + breath);
-    ctx.lineTo(5, -34 + breath);
-    ctx.stroke();
-
-    // 头部
-    ctx.fillStyle = '#e8d8be';
-    ctx.strokeStyle = '#1c1814';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.arc(0, -42 + breath, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // 按 spriteType 绘制专属头饰/器物
-    if (npc.spriteType === 'hermit' || npc.spriteType === 'guide') {
-      // 道冠/竹笠
-      ctx.fillStyle = '#2d2a24';
-      ctx.beginPath();
-      ctx.moveTo(-15, -46 + breath);
-      ctx.lineTo(0, -56 + breath);
-      ctx.lineTo(15, -46 + breath);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else if (npc.spriteType === 'smith') {
-      // 铁匠护额与锻锤剪影
-      ctx.fillStyle = '#b53a2e';
-      ctx.fillRect(-8, -48 + breath, 16, 3.5);
-      ctx.strokeStyle = '#6c7278';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(14, -10);
-      ctx.lineTo(16, -34);
-      ctx.stroke();
-    } else if (npc.spriteType === 'master') {
-      // 宗师发髻与背剑
-      ctx.fillStyle = '#24201d';
-      ctx.beginPath();
-      ctx.arc(0, -51 + breath, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#c89b3c';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(-14, -46);
-      ctx.lineTo(12, -16);
-      ctx.stroke();
+    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+      const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
+      ctx.save();
+      if (npcRef.facing === 'left') ctx.scale(-1, 1);
+      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 5 + breath, drawW, drawH);
+      ctx.restore();
     } else {
-      // 墨发/布帽
-      ctx.fillStyle = '#26211d';
+      ctx.fillStyle = npc.robeColor || '#4c3e32';
+      ctx.strokeStyle = '#c89b3c';
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.arc(0, -44 + breath, 8.2, Math.PI, 0);
+      ctx.roundRect(-12, -48 + breath, 24, 46, 6);
       ctx.fill();
+      ctx.stroke();
     }
 
     // 头顶宣纸名牌
     ctx.font = 'bold 11px "Noto Serif SC", sans-serif';
     const nw = ctx.measureText(npc.name).width + 16;
-    ctx.fillStyle = 'rgba(232, 222, 200, 0.92)';
+    const tagY = -drawH - 16 + breath;
+    ctx.fillStyle = 'rgba(232, 222, 200, 0.94)';
     ctx.strokeStyle = '#2c251e';
     ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.roundRect(-nw * 0.5, -76 + breath, nw, 19, 3);
+    ctx.roundRect(-nw * 0.5, tagY, nw, 19, 3);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#1c1916';
     ctx.textAlign = 'center';
-    ctx.fillText(npc.name, 0, -63 + breath);
+    ctx.fillText(npc.name, 0, tagY + 13);
 
     ctx.restore();
   }
 
-  // ==================== 怪物与 Boss 水墨绘制（无 Emoji） ====================
+  // ==================== 怪物与 Boss 手绘透明精灵渲染 ====================
 
   _drawEnemy(ctx, en) {
     const tpl = en.data || ENEMIES.rat;
-    const scale = tpl.scale || 1;
     const isBoss = Boolean(tpl.isBoss);
     const t = this._elapsed;
-    const bob = Math.abs(Math.sin(en.phase)) * (isBoss ? 5 : 3.5);
-    const color = tpl.color || '#332d29';
+    const bob = Math.abs(Math.sin(en.phase)) * (isBoss ? 4.5 : 3);
     const accent = tpl.accent || '#d9483b';
+    const spriteKey = this._getEnemySpriteKey(tpl.spriteType);
+    const sprite = this._getSprite(spriteKey);
+    const drawH = isBoss ? 118 : 88;
 
     ctx.save();
     ctx.translate(en.x, en.y);
 
     // 接地墨影与气场环
-    ctx.fillStyle = 'rgba(12, 10, 8, 0.48)';
+    ctx.fillStyle = 'rgba(10, 8, 6, 0.5)';
     ctx.beginPath();
-    ctx.ellipse(0, 2, 18 * scale, 6.5 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3, isBoss ? 34 : 24, isBoss ? 11 : 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (isBoss) {
       const pulse = 0.55 + 0.45 * Math.sin(t * 4);
-      ctx.strokeStyle = accent;
-      ctx.globalAlpha = 0.5 + pulse * 0.4;
+      const aura = ctx.createRadialGradient(0, -drawH * 0.42, 10, 0, -drawH * 0.42, 68);
+      aura.addColorStop(0, `rgba(217, 72, 59, ${0.28 + pulse * 0.16})`);
+      aura.addColorStop(0.55, `rgba(212, 154, 58, ${0.18 + pulse * 0.12})`);
+      aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(0, -drawH * 0.42, 68, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#e6b84c';
+      ctx.globalAlpha = 0.55 + pulse * 0.35;
       ctx.lineWidth = 2.4;
       ctx.beginPath();
-      ctx.ellipse(0, 2, 28 * scale, 11 * scale, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 3, 40, 14, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     } else {
-      ctx.strokeStyle = 'rgba(181, 58, 46, 0.35)';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = 'rgba(181, 58, 46, 0.38)';
+      ctx.lineWidth = 1.3;
       ctx.beginPath();
-      ctx.ellipse(0, 2, 20 * scale, 7.5 * scale, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 3, 26, 9, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // 实体缩放与朝向翻转
+    // 透明 PNG 精灵绘制（按朝向翻转）
     ctx.save();
     ctx.translate(0, -bob);
-    ctx.scale(en.facing * scale, scale);
-    this._drawEnemySilhouette(ctx, tpl.spriteType, color, accent, t);
+    if (en.facing < 0) ctx.scale(-1, 1);
+    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+      const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
+      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 6, drawW, drawH);
+    } else {
+      ctx.scale(tpl.scale || 1, tpl.scale || 1);
+      this._drawEnemySilhouette(ctx, tpl.spriteType, tpl.color || '#332d29', accent, t);
+    }
     ctx.restore();
 
     // 名称与血条
-    const labelY = -52 * scale - bob;
+    const labelY = -drawH - 6 - bob;
     const label = isBoss ? `【首领】${tpl.name}` : tpl.name;
     ctx.font = isBoss ? 'bold 12px "Noto Serif SC", sans-serif' : 'bold 10.5px "Noto Serif SC", sans-serif';
     const tw = ctx.measureText(label).width + 14;
-    ctx.fillStyle = isBoss ? 'rgba(42, 14, 14, 0.9)' : 'rgba(22, 18, 16, 0.82)';
-    ctx.strokeStyle = isBoss ? '#e6b84c' : 'rgba(181, 58, 46, 0.7)';
+    ctx.fillStyle = isBoss ? 'rgba(42, 14, 14, 0.9)' : 'rgba(22, 18, 16, 0.84)';
+    ctx.strokeStyle = isBoss ? '#e6b84c' : 'rgba(181, 58, 46, 0.72)';
     ctx.lineWidth = isBoss ? 1.5 : 1;
     ctx.beginPath();
     ctx.roundRect(-tw * 0.5, labelY - 14, tw, 18, 3);
@@ -1906,7 +1797,7 @@ export class InkWorldEngine {
 
     // Boss 血条（或受损敌人血条）
     if (isBoss || en.hp < en.maxHp) {
-      const bw = isBoss ? 72 : 44;
+      const bw = isBoss ? 78 : 48;
       const bh = isBoss ? 6 : 4;
       const pct = clamp(en.hp / Math.max(1, en.maxHp), 0, 1);
       ctx.fillStyle = '#1a1412';
@@ -2133,114 +2024,44 @@ export class InkWorldEngine {
     ctx.restore();
   }
 
-  // ==================== 主角「沈砚」多部件水墨绘制（8 向朝向） ====================
+  // ==================== 主角「沈砚」手绘透明精灵渲染 ====================
 
   _drawHero(ctx) {
     const h = this.hero;
-    const stride = h.moving ? Math.sin(h.walkPhase) * 6 : 0;
-    const breath = h.moving ? Math.abs(Math.cos(h.walkPhase)) * 2.2 : Math.sin(this._elapsed * 2.8) * 1.2;
-    const facingUp = h.facing === 'up';
+    const bob = h.moving ? Math.abs(Math.sin(h.walkPhase)) * 2.4 : Math.sin(this._elapsed * 2.6) * 1.1;
+    const lean = h.moving ? Math.sin(h.walkPhase) * 0.045 : 0;
     const flipX = h.facing === 'left' ? -1 : (h.facing === 'right' ? 1 : h.lastSide);
+    const sprite = this._getSprite('hero');
+    const drawH = 96;
 
     ctx.save();
     ctx.translate(h.x, h.y);
 
-    // 1. 脚下椭圆墨影
-    ctx.fillStyle = 'rgba(12, 10, 8, 0.48)';
+    // 脚下椭圆墨影
+    ctx.fillStyle = 'rgba(10, 8, 6, 0.5)';
     ctx.beginPath();
-    ctx.ellipse(0, 2, 17, 6.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3, 21, 7, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.save();
-    ctx.scale(flipX, 1);
-
-    // 2. 背后/侧挂神兵剪影（青城剑/火铳/电磁炮）
-    ctx.save();
-    ctx.strokeStyle = '#c89b3c';
-    ctx.lineWidth = 2.6;
-    ctx.beginPath();
-    if (h.weaponType === 'sniper' || h.weaponType === 'railgun' || h.weaponType === 'plasma') {
-      ctx.moveTo(-14, -48 - breath);
-      ctx.lineTo(14, -14 - breath);
+    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+      const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
+      ctx.save();
+      ctx.translate(0, -bob);
+      ctx.rotate(lean * flipX);
+      ctx.scale(flipX, 1);
+      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 5, drawW, drawH);
+      ctx.restore();
     } else {
-      ctx.moveTo(-13, -46 - breath);
-      ctx.lineTo(11, -16 - breath);
-    }
-    ctx.stroke();
-    // 剑柄/枪口微光
-    ctx.fillStyle = '#e8dec8';
-    ctx.beginPath();
-    ctx.arc(-13, -46 - breath, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // 3. 迈步双足
-    ctx.strokeStyle = '#dfd4be';
-    ctx.lineWidth = 3.2;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-4, -16);
-    ctx.lineTo(-4 + stride, -1);
-    ctx.moveTo(4, -16);
-    ctx.lineTo(4 - stride, -1);
-    ctx.stroke();
-
-    // 4. 青灰焦墨长披风与鎏金古铜滚边
-    ctx.fillStyle = '#1f1c18';
-    ctx.strokeStyle = '#c89b3c';
-    ctx.lineWidth = 1.6;
-    const cloakSway = h.moving ? -stride * 0.45 : Math.sin(this._elapsed * 2.2) * 1.5;
-    ctx.beginPath();
-    ctx.moveTo(-12 + cloakSway, -13 - breath * 0.4);
-    ctx.lineTo(-9, -43 - breath);
-    ctx.lineTo(9, -43 - breath);
-    ctx.lineTo(12, -14 - breath * 0.4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // 正面内衬领口（背对时隐藏）
-    if (!facingUp) {
-      ctx.fillStyle = '#36322d';
+      // 精灵加载前回退剪影
+      ctx.fillStyle = '#1f1c18';
+      ctx.strokeStyle = '#c89b3c';
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.moveTo(-4, -42 - breath);
-      ctx.lineTo(0, -28 - breath);
-      ctx.lineTo(5, -42 - breath);
-      ctx.closePath();
+      ctx.roundRect(-12, -52 - bob, 24, 50, 6);
       ctx.fill();
+      ctx.stroke();
     }
 
-    // 5. 随风飘动的朱砂围巾飘带
-    const scarfWave = Math.sin(this._elapsed * 5.2 + h.walkPhase) * 4;
-    ctx.strokeStyle = '#b53a2e';
-    ctx.lineWidth = 3.6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(facingUp ? 0 : 4, -41 - breath);
-    ctx.quadraticCurveTo(-11, -37 - breath + scarfWave * 0.5, -22, -29 - breath + scarfWave);
-    ctx.stroke();
-
-    // 6. 头颅与竹笠斗笠
-    if (!facingUp) {
-      ctx.fillStyle = '#e8dec8';
-      ctx.beginPath();
-      ctx.arc(1, -48 - breath, 6.8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // 竹笠
-    ctx.fillStyle = '#3a3226';
-    ctx.strokeStyle = '#c89b3c';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(-17, -50 - breath);
-    ctx.quadraticCurveTo(0, -56 - breath, 17, -50 - breath);
-    ctx.lineTo(0, -64 - breath);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
     ctx.restore();
   }
 

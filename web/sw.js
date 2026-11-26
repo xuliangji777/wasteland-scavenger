@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moshitu-rpg-v4';
+const CACHE_NAME = 'moshitu-rpg-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   './js/game.js',
   './manifest.json',
   './icon.svg',
+  './assets/app_icon.png',
   './assets/bg_town.jpg',
   './assets/bg_wasteland.jpg',
   './assets/bg_ruins.jpg',
@@ -20,7 +21,15 @@ const ASSETS = [
   './assets/bg_battle.jpg',
   './assets/portrait_hero.jpg',
   './assets/portrait_laohuang.jpg',
-  './assets/portrait_yinshi.jpg'
+  './assets/portrait_yinshi.jpg',
+  './assets/sprites/hero.png',
+  './assets/sprites/npc_merchant.png',
+  './assets/sprites/npc_hermit.png',
+  './assets/sprites/shrine.png',
+  './assets/sprites/enemy_beast.png',
+  './assets/sprites/enemy_mech.png',
+  './assets/sprites/enemy_demon.png',
+  './assets/sprites/chest.png'
 ];
 
 self.addEventListener('install', (e) => {

@@ -145,111 +145,130 @@
   <div id="float-layer" class="float-layer" aria-hidden="true"></div>
 
   <div class="rpg-shell">
-    <!-- ==================== 顶部宣纸水墨 HUD ==================== -->
-    <header class="ink-topbar">
-      <!-- 左侧：工笔主角立绘 + 朱砂印章 + 标题与实时地标 -->
-      <div class="seal-brand">
-        <div class="hero-portrait-frame">
-          <img id="hud-hero-portrait" src="assets/portrait_hero.jpg" alt="沈砚" />
-          <span class="vermilion-seal" aria-label="墨土印">墨土</span>
-        </div>
-        <div class="brand-titles">
-          <div class="title-row">
-            <h1>墨土拾荒录</h1>
-            <span id="day-badge" class="day-chip">第1天</span>
-          </div>
-          <div class="location-row">
-            <span id="region-name-badge" class="region-chip">墨石镇域</span>
-            <span class="loc-sep">·</span>
-            <span id="map-name-badge" class="map-chip">墨石镇</span>
-            <span class="loc-sep">·</span>
-            <span id="weather-badge" class="weather-chip">晴朗微风</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 中部：单行紧凑六维状态条（1180px+ 不换行） -->
-      <div class="hud-stats-strip">
-        <div class="ink-stat stat-lv">
-          <div class="stat-top">
-            <span class="lbl">修为</span>
-            <strong>Lv.<span id="hud-lv">1</span></strong>
-          </div>
-          <div class="ink-bar"><div id="bar-exp" class="ink-fill exp-fill" style="width:0%"></div></div>
-        </div>
-
-        <div class="ink-stat stat-hp">
-          <div class="stat-top">
-            <span class="lbl">气血</span>
-            <strong><span id="hud-hp">120</span>/<span id="hud-hp-max">120</span></strong>
-          </div>
-          <div class="ink-bar"><div id="bar-hp" class="ink-fill hp-fill" style="width:100%"></div></div>
-        </div>
-
-        <div class="ink-stat stat-mp">
-          <div class="stat-top">
-            <span class="lbl">内息</span>
-            <strong><span id="hud-energy">100</span>/<span id="hud-energy-max">100</span></strong>
-          </div>
-          <div class="ink-bar"><div id="bar-energy" class="ink-fill energy-fill" style="width:100%"></div></div>
-        </div>
-
-        <div class="ink-stat stat-food">
-          <div class="stat-top">
-            <span class="lbl">饱食</span>
-            <strong><span id="hud-food">100</span></strong>
-          </div>
-          <div class="ink-bar"><div id="bar-food" class="ink-fill food-fill" style="width:100%"></div></div>
-        </div>
-
-        <div class="ink-stat stat-gold">
-          <div class="stat-top">
-            <span class="lbl">废土币</span>
-            <strong id="hud-gold">80</strong>
-          </div>
-          <div class="stat-sub">铜钱流转</div>
-        </div>
-
-        <div class="ink-stat stat-bag">
-          <div class="stat-top">
-            <span class="lbl">行囊</span>
-            <strong><span id="hud-bag">0</span>/<span id="hud-bag-max">10</span></strong>
-          </div>
-          <div class="stat-sub">负重格数</div>
-        </div>
-      </div>
-
-      <!-- 右侧：账号与系统工具按钮 -->
-      <div class="topbar-btns">
-        <button id="btn-account" class="ink-btn-sm" title="幸存者账号与云端/本地存档">
-          <span class="btn-glyph">名</span>
-          <span id="hud-username">废土游客</span>
-        </button>
-        <button id="btn-sound" class="ink-icon-btn" title="音效开关" aria-label="音效开关">🔊</button>
-        <button id="btn-help" class="ink-icon-btn" title="江湖指南" aria-label="江湖指南">❔</button>
-        <button id="btn-reset" class="ink-icon-btn danger" title="重开周目" aria-label="重开周目">↺</button>
-      </div>
-    </header>
-
-    <!-- ==================== 五幕主线与区域危机彩带 ==================== -->
-    <div class="quest-ribbon">
-      <div class="quest-left">
-        <span class="seal-tag">主线</span>
-        <span id="hud-quest">【第一幕】拜访墨石镇老黄，探寻同伴「阿哲」的下落</span>
-      </div>
-      <div class="quest-right">
-        <span id="warn-badge" class="hazard-pill hidden">警戒 <strong id="hud-warn">0%</strong></span>
-        <span id="tide-badge" class="hazard-pill tide hidden">辐射潮 <strong id="hud-tide">60s</strong></span>
-        <span id="hud-guardian-badge" class="guardian-pill">护驾：未出战</span>
-        <span class="ending-pill">天命 <strong id="hud-ending-pct">0%</strong></span>
-      </div>
-    </div>
-
-    <!-- ==================== 2.5D 俯斜全地图行走舞台 ==================== -->
+    <!-- ==================== 100% 全屏 2.5D 俯斜行走舞台 ==================== -->
     <main class="rpg-stage-wrap" id="rpg-stage-wrap">
       <canvas id="rpg-canvas"></canvas>
 
-      <!-- 左上角水墨操作提示浮标 -->
+      <!-- ==================== 浮空无框 RPG 顶部 HUD 叠层 ==================== -->
+      <div class="hud-overlay-top" aria-label="状态与地标">
+        <!-- 左上：圆形青铜玉环主角徽章 + 无框斜切血气内息条 + 浮空主线提示 -->
+        <div class="hud-hero-cluster">
+          <div class="hud-hero-row">
+            <div class="hero-medallion">
+              <div class="hero-medallion-ring">
+                <img id="hud-hero-portrait" src="assets/portrait_hero.jpg" alt="沈砚" />
+              </div>
+              <span class="hero-lv-badge">Lv.<span id="hud-lv">1</span></span>
+            </div>
+
+            <div class="hud-gauges-stack">
+              <!-- 气血斜切槽 -->
+              <div class="rpg-gauge gauge-hp">
+                <div class="gauge-track">
+                  <div id="bar-hp" class="gauge-fill hp-fill" style="width:100%"></div>
+                </div>
+                <span class="gauge-label">血</span>
+                <span class="gauge-val"><span id="hud-hp">120</span>/<span id="hud-hp-max">120</span></span>
+              </div>
+
+              <!-- 内息斜切槽 -->
+              <div class="rpg-gauge gauge-mp">
+                <div class="gauge-track">
+                  <div id="bar-energy" class="gauge-fill energy-fill" style="width:100%"></div>
+                </div>
+                <span class="gauge-label">息</span>
+                <span class="gauge-val"><span id="hud-energy">100</span>/<span id="hud-energy-max">100</span></span>
+              </div>
+
+              <!-- 细线修为槽 -->
+              <div class="rpg-exp-line" title="修为进度">
+                <div id="bar-exp" class="exp-line-fill" style="width:0%"></div>
+              </div>
+
+              <!-- 内联无框补给遥测：饱食 / 废土币 / 行囊 -->
+              <div class="hud-inline-telemetry">
+                <span class="tele-item tele-food" title="饱食度">
+                  <span class="tele-dot food"></span>
+                  <span class="tele-lbl">食</span>
+                  <strong id="hud-food">100</strong>
+                  <span class="tele-mini-bar"><span id="bar-food" class="food-fill" style="width:100%"></span></span>
+                </span>
+                <span class="tele-sep">·</span>
+                <span class="tele-item tele-gold" title="废土币">
+                  <span class="tele-lbl">币</span>
+                  <strong id="hud-gold">80</strong>
+                </span>
+                <span class="tele-sep">·</span>
+                <span class="tele-item tele-bag" title="行囊负重">
+                  <span class="tele-lbl">囊</span>
+                  <strong><span id="hud-bag">0</span>/<span id="hud-bag-max">10</span></strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 浮空主线目标与危机标记（无实心黑条） -->
+          <div class="hud-quest-float">
+            <span class="quest-seal-dot" aria-hidden="true">主线</span>
+            <span id="hud-quest">【第一幕】拜访墨石镇老黄，探寻同伴「阿哲」的下落</span>
+          </div>
+          <div class="hud-status-pills">
+            <span id="warn-badge" class="hazard-pill hidden">警戒 <strong id="hud-warn">0%</strong></span>
+            <span id="tide-badge" class="hazard-pill tide hidden">辐射潮 <strong id="hud-tide">60s</strong></span>
+            <span id="hud-guardian-badge" class="guardian-pill">护驾：未出战</span>
+          </div>
+        </div>
+
+        <!-- 顶中/右上：水墨书法地标 + 天时天命 + 轻透系统按钮 -->
+        <div class="hud-right-cluster">
+          <div class="hud-location-float">
+            <div class="loc-title-line">
+              <span id="map-name-badge" class="loc-map-title">墨石镇</span>
+              <span id="day-badge" class="day-chip">第1天</span>
+            </div>
+            <div class="loc-sub-line">
+              <span id="region-name-badge" class="region-chip">墨石镇域</span>
+              <span class="loc-sep">·</span>
+              <span id="weather-badge" class="weather-chip">晴朗微风</span>
+              <span class="loc-sep">·</span>
+              <span class="ending-pill">天命 <strong id="hud-ending-pct">0%</strong></span>
+            </div>
+          </div>
+
+          <div class="topbar-btns">
+            <button id="btn-account" class="hud-pill-btn" title="幸存者账号与云端/本地存档">
+              <span class="btn-glyph">名</span>
+              <span id="hud-username">废土游客</span>
+            </button>
+            <button id="btn-sound" class="hud-circle-btn" title="音效开关" aria-label="音效开关">
+              <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <path d="M4.5 9.5H8L13 5.2V18.8L8 14.5H4.5V9.5Z" stroke="#d4a24a" stroke-width="1.7" stroke-linejoin="round" fill="rgba(212,162,74,0.16)"/>
+                <path d="M16 9.2C17.2 10.2 17.8 11.1 17.8 12C17.8 12.9 17.2 13.8 16 14.8" stroke="#5eead4" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M18.4 6.8C20.2 8.3 21 10.1 21 12C21 13.9 20.2 15.7 18.4 17.2" stroke="#4fd1c5" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2.2 1.8"/>
+                <circle cx="6.2" cy="12" r="0.9" fill="#5eead4"/>
+              </svg>
+            </button>
+            <button id="btn-help" class="hud-circle-btn" title="江湖指南" aria-label="江湖指南">
+              <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <polygon points="8.5,3 15.5,3 21,8.5 21,15.5 15.5,21 8.5,21 3,15.5 3,8.5" stroke="#d4a24a" stroke-width="1.5" fill="rgba(212,162,74,0.09)"/>
+                <path d="M9.6 9.4C9.8 7.9 10.9 7 12.3 7C13.8 7 14.9 7.9 14.9 9.2C14.9 10.4 14 11 12.9 11.6C12.3 11.9 12 12.4 12 13.2V13.8" stroke="#efe5d1" stroke-width="1.75" stroke-linecap="round"/>
+                <circle cx="12" cy="16.8" r="1.15" fill="#5eead4"/>
+                <path d="M6.5 6.5L8 8M17.5 6.5L16 8M17.5 17.5L16 16M6.5 17.5L8 16" stroke="#4fd1c5" stroke-width="1.1" stroke-linecap="round" opacity="0.7"/>
+              </svg>
+            </button>
+            <button id="btn-reset" class="hud-circle-btn danger" title="重开周目" aria-label="重开周目">
+              <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <path d="M6.3 9.2A7 7 0 1 1 6 15.2" stroke="#d4a24a" stroke-width="1.7" stroke-linecap="round"/>
+                <path d="M4.2 5.4V9.8H8.6" stroke="#c44332" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="2" stroke="#5eead4" stroke-width="1.35" fill="rgba(94,234,212,0.18)"/>
+                <path d="M12 7.4V8.8M12 15.2V16.6M15.2 12H16.6" stroke="#4fd1c5" stroke-width="1.2" stroke-linecap="round" opacity="0.75"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 轻透操作提示浮标（贴底悬浮，不抢画面） -->
       <div class="stage-corner-info">
         <span id="stage-hint-text">WASD / 方向键行走 · E / 空格 交互 · 点击地面寻路</span>
       </div>
@@ -258,11 +277,31 @@
       <div class="stage-controls">
         <!-- 左下角：四向触控十字键（桌面轻透、移动顺手） -->
         <div class="dpad-cross" role="group" aria-label="方向控制">
-          <button id="btn-move-up" class="dpad-btn dpad-up" aria-label="向上走">▲</button>
-          <button id="btn-move-left" class="dpad-btn dpad-left" aria-label="向左走">◀</button>
+          <button id="btn-move-up" class="dpad-btn dpad-up" aria-label="向上走">
+            <svg class="cyber-ink-ico dpad-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M12 5.5L18.5 14.5H5.5L12 5.5Z" stroke="#d4a24a" stroke-width="1.7" stroke-linejoin="round" fill="rgba(212,162,74,0.18)"/>
+              <path d="M9.5 17.5H14.5" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="btn-move-left" class="dpad-btn dpad-left" aria-label="向左走">
+            <svg class="cyber-ink-ico dpad-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M5.5 12L14.5 5.5V18.5L5.5 12Z" stroke="#d4a24a" stroke-width="1.7" stroke-linejoin="round" fill="rgba(212,162,74,0.18)"/>
+              <path d="M17.5 9.5V14.5" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
           <span class="dpad-center" aria-hidden="true">墨</span>
-          <button id="btn-move-right" class="dpad-btn dpad-right" aria-label="向右走">▶</button>
-          <button id="btn-move-down" class="dpad-btn dpad-down" aria-label="向下走">▼</button>
+          <button id="btn-move-right" class="dpad-btn dpad-right" aria-label="向右走">
+            <svg class="cyber-ink-ico dpad-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M18.5 12L9.5 5.5V18.5L18.5 12Z" stroke="#d4a24a" stroke-width="1.7" stroke-linejoin="round" fill="rgba(212,162,74,0.18)"/>
+              <path d="M6.5 9.5V14.5" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="btn-move-down" class="dpad-btn dpad-down" aria-label="向下走">
+            <svg class="cyber-ink-ico dpad-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M12 18.5L18.5 9.5H5.5L12 18.5Z" stroke="#d4a24a" stroke-width="1.7" stroke-linejoin="round" fill="rgba(212,162,74,0.18)"/>
+              <path d="M9.5 6.5H14.5" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
 
         <!-- 右下角：主交互键 + 搜寻新迹 -->
@@ -272,10 +311,105 @@
             <span id="interact-label">探索周围</span>
           </button>
           <button id="btn-refresh-loot" class="ink-action-btn" title="刷新当前区域废墟与物资">
-            <span class="action-glyph">↻</span> 搜寻新迹
+            <span class="action-glyph">
+              <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <path d="M18.6 9.4A7 7 0 1 0 18.4 15.2" stroke="#d4a24a" stroke-width="1.7" stroke-linecap="round"/>
+                <path d="M19.5 5.2V9.8H14.9" stroke="#5eead4" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="2.2" stroke="#4fd1c5" stroke-width="1.35" fill="rgba(94,234,212,0.2)"/>
+                <path d="M12 7.5V9M12 15V16.5M7.5 12H9" stroke="#d4a24a" stroke-width="1.15" stroke-linecap="round" opacity="0.75"/>
+              </svg>
+            </span>
+            <span>搜寻新迹</span>
           </button>
         </div>
       </div>
+
+      <!-- ==================== 底部居中浮空水墨徽章功能坞 ==================== -->
+      <nav class="ink-dock" aria-label="主功能导航">
+        <button class="dock-tab accent" data-action="openWorldMap">
+          <span class="dock-ico">
+            <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <polygon points="8.3,2.8 15.7,2.8 21.2,8.3 21.2,15.7 15.7,21.2 8.3,21.2 2.8,15.7 2.8,8.3" stroke="#d4a24a" stroke-width="1.55" fill="rgba(212,162,74,0.1)"/>
+              <circle cx="12" cy="12" r="5.6" stroke="#4fd1c5" stroke-width="1.15" stroke-dasharray="2.5 2"/>
+              <path d="M12 4.5V6.5M12 17.5V19.5M4.5 12H6.5M17.5 12H19.5" stroke="#d4a24a" stroke-width="1.4" stroke-linecap="round"/>
+              <polygon points="12,7.2 14.3,12 12,16.8 9.7,12" stroke="#5eead4" stroke-width="1.35" fill="rgba(94,234,212,0.2)"/>
+              <circle cx="12" cy="12" r="1.45" fill="#c44332"/>
+            </svg>
+          </span>
+          <small>天下舆图</small>
+        </button>
+        <button class="dock-tab crucible-tab" data-action="openCrucible">
+          <span class="dock-ico">
+            <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M8.4 5.5H15.6L14.3 8.4C17.2 9.6 18.6 12.1 18.1 15.2C17.6 18.1 15.2 20.2 12 20.2C8.8 20.2 6.4 18.1 5.9 15.2C5.4 12.1 6.8 9.6 9.7 8.4L8.4 5.5Z" stroke="#d4a24a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.14)"/>
+              <path d="M5.6 11.4C4.2 11.4 3.6 12.4 3.8 13.6C4 14.7 4.9 15.2 5.9 15.1M18.4 11.4C19.8 11.4 20.4 12.4 20.2 13.6C20 14.7 19.1 15.2 18.1 15.1" stroke="#d4a24a" stroke-width="1.3" stroke-linecap="round"/>
+              <polygon points="12,10.8 14.8,14.2 12,17.6 9.2,14.2" stroke="#5eead4" stroke-width="1.35" fill="rgba(94,234,212,0.22)"/>
+              <path d="M12 2.4V4.2M9.6 3.1L10.4 4.3M14.4 3.1L13.6 4.3" stroke="#5eead4" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <small>天工墨壶</small>
+        </button>
+        <button class="dock-tab" data-action="openBagModal">
+          <span class="dock-ico">
+            <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M8.5 7V5.4C8.5 4.1 9.6 3.2 11 3.2H13C14.4 3.2 15.5 4.1 15.5 5.4V7" stroke="#d4a24a" stroke-width="1.6" stroke-linecap="round"/>
+              <rect x="4.2" y="7" width="15.6" height="13.4" rx="2.6" stroke="#d4a24a" stroke-width="1.6" fill="rgba(212,162,74,0.12)"/>
+              <path d="M4.2 11.8H19.8" stroke="#d4a24a" stroke-width="1.4"/>
+              <rect x="10.2" y="10.1" width="3.6" height="3.6" rx="0.8" stroke="#5eead4" stroke-width="1.4" fill="rgba(94,234,212,0.24)"/>
+              <path d="M7.2 16.5H10.5M13.5 16.5H16.8" stroke="#4fd1c5" stroke-width="1.35" stroke-linecap="round"/>
+              <circle cx="17.2" cy="9.4" r="0.9" fill="#c44332"/>
+            </svg>
+          </span>
+          <small>行囊装备</small>
+        </button>
+        <button class="dock-tab" data-action="openSkill">
+          <span class="dock-ico">
+            <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M19.8 4.2L10.6 13.4M19.8 4.2L18.5 8.8L12.6 14.7L9.3 11.4L15.2 5.5L19.8 4.2Z" stroke="#d4a24a" stroke-width="1.55" stroke-linejoin="round" fill="rgba(212,162,74,0.18)"/>
+              <path d="M7.8 12.9L11.1 16.2M6.8 17.2L4.4 19.6" stroke="#d4a24a" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M8.6 4.2L5.4 9.2H8.4L6.8 13.2" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M15.8 13.6L19.2 15.2L16.4 19.6" stroke="#4fd1c5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <small>武学奇术</small>
+        </button>
+        <button class="dock-tab" data-action="openQuests">
+          <span class="dock-ico">
+            <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M6.5 4.2H17.5C18.6 4.2 19.5 5 19.5 6.1C19.5 7.2 18.6 8 17.5 8H6.5C5.4 8 4.5 7.2 4.5 6.1C4.5 5 5.4 4.2 6.5 4.2Z" stroke="#d4a24a" stroke-width="1.5" fill="rgba(212,162,74,0.16)"/>
+              <path d="M6.5 8V16.8C6.5 18.3 7.7 19.5 9.2 19.5H17.5V8" stroke="#d4a24a" stroke-width="1.55" stroke-linejoin="round" fill="rgba(212,162,74,0.08)"/>
+              <path d="M9.6 11.2H14.8M9.6 14.1H13.4" stroke="#5eead4" stroke-width="1.45" stroke-linecap="round"/>
+              <rect x="14.2" y="14.8" width="2.4" height="2.4" rx="0.4" fill="#c44332"/>
+              <path d="M4.5 16.8H6.5" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <small>主线支线</small>
+        </button>
+        <button class="dock-tab" data-action="openCollection">
+          <span class="dock-ico">
+            <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="11.2" r="7.4" stroke="#d4a24a" stroke-width="1.6" fill="rgba(212,162,74,0.1)"/>
+              <circle cx="12" cy="11.2" r="4.8" stroke="#4fd1c5" stroke-width="1.2" stroke-dasharray="2.8 1.8"/>
+              <path d="M8.5 11.2C9.6 9.5 14.4 9.5 15.5 11.2C14.4 12.9 9.6 12.9 8.5 11.2Z" stroke="#5eead4" stroke-width="1.4" fill="rgba(94,234,212,0.18)"/>
+              <circle cx="12" cy="11.2" r="1.2" fill="#c44332"/>
+              <path d="M9.2 20.6H14.8M12 18.6V20.6" stroke="#d4a24a" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <small>古董志怪</small>
+        </button>
+        <button class="dock-tab" data-action="openRank">
+          <span class="dock-ico">
+            <svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+              <path d="M7.5 4.8H16.5V10.4C16.5 13.1 14.5 15.2 12 15.2C9.5 15.2 7.5 13.1 7.5 10.4V4.8Z" stroke="#d4a24a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.16)"/>
+              <path d="M7.5 6.8H4.8C4.8 9.6 5.9 11.2 7.8 11.5M16.5 6.8H19.2C19.2 9.6 18.1 11.2 16.2 11.5" stroke="#d4a24a" stroke-width="1.45" stroke-linecap="round"/>
+              <path d="M12 15.2V18.8M8.5 19.6H15.5" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round"/>
+              <polygon points="12,7.2 13.2,9.7 12,12.2 10.8,9.7" stroke="#5eead4" stroke-width="1.25" fill="rgba(94,234,212,0.32)"/>
+              <path d="M9.6 2.8H14.4" stroke="#5eead4" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <small>英雄榜</small>
+        </button>
+      </nav>
 
       <!-- ==================== 《轩辕剑三》式底部半透明水墨剧情对话框 ==================== -->
       <section id="rpg-dialog-box" class="rpg-dialog-box hidden" role="dialog" aria-label="人物对话">
@@ -294,122 +428,139 @@
         </div>
       </section>
 
-      <!-- ==================== 《轩辕剑三》式横版回合制战斗界面 ==================== -->
+      <!-- ==================== 100% 全屏无框落地回合制战斗界面 ==================== -->
       <section id="rpg-battle-overlay" class="rpg-battle-overlay hidden" role="dialog" aria-label="墨土回合战斗">
         <div class="battle-vignette" aria-hidden="true"></div>
 
-        <!-- 战斗主舞台：左敌右我 -->
-        <div class="battle-arena">
-          <!-- 左侧：敌方单位 -->
-          <div class="battle-side enemy-side">
-            <div class="battle-unit-card enemy-card">
-              <div class="unit-card-head">
-                <div id="bat-enemy-name" class="unit-name">变异荒原鼠</div>
-                <span id="bat-enemy-badge" class="enemy-badge">可收妖</span>
-              </div>
-              <div class="ink-bar large"><div id="bat-enemy-hpbar" class="ink-fill hp-fill" style="width:100%"></div></div>
-              <div class="unit-hp-row">
-                <span class="bar-tag">气血</span>
-                <small id="bat-enemy-hp">45 / 45</small>
-              </div>
-              <div id="bat-enemy-status" class="unit-status-row"></div>
+        <!-- 顶部浮空无框双边战况血条（绝无矩形黑盒） -->
+        <div class="battle-hud-top">
+          <!-- 左上：敌方浮空血条 -->
+          <div class="battle-gauge-side enemy-gauge-side">
+            <div class="battle-name-row">
+              <div id="bat-enemy-name" class="unit-name">变异荒原鼠</div>
+              <span id="bat-enemy-badge" class="enemy-badge">可收妖</span>
             </div>
-
-            <div class="battle-visual-stage">
-              <div id="bat-enemy-visual" class="battle-enemy-visual"></div>
-              <div class="battle-ground-shadow"></div>
+            <div class="battle-slant-bar enemy-bar">
+              <div id="bat-enemy-hpbar" class="battle-slant-fill hp-fill" style="width:100%"></div>
             </div>
+            <div class="battle-bar-meta">
+              <span class="bar-tag">气血</span>
+              <small id="bat-enemy-hp">45 / 45</small>
+            </div>
+            <div id="bat-enemy-status" class="unit-status-row"></div>
           </div>
 
-          <!-- 中央水墨对决印记 -->
+          <!-- 中央水墨对决徽印 -->
           <div class="battle-vs" aria-hidden="true">
             <span class="vs-seal">决</span>
           </div>
 
-          <!-- 右侧：主角与护驾 -->
-          <div class="battle-side hero-side">
-            <div class="battle-unit-card hero-card">
-              <div class="unit-card-head">
-                <div class="unit-name">沈砚 <span class="lv-tag">Lv.<span id="bat-hero-lv">1</span></span></div>
-                <span id="bat-hero-shield" class="shield-badge hidden">护盾 0</span>
-              </div>
-              <div class="ink-bar large"><div id="bat-hero-hpbar" class="ink-fill hp-fill" style="width:100%"></div></div>
-              <div class="unit-hp-row">
-                <span class="bar-tag">气血</span>
-                <small id="bat-hero-hp">120 / 120</small>
-              </div>
-              <div class="ink-bar large mp-bar"><div id="bat-hero-mpbar" class="ink-fill energy-fill" style="width:100%"></div></div>
-              <div class="unit-hp-row">
-                <span class="bar-tag">内息</span>
-                <small id="bat-hero-mp">100 / 100</small>
-              </div>
+          <!-- 右上：主角浮空血气内息条 + 护驾标识 -->
+          <div class="battle-gauge-side hero-gauge-side">
+            <div class="battle-name-row hero-name-row">
+              <span id="bat-hero-shield" class="shield-badge hidden">护盾 0</span>
+              <div class="unit-name">沈砚 <span class="lv-tag">Lv.<span id="bat-hero-lv">1</span></span></div>
             </div>
-
-            <div class="hero-battle-stage">
-              <div class="hero-portrait-battle">
-                <img id="bat-hero-portrait" src="assets/portrait_hero.jpg" alt="沈砚" />
-              </div>
-              <div id="bat-guardian-card" class="battle-guardian-card hidden">
-                <span class="guardian-seal">灵</span>
-                <div class="guardian-meta">
-                  <strong class="guardian-name">护驾灵兽</strong>
-                  <small class="guardian-skill">协同出战</small>
-                </div>
+            <div class="battle-slant-bar hero-hp-bar">
+              <div id="bat-hero-hpbar" class="battle-slant-fill hp-fill" style="width:100%"></div>
+            </div>
+            <div class="battle-bar-meta hero-bar-meta">
+              <small id="bat-hero-hp">120 / 120</small>
+              <span class="bar-tag">气血</span>
+            </div>
+            <div class="battle-slant-bar hero-mp-bar">
+              <div id="bat-hero-mpbar" class="battle-slant-fill energy-fill" style="width:100%"></div>
+            </div>
+            <div class="battle-bar-meta hero-bar-meta">
+              <small id="bat-hero-mp">100 / 100</small>
+              <span class="bar-tag">内息</span>
+            </div>
+            <div id="bat-guardian-card" class="battle-guardian-card hidden">
+              <span class="guardian-seal">灵</span>
+              <div class="guardian-meta">
+                <strong class="guardian-name">护驾灵兽</strong>
+                <small class="guardian-skill">协同出战</small>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 战斗底部指挥台 -->
+        <!-- 战斗主舞台：左敌右我直接立于石台地面，零方框包裹 -->
+        <div class="battle-arena">
+          <!-- 剑气与伤害飘字特效层 -->
+          <div id="bat-vfx-layer" class="bat-vfx-layer" aria-hidden="true"></div>
+
+          <!-- 左侧落地敌方 -->
+          <div class="battle-fighter enemy-fighter">
+            <div id="bat-enemy-visual" class="battle-enemy-visual"></div>
+            <div class="fighter-shadow enemy-shadow" aria-hidden="true"></div>
+          </div>
+
+          <!-- 右侧落地主角（透明全身立绘直接立于石台，面向左方） -->
+          <div class="battle-fighter hero-fighter">
+            <div class="hero-portrait-battle battle-hero-fighter">
+              <img id="bat-hero-portrait" src="assets/sprites/hero.png" alt="沈砚" />
+            </div>
+            <div class="fighter-shadow hero-shadow" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <!-- 战斗底部黑曜青铜斜刃指令条 -->
         <div class="battle-bottom-panel">
           <div id="bat-log" class="battle-log">遭遇强敌！凝神戒备，准备迎战！</div>
 
           <!-- 可展开子面板：16 项四系绝学/奇术 或 丹药补给 -->
           <div id="bat-subpanel" class="battle-subpanel hidden"></div>
 
-          <!-- 主指令栏 -->
+          <!-- 主指令栏：暗墨青铜斜切刀刃按键 -->
           <div class="battle-commands">
-            <button class="bat-cmd primary" id="bat-btn-atk">⚔️ 普攻</button>
-            <button class="bat-cmd skill" id="bat-btn-skills">⚡ 绝学/奇术</button>
-            <button class="bat-cmd capture" id="bat-btn-capture">🏺 收妖</button>
-            <button class="bat-cmd item" id="bat-btn-item">🧪 丹药</button>
-            <button class="bat-cmd escape" id="bat-btn-run">💨 撤退</button>
+            <button class="bat-cmd primary" id="bat-btn-atk">
+              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <path d="M19.5 4.5L10.5 13.5M19.5 4.5L18.2 9.4L12.6 15L9 11.4L14.6 5.8L19.5 4.5Z" stroke="#f2d28b" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.2)"/>
+                <path d="M7.4 13L11 16.6M6.5 17.5L4.5 19.5" stroke="#d4a24a" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M4.8 6.8L9.2 11.2M14.8 16.8L18.8 19.5" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2.5 1.8"/>
+                <circle cx="15.2" cy="8.8" r="1" fill="#5eead4"/>
+              </svg>
+              <span>普攻</span>
+            </button>
+            <button class="bat-cmd skill" id="bat-btn-skills">
+              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <polygon points="12,2.5 18.8,6.2 18.8,17.8 12,21.5 5.2,17.8 5.2,6.2" stroke="#d4a24a" stroke-width="1.4" stroke-dasharray="3.5 2" fill="rgba(79,209,197,0.08)"/>
+                <path d="M13.6 4.8L8.2 12.6H12.2L10.4 19.2L16.2 11.2H12.2L13.6 4.8Z" stroke="#5eead4" stroke-width="1.65" stroke-linejoin="round" fill="rgba(94,234,212,0.24)"/>
+              </svg>
+              <span>绝学/奇术</span>
+            </button>
+            <button class="bat-cmd capture" id="bat-btn-capture">
+              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <path d="M8.5 6.5H15.5L14.2 9.2C16.8 10.4 18 12.6 17.5 15.4C17 18 14.8 19.8 12 19.8C9.2 19.8 7 18 6.5 15.4C6 12.6 7.2 10.4 9.8 9.2L8.5 6.5Z" stroke="#d4a24a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.16)"/>
+                <path d="M9.8 4.2C10.8 2.8 13.2 2.8 14.2 4.2" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="12" cy="14.2" r="2.2" stroke="#5eead4" stroke-width="1.4" fill="rgba(94,234,212,0.25)"/>
+                <path d="M12 10.2V12M12 16.4V18" stroke="#4fd1c5" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              <span>收妖</span>
+            </button>
+            <button class="bat-cmd item" id="bat-btn-item">
+              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <path d="M9.5 3.8H14.5M10.4 3.8V7.2L6.8 13.8C5.8 15.6 7.1 18.8 9.4 19.5H14.6C16.9 18.8 18.2 15.6 17.2 13.8L13.6 7.2V3.8" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" fill="rgba(212,162,74,0.12)"/>
+                <path d="M7.6 14.5C9.4 13.6 14.6 15.4 16.4 14.5L15.2 18.2H8.8L7.6 14.5Z" fill="rgba(94,234,212,0.34)" stroke="#5eead4" stroke-width="1.25" stroke-linejoin="round"/>
+                <circle cx="11.2" cy="11.4" r="1" fill="#5eead4"/>
+                <circle cx="13.8" cy="13.1" r="0.8" fill="#c44332"/>
+              </svg>
+              <span>丹药</span>
+            </button>
+            <button class="bat-cmd escape" id="bat-btn-run">
+              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                <path d="M4.5 9.2H13.5C15.4 9.2 16.8 7.9 16.8 6.4C16.8 5 15.6 4 14.2 4C13 4 12.1 4.8 11.9 5.8" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round"/>
+                <path d="M3.5 13H17.5C19.4 13 20.6 14.2 20.6 15.8C20.6 17.3 19.3 18.5 17.7 18.5C16.3 18.5 15.3 17.6 15.1 16.5" stroke="#5eead4" stroke-width="1.65" stroke-linecap="round"/>
+                <path d="M6.5 16.8H11.8" stroke="#d4a24a" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2.4 2"/>
+                <path d="M16.5 10.6L19.2 13L16.5 15.4" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>撤退</span>
+            </button>
           </div>
         </div>
       </section>
     </main>
-
-    <!-- ==================== 底部水墨卷轴功能坞 ==================== -->
-    <nav class="ink-dock" aria-label="主功能导航">
-      <button class="dock-tab accent" data-action="openWorldMap">
-        <span class="dock-ico">🗺️</span>
-        <small>天下舆图</small>
-      </button>
-      <button class="dock-tab crucible-tab" data-action="openCrucible">
-        <span class="dock-ico">🏺</span>
-        <small>天工墨壶</small>
-      </button>
-      <button class="dock-tab" data-action="openBagModal">
-        <span class="dock-ico">🎒</span>
-        <small>行囊装备</small>
-      </button>
-      <button class="dock-tab" data-action="openSkill">
-        <span class="dock-ico">⚡</span>
-        <small>武学奇术</small>
-      </button>
-      <button class="dock-tab" data-action="openQuests">
-        <span class="dock-ico">📜</span>
-        <small>主线支线</small>
-      </button>
-      <button class="dock-tab" data-action="openCollection">
-        <span class="dock-ico">📖</span>
-        <small>古董志怪</small>
-      </button>
-      <button class="dock-tab" data-action="openRank">
-        <span class="dock-ico">🏆</span>
-        <small>英雄榜</small>
-      </button>
-    </nav>
   </div>
 
   <!-- ==================== 通用水墨卷轴弹窗 ==================== -->
@@ -446,6 +597,24 @@
       const autoTimer = setTimeout(dismiss, 3200);
       if (skipBtn) skipBtn.addEventListener('click', dismiss, { once: true });
       splash.addEventListener('click', dismiss, { once: true });
+
+      // Keep bespoke cyber-ink SVG icons on #btn-sound even when game.js toggles textContent
+      const soundBtn = document.getElementById('btn-sound');
+      if (soundBtn) {
+        const SVG_SOUND_ON = '<svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="M4.5 9.5H8L13 5.2V18.8L8 14.5H4.5V9.5Z" stroke="#d4a24a" stroke-width="1.7" stroke-linejoin="round" fill="rgba(212,162,74,0.16)"/><path d="M16 9.2C17.2 10.2 17.8 11.1 17.8 12C17.8 12.9 17.2 13.8 16 14.8" stroke="#5eead4" stroke-width="1.6" stroke-linecap="round"/><path d="M18.4 6.8C20.2 8.3 21 10.1 21 12C21 13.9 20.2 15.7 18.4 17.2" stroke="#4fd1c5" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2.2 1.8"/><circle cx="6.2" cy="12" r="0.9" fill="#5eead4"/></svg>';
+        const SVG_SOUND_OFF = '<svg class="cyber-ink-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="M4.5 9.5H8L13 5.2V18.8L8 14.5H4.5V9.5Z" stroke="#a69b89" stroke-width="1.7" stroke-linejoin="round" fill="rgba(166,155,137,0.12)"/><path d="M16 9.2L20.5 14.8M20.5 9.2L16 14.8" stroke="#c44332" stroke-width="1.8" stroke-linecap="round"/></svg>';
+        const obs = new MutationObserver(() => {
+          const txt = (soundBtn.textContent || '').trim();
+          if (txt === '🔇') {
+            soundBtn.innerHTML = SVG_SOUND_OFF;
+            soundBtn.classList.add('is-muted');
+          } else if (txt === '🔊') {
+            soundBtn.innerHTML = SVG_SOUND_ON;
+            soundBtn.classList.remove('is-muted');
+          }
+        });
+        obs.observe(soundBtn, { childList: true, characterData: true, subtree: true });
+      }
     })();
   </script>
   <script type="module" src="js/game.js"></script>

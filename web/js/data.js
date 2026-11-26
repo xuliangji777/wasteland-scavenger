@@ -10,7 +10,15 @@ export const ASSETS = {
   bg_battle: 'assets/bg_battle.jpg',
   portrait_hero: 'assets/portrait_hero.jpg',
   portrait_laohuang: 'assets/portrait_laohuang.jpg',
-  portrait_yinshi: 'assets/portrait_yinshi.jpg'
+  portrait_yinshi: 'assets/portrait_yinshi.jpg',
+  sprite_hero: 'assets/sprites/hero.png',
+  sprite_npc_merchant: 'assets/sprites/npc_merchant.png',
+  sprite_npc_hermit: 'assets/sprites/npc_hermit.png',
+  sprite_shrine: 'assets/sprites/shrine.png',
+  sprite_enemy_beast: 'assets/sprites/enemy_beast.png',
+  sprite_enemy_mech: 'assets/sprites/enemy_mech.png',
+  sprite_enemy_demon: 'assets/sprites/enemy_demon.png',
+  sprite_chest: 'assets/sprites/chest.png'
 };
 
 export const QUALITY = {
@@ -795,60 +803,71 @@ export const MAPS = [
     worldPos: { x: 16, y: 56 }, links: ['wasteland'],
     width: 1600, height: 1000,
     bgAsset: 'bg_town.jpg', bgTint: null,
-    spawn: { x: 800, y: 515 },
+    spawn: { x: 780, y: 615 },
     palette: { ground: '#c7b89c', road: '#a7967a', shadow: 'rgba(28,25,22,0.34)', accent: '#c89b3c', mist: 'rgba(232,222,200,0.12)' },
     weatherPool: [0],
-    desc: '废土中仅存的青石古镇。老黄杂货铺与回春医馆可直接步入内室，亦可于拆解坊、钱庄、悬赏榜整备后自东门踏入荒原。',
+    desc: '废土中仅存的新中式废土古城。老黄杂货铺、回春医馆与墨石武馆可直接步入内室，亦可于墨甲拆解坊、钱庄、悬赏榜整备后出城踏入荒原。',
     weight: new Array(38).fill(0),
+    walkablePolys: [
+      // 严格贴合新 bg_town.jpg 龟裂柏油十字大道与中心广场（绝不可踩上任何建筑/屋檐/墙体）
+      [[370, 395], [460, 355], [760, 485], [960, 485], [1160, 595], [1400, 740], [1340, 860], [1080, 720], [920, 680], [720, 710], [490, 830], [380, 740], [540, 620], [510, 540], [370, 455]]
+    ],
     buildings: [
       {
         id: 'shop', name: '老黄杂货铺', sign: '杂货',
-        x: 190, y: 170, w: 260, h: 145, roofH: 78,
-        doorX: 320, doorY: 335, action: 'enter_map', targetMap: 'interior_shop', targetSpawnX: 500, targetSpawnY: 565,
+        x: 220, y: 450, w: 280, h: 170,
+        doorX: 485, doorY: 605, plaqueX: 380, plaqueY: 520,
+        action: 'enter_map', targetMap: 'interior_shop', targetSpawnX: 500, targetSpawnY: 565,
         style: 'timber_shop', desc: '步入杂货铺内室，与老黄交易物资或听取阿哲线索。'
       },
       {
-        id: 'disassemble', name: '巧匠拆解坊', sign: '拆解',
-        x: 650, y: 155, w: 260, h: 145, roofH: 82,
-        doorX: 780, doorY: 320, action: 'disassemble',
-        style: 'forge', desc: '拆解旧家电、主板与军工残骸，博取高额暴击收益。'
-      },
-      {
-        id: 'inn', name: '回春医馆', sign: '医馆',
-        x: 1110, y: 170, w: 260, h: 145, roofH: 76,
-        doorX: 1240, doorY: 335, action: 'enter_map', targetMap: 'interior_inn', targetSpawnX: 500, targetSpawnY: 565,
-        style: 'clinic', desc: '步入回春医馆内室歇脚疗伤，恢复生命、内息与饱食。'
-      },
-      {
         id: 'loan', name: '黑哥钱庄', sign: '钱庄',
-        x: 210, y: 625, w: 250, h: 140, roofH: 76,
-        doorX: 335, doorY: 785, action: 'loan',
+        x: 390, y: 240, w: 260, h: 185,
+        doorX: 550, doorY: 425, plaqueX: 530, plaqueY: 290,
+        action: 'loan',
         style: 'pawnshop', desc: '周转废土币、偿还债务与筹措出征资金。'
       },
       {
-        id: 'bounty', name: '镇口悬赏榜', sign: '悬赏',
-        x: 715, y: 665, w: 170, h: 90, roofH: 52,
-        doorX: 800, doorY: 775, action: 'tasks',
-        style: 'board', desc: '查看每日/周常悬赏、小队任务与墨土排行。'
+        id: 'inn', name: '回春医馆', sign: '医馆',
+        x: 660, y: 280, w: 260, h: 205,
+        doorX: 790, doorY: 488, plaqueX: 790, plaqueY: 365,
+        action: 'enter_map', targetMap: 'interior_inn', targetSpawnX: 500, targetSpawnY: 565,
+        style: 'clinic', desc: '步入回春医馆内室歇脚疗伤，恢复生命、内息与饱食。'
       },
       {
-        id: 'gate', name: '镇门驿站', sign: '驿站',
-        x: 1325, y: 415, w: 165, h: 165, roofH: 96,
-        doorX: 1305, doorY: 500, action: 'worldmap',
+        id: 'disassemble', name: '墨甲拆解坊', sign: '拆解',
+        x: 920, y: 310, w: 260, h: 255,
+        doorX: 1045, doorY: 575, plaqueX: 1045, plaqueY: 385,
+        action: 'disassemble',
+        style: 'forge', desc: '在墨甲机库拆解旧家电、主板与军工残骸，博取高额暴击收益。'
+      },
+      {
+        id: 'dojo', name: '墨石武馆', sign: '武馆',
+        x: 1180, y: 500, w: 260, h: 210,
+        doorX: 1255, doorY: 690, plaqueX: 1290, plaqueY: 570,
+        action: 'enter_map', targetMap: 'interior_dojo', targetSpawnX: 500, targetSpawnY: 565,
+        style: 'dojo', desc: '步入墨石武馆演武堂，向教头研习古武修为与心法。'
+      },
+      {
+        id: 'gate', name: '出城驿站', sign: '驿站',
+        x: 1320, y: 710, w: 120, h: 110,
+        doorX: 1345, doorY: 795, plaqueX: 1355, plaqueY: 745,
+        action: 'worldmap',
         style: 'gatehouse', desc: '打开墨土五域舆图，解锁并传送至各大野外险境。'
+      },
+      {
+        id: 'bounty', name: '镇口悬赏榜', sign: '悬赏',
+        x: 410, y: 380, w: 40, h: 40,
+        doorX: 430, doorY: 410, plaqueX: 430, plaqueY: 375,
+        action: 'tasks',
+        style: 'board', desc: '查看每日/周常悬赏、小队任务与墨土排行。'
       }
     ],
-    obstacles: [
-      { id: 'town_well', type: 'stone_well', x: 760, y: 425, w: 80, h: 56, label: '古石井' },
-      { id: 'town_tree_nw', type: 'ink_tree', x: 95, y: 245, w: 58, h: 48, label: '枯槐' },
-      { id: 'town_tree_sw', type: 'ink_tree', x: 105, y: 745, w: 62, h: 50, label: '老松' },
-      { id: 'town_crates_se', type: 'crate_stack', x: 1120, y: 705, w: 110, h: 68, label: '商队货箱' }
-    ],
+    obstacles: [],
     portals: [
-      { id: 'town_to_wasteland', x: 1535, y: 500, r: 44, to: 'wasteland',     spawnX: 175, spawnY: 560, label: '出东门 · 前往城郊废土' },
-      { id: 'town_to_dojo',      x: 1030, y: 760, r: 42, to: 'interior_dojo', spawnX: 500, spawnY: 565, label: '步入 墨石武馆' }
+      { id: 'town_to_wasteland', x: 465, y: 765, r: 42, to: 'wasteland', spawnX: 175, spawnY: 560, label: '出城大道 · 前往城郊废土' }
     ],
-    npc: { id: 'laohuang', x: 495, y: 365, facing: 'down' },
+    npc: { id: 'laohuang', x: 560, y: 590, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
     hasWarn: false, hasTide: false, hasChem: false
   },
@@ -866,13 +885,14 @@ export const MAPS = [
     desc: '木柜林立、暖灯微晃的杂货铺内室。柜台后立着精明的商人老黄，角落放着一台战前留声机。',
     weight: new Array(38).fill(0),
     buildings: [],
+    walkablePolys: [[[80, 290], [920, 290], [920, 665], [80, 665]]],
     obstacles: [
       { id: 'shop_counter', type: 'wood_counter', x: 260, y: 220, w: 480, h: 72, label: '杂货柜台' },
       { id: 'shop_shelf_l', type: 'crate_stack',  x: 90,  y: 340, w: 95,  h: 150, label: '货架' },
       { id: 'shop_shelf_r', type: 'crate_stack',  x: 815, y: 340, w: 95,  h: 150, label: '旧物柜' }
     ],
     portals: [
-      { id: 'shop_exit', x: 500, y: 640, r: 44, to: 'town', spawnX: 320, spawnY: 365, label: '走出老黄杂货铺' }
+      { id: 'shop_exit', x: 500, y: 640, r: 44, to: 'town', spawnX: 545, spawnY: 605, label: '走出老黄杂货铺' }
     ],
     npc: { id: 'laohuang', x: 500, y: 325, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
@@ -892,13 +912,14 @@ export const MAPS = [
     desc: '百草柜飘散着苦涩药香，药炉文火不熄。可向回春药童求医歇脚，迅速回复生命与内息。',
     weight: new Array(38).fill(0),
     buildings: [],
+    walkablePolys: [[[80, 290], [920, 290], [920, 665], [80, 665]]],
     obstacles: [
       { id: 'inn_counter', type: 'wood_counter', x: 270, y: 220, w: 460, h: 72, label: '药房柜台' },
       { id: 'inn_bed_l',   type: 'crate_stack',  x: 95,  y: 350, w: 110, h: 145, label: '竹榻病床' },
       { id: 'inn_stove_r', type: 'stone_well',   x: 795, y: 365, w: 95,  h: 95,  label: '煎药丹炉' }
     ],
     portals: [
-      { id: 'inn_exit', x: 500, y: 640, r: 44, to: 'town', spawnX: 1240, spawnY: 365, label: '走出回春医馆' }
+      { id: 'inn_exit', x: 500, y: 640, r: 44, to: 'town', spawnX: 790, spawnY: 520, label: '走出回春医馆' }
     ],
     npc: { id: 'yaotong', x: 500, y: 325, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
@@ -927,7 +948,7 @@ export const MAPS = [
       { id: 'wl_wall_2',  type: 'ruin_wall', x: 1380, y: 770, w: 170, h: 66, label: '塌陷砖墙' }
     ],
     portals: [
-      { id: 'wl_to_town',   x: 90,   y: 560, r: 44, to: 'town',        spawnX: 1435, spawnY: 500, label: '返回 墨石镇' },
+      { id: 'wl_to_town',   x: 90,   y: 560, r: 44, to: 'town',        spawnX: 525, spawnY: 750, label: '返回 墨石镇' },
       { id: 'wl_to_bunker', x: 930,  y: 145, r: 46, to: 'cave_bunker', spawnX: 185,  spawnY: 700, label: '潜入 城郊废弃防空洞' },
       { id: 'wl_to_ruins',  x: 1705, y: 540, r: 44, to: 'ruins',       spawnX: 175,  spawnY: 560, label: '前往 铁锈废都街区' }
     ],
@@ -1018,7 +1039,7 @@ export const MAPS = [
       { id: 'ruins_to_metro',   x: 960,  y: 145, r: 46, to: 'cave_metro', spawnX: 175,  spawnY: 455, label: '潜入 地铁二号线隧道' },
       { id: 'ruins_to_crypt',   x: 740,  y: 965, r: 44, to: 'cave_crypt', spawnX: 175,  spawnY: 430, label: '探入 旧城古墓密室（妖灵）' },
       { id: 'ruins_to_arsenal', x: 1705, y: 540, r: 44, to: 'arsenal',    spawnX: 175,  spawnY: 560, label: '前往 赤焰兵工废墟' },
-      { id: 'ruins_to_town',    x: 180,  y: 985, r: 42, to: 'town',       spawnX: 1265, spawnY: 500, label: '驿站捷径 · 返回墨石镇' }
+      { id: 'ruins_to_town',    x: 180,  y: 985, r: 42, to: 'town',       spawnX: 780, spawnY: 615, label: '驿站捷径 · 返回墨石镇' }
     ],
     npc: { id: 'shaobing', x: 865, y: 475, facing: 'left' },
     enemySpawns: [
@@ -1053,6 +1074,7 @@ export const MAPS = [
     desc: '烟雾缭绕的拾荒客酒馆，酒保三娘暗中收购古董与腕表，也知晓地铁二号线的秘密。',
     weight: new Array(38).fill(0),
     buildings: [],
+    walkablePolys: [[[80, 290], [920, 290], [920, 665], [80, 665]]],
     obstacles: [
       { id: 'tav_bar',   type: 'wood_counter', x: 250, y: 215, w: 500, h: 72, label: '黑市吧台' },
       { id: 'tav_tbl_l', type: 'crate_stack',  x: 130, y: 390, w: 105, h: 95, label: '酒客方桌' },
@@ -1133,7 +1155,7 @@ export const MAPS = [
       { id: 'ar_to_hangar', x: 960,  y: 145, r: 46, to: 'cave_hangar', spawnX: 175,  spawnY: 455, label: '潜入 战前战隼机库（机甲/军火）' },
       { id: 'ar_to_b04',    x: 940,  y: 975, r: 46, to: 'cave_b04',    spawnX: 200,  spawnY: 185, label: '潜入 B-04 地下冷却井' },
       { id: 'ar_to_swamp',  x: 1705, y: 540, r: 44, to: 'swamp',       spawnX: 175,  spawnY: 580, label: '前往 青瘴辐射沼泽' },
-      { id: 'ar_to_town',   x: 185,  y: 985, r: 42, to: 'town',        spawnX: 1265, spawnY: 500, label: '驿站捷径 · 返回墨石镇' }
+      { id: 'ar_to_town',   x: 185,  y: 985, r: 42, to: 'town',        spawnX: 780, spawnY: 615, label: '驿站捷径 · 返回墨石镇' }
     ],
     npc: null,
     enemySpawns: [
@@ -1168,6 +1190,7 @@ export const MAPS = [
     desc: '炉火通红的地下军械库，老铁匠守着最后一座战前锻造台，助少侠以天工墨壶铸造神兵。',
     weight: new Array(38).fill(0),
     buildings: [],
+    walkablePolys: [[[80, 290], [920, 290], [920, 665], [80, 665]]],
     obstacles: [
       { id: 'arm_anvil',  type: 'wood_counter', x: 260, y: 215, w: 480, h: 72, label: '军工锻造台' },
       { id: 'arm_rack_l', type: 'crate_stack',  x: 100, y: 360, w: 100, h: 145, label: '兵器架' },
@@ -1248,7 +1271,7 @@ export const MAPS = [
       { id: 'swamp_to_mire',  x: 765,  y: 140, r: 46, to: 'cave_mire',       spawnX: 200,  spawnY: 730, label: '潜入 毒泽沉没菌窟' },
       { id: 'swamp_to_fox',   x: 1120, y: 975, r: 46, to: 'cave_fox_shrine', spawnX: 175,  spawnY: 430, label: '步入 青瘴狐仙秘境（九尾狐）' },
       { id: 'swamp_to_vault', x: 1705, y: 540, r: 44, to: 'vault',           spawnX: 175,  spawnY: 560, label: '前往 07号避难所主控区' },
-      { id: 'swamp_to_town',  x: 205,  y: 985, r: 42, to: 'town',            spawnX: 1265, spawnY: 500, label: '渡口捷径 · 返回墨石镇' }
+      { id: 'swamp_to_town',  x: 205,  y: 985, r: 42, to: 'town',            spawnX: 780, spawnY: 615, label: '渡口捷径 · 返回墨石镇' }
     ],
     npc: { id: 'yinshi', x: 925, y: 400, facing: 'down' },
     enemySpawns: [
@@ -1283,6 +1306,7 @@ export const MAPS = [
     desc: '竹帘药架间摆着一台发出沙沙电流声的短波电台，失散多年的挚友阿哲正静坐灯下。',
     weight: new Array(38).fill(0),
     buildings: [],
+    walkablePolys: [[[80, 290], [920, 290], [920, 665], [80, 665]]],
     obstacles: [
       { id: 'hm_table',  type: 'wood_counter', x: 270, y: 215, w: 460, h: 72, label: '无线电药案' },
       { id: 'hm_herb_l', type: 'crate_stack',  x: 105, y: 360, w: 100, h: 145, label: '晾药竹架' },
@@ -1356,7 +1380,7 @@ export const MAPS = [
       { id: 'vault_to_swamp',   x: 90,   y: 560, r: 44, to: 'swamp',              spawnX: 1620, spawnY: 540, label: '返回 青瘴辐射沼泽' },
       { id: 'vault_to_thunder', x: 1265, y: 145, r: 46, to: 'cave_thunder_altar', spawnX: 175,  spawnY: 450, label: '踏入 天枢雷公古坛（雷神/罗刹）' },
       { id: 'vault_to_tianshu', x: 1705, y: 540, r: 46, to: 'cave_tianshu',       spawnX: 175,  spawnY: 450, label: '步入 天枢地脉密窟（终局）' },
-      { id: 'vault_to_town',    x: 200,  y: 985, r: 42, to: 'town',               spawnX: 1265, spawnY: 500, label: '应急电梯 · 返回墨石镇' }
+      { id: 'vault_to_town',    x: 200,  y: 985, r: 42, to: 'town',               spawnX: 780, spawnY: 615, label: '应急电梯 · 返回墨石镇' }
     ],
     npc: { id: 'xuezhe', x: 710, y: 420, facing: 'down' },
     enemySpawns: [
@@ -1426,13 +1450,14 @@ export const MAPS = [
     desc: '青城旧脉在墨石镇设立的古武演武堂，兵器架寒光凛凛，教头传授古武剑诀与调息心法。',
     weight: new Array(38).fill(0),
     buildings: [],
+    walkablePolys: [[[80, 290], [920, 290], [920, 665], [80, 665]]],
     obstacles: [
       { id: 'dj_altar',  type: 'wood_counter', x: 280, y: 215, w: 440, h: 70, label: '武馆讲武台' },
       { id: 'dj_rack_l', type: 'crate_stack',  x: 105, y: 360, w: 100, h: 140, label: '刀剑兵器架' },
       { id: 'dj_rack_r', type: 'crate_stack',  x: 795, y: 360, w: 100, h: 140, label: '练功木人桩' }
     ],
     portals: [
-      { id: 'dojo_exit', x: 500, y: 640, r: 44, to: 'town', spawnX: 1030, spawnY: 710, label: '走出墨石武馆' }
+      { id: 'dojo_exit', x: 500, y: 640, r: 44, to: 'town', spawnX: 1190, spawnY: 695, label: '走出墨石武馆' }
     ],
     npc: { id: 'jiaotou', x: 500, y: 325, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
