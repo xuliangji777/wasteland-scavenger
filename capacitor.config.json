@@ -1,10 +1,10 @@
 {
-  "appId": "com.wasteland.scavenger",
-  "appName": "末世拾荒",
+  "appId": "com.laonianbing.motu",
+  "appName": "墨土拾荒录",
   "webDir": "web",
   "bundledWebRuntime": false,
   "android": {
-    "backgroundColor": "#090c10",
+    "backgroundColor": "#121110",
     "allowMixedContent": true
   }
 }

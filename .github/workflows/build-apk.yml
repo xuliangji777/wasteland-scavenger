@@ -31,6 +31,59 @@ jobs:
           fi
           npx cap sync android
 
+      - name: Apply custom Mo-Jia Ink Crucible Android launcher icons
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 - << 'EOF'
+          import os
+          from PIL import Image, ImageDraw
+
+          src = Image.open('web/assets/app_icon.png').convert('RGBA')
+          res_root = 'android/app/src/main/res'
+
+          launcher_sizes = {
+              'mipmap-mdpi': 48,
+              'mipmap-hdpi': 72,
+              'mipmap-xhdpi': 96,
+              'mipmap-xxhdpi': 144,
+              'mipmap-xxxhdpi': 192,
+          }
+          fg_sizes = {
+              'mipmap-mdpi': 108,
+              'mipmap-hdpi': 162,
+              'mipmap-xhdpi': 216,
+              'mipmap-xxhdpi': 324,
+              'mipmap-xxxhdpi': 432,
+          }
+
+          for folder, sz in launcher_sizes.items():
+              out_dir = os.path.join(res_root, folder)
+              os.makedirs(out_dir, exist_ok=True)
+              resized = src.resize((sz, sz), Image.LANCZOS)
+              resized.save(os.path.join(out_dir, 'ic_launcher.png'))
+
+              mask = Image.new('L', (sz, sz), 0)
+              ImageDraw.Draw(mask).ellipse((0, 0, sz - 1, sz - 1), fill=255)
+              round_img = Image.new('RGBA', (sz, sz), (0, 0, 0, 0))
+              round_img.paste(resized, (0, 0), mask)
+              round_img.save(os.path.join(out_dir, 'ic_launcher_round.png'))
+
+          for folder, sz in fg_sizes.items():
+              out_dir = os.path.join(res_root, folder)
+              os.makedirs(out_dir, exist_ok=True)
+              canvas = Image.new('RGBA', (sz, sz), (18, 17, 16, 255))
+              inner = int(sz * 0.72)
+              pad = (sz - inner) // 2
+              canvas.paste(src.resize((inner, inner), Image.LANCZOS), (pad, pad), src.resize((inner, inner), Image.LANCZOS))
+              canvas.save(os.path.join(out_dir, 'ic_launcher_foreground.png'))
+
+          bg_xml = os.path.join(res_root, 'values', 'ic_launcher_background.xml')
+          if os.path.exists(bg_xml):
+              with open(bg_xml, 'w') as f:
+                  f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#121110</color>\n</resources>\n')
+          print('Applied custom Android launcher icons successfully!')
+          EOF
+
       - name: Build Debug APK
         run: |
           cd android
