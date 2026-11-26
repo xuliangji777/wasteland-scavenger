@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wasteland-app-v1';
+const CACHE_NAME = 'moshitu-rpg-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -7,9 +7,20 @@ const ASSETS = [
   './js/audio.js',
   './js/fx.js',
   './js/storage.js',
+  './js/rpg_world.js',
   './js/game.js',
   './manifest.json',
-  './icon.svg'
+  './icon.svg',
+  './assets/bg_town.jpg',
+  './assets/bg_wasteland.jpg',
+  './assets/bg_ruins.jpg',
+  './assets/bg_swamp.jpg',
+  './assets/bg_interior.jpg',
+  './assets/bg_cave.jpg',
+  './assets/bg_battle.jpg',
+  './assets/portrait_hero.jpg',
+  './assets/portrait_laohuang.jpg',
+  './assets/portrait_yinshi.jpg'
 ];
 
 self.addEventListener('install', (e) => {
@@ -28,6 +39,6 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request).catch(() => caches.match(e.request, { ignoreSearch: true }))
   );
 });

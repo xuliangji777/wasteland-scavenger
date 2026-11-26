@@ -1,4 +1,4 @@
-// ==================== 可切换的存档与账号服务层 ====================
+// ==================== 可切换的多槽位存档与账号服务层 ====================
 // 后续接入线上后端时，只需将 mode 改为 'remote' 并配置 apiBaseUrl（服务端口地址）即可平滑切换。
 
 export const STORAGE_CONFIG = {
@@ -10,8 +10,35 @@ const ACCOUNTS_INDEX_KEY = 'wasteland_accounts_v1';
 const CURRENT_USER_KEY = 'wasteland_current_user_v1';
 const LEGACY_SAVE_KEY = 'wasteland_scavenger_save_v3';
 
+const SLOT_DEFS = [
+  { slotId: 'auto',  label: '自动存档' },
+  { slotId: 'slot1', label: '记录槽位 一' },
+  { slotId: 'slot2', label: '记录槽位 二' },
+  { slotId: 'slot3', label: '记录槽位 三' }
+];
+
 function profileSaveKey(username) {
   return `wasteland_save_user_${encodeURIComponent(username)}`;
+}
+
+function profileSlotKey(username, slotId) {
+  if (slotId === 'auto') return profileSaveKey(username);
+  return `wasteland_save_user_${encodeURIComponent(username)}_slot_${encodeURIComponent(slotId)}`;
+}
+
+function profileSlotMetaKey(username, slotId) {
+  return `wasteland_meta_user_${encodeURIComponent(username)}_slot_${encodeURIComponent(slotId)}`;
+}
+
+function extractMetaFromState(stateObj, meta = {}) {
+  const s = stateObj || {};
+  return {
+    mapName: meta.mapName || s.mapId || '墨石镇',
+    lv: meta.lv ?? s.level ?? 1,
+    gold: meta.gold ?? s.gold ?? 0,
+    act: meta.act ?? Math.min(5, (Array.isArray(s.completedActs) ? s.completedActs.length : 0) + 1),
+    savedAt: meta.savedAt || Date.now()
+  };
 }
 
 // ---------- 本地存储适配器 ----------
@@ -62,18 +89,71 @@ class LocalStorageAdapter {
       accounts = [{ username: '废土游客', createdAt: Date.now(), lastLogin: Date.now() }];
     }
     this.saveAccounts(accounts);
-    localStorage.removeItem(profileSaveKey(username));
+    for (const def of SLOT_DEFS) {
+      localStorage.removeItem(profileSlotKey(username, def.slotId));
+      localStorage.removeItem(profileSlotMetaKey(username, def.slotId));
+    }
     if (this.getCurrentUser() === username) {
       localStorage.setItem(CURRENT_USER_KEY, accounts[0].username);
     }
     return this.getCurrentUser();
   }
 
-  loadSave(username) {
-    const key = profileSaveKey(username);
+  // ---- 多槽位存档 API ----
+  listSlots(username) {
+    return SLOT_DEFS.map((def) => {
+      const raw = localStorage.getItem(profileSlotKey(username, def.slotId));
+      if (!raw) {
+        return {
+          slotId: def.slotId,
+          label: def.label,
+          mapName: '',
+          lv: 0,
+          gold: 0,
+          act: 1,
+          savedAt: 0,
+          empty: true
+        };
+      }
+      let meta = null;
+      try {
+        meta = JSON.parse(localStorage.getItem(profileSlotMetaKey(username, def.slotId)) || 'null');
+      } catch { /* ignore */ }
+      if (!meta) {
+        try {
+          const parsed = JSON.parse(raw);
+          meta = extractMetaFromState(parsed);
+        } catch {
+          meta = { mapName: '未知区域', lv: 1, gold: 0, act: 1, savedAt: 0 };
+        }
+      }
+      return {
+        slotId: def.slotId,
+        label: def.label,
+        mapName: meta.mapName || '墨石镇',
+        lv: meta.lv ?? 1,
+        gold: meta.gold ?? 0,
+        act: meta.act ?? 1,
+        savedAt: meta.savedAt || 0,
+        empty: false
+      };
+    });
+  }
+
+  writeSlot(username, slotId, stateObj, meta = {}) {
+    const cleanSlot = SLOT_DEFS.some(d => d.slotId === slotId) ? slotId : 'auto';
+    const fullMeta = extractMetaFromState(stateObj, meta);
+    localStorage.setItem(profileSlotKey(username, cleanSlot), JSON.stringify(stateObj));
+    localStorage.setItem(profileSlotMetaKey(username, cleanSlot), JSON.stringify(fullMeta));
+    return { ok: true, slotId: cleanSlot, savedAt: fullMeta.savedAt };
+  }
+
+  loadSlot(username, slotId) {
+    const cleanSlot = SLOT_DEFS.some(d => d.slotId === slotId) ? slotId : 'auto';
+    const key = profileSlotKey(username, cleanSlot);
     let raw = localStorage.getItem(key);
-    // 兼容迁移旧版单人存档到默认账号
-    if (!raw && username === '废土游客') {
+    // 兼容迁移旧版单人存档到默认账号的 auto 槽位
+    if (!raw && cleanSlot === 'auto' && username === '废土游客') {
       const legacy = localStorage.getItem(LEGACY_SAVE_KEY);
       if (legacy) {
         localStorage.setItem(key, legacy);
@@ -88,13 +168,24 @@ class LocalStorageAdapter {
     }
   }
 
-  writeSave(username, stateObj) {
-    localStorage.setItem(profileSaveKey(username), JSON.stringify(stateObj));
-    return { ok: true, savedAt: Date.now() };
+  deleteSlot(username, slotId) {
+    const cleanSlot = SLOT_DEFS.some(d => d.slotId === slotId) ? slotId : 'auto';
+    localStorage.removeItem(profileSlotKey(username, cleanSlot));
+    localStorage.removeItem(profileSlotMetaKey(username, cleanSlot));
+    return { ok: true, slotId: cleanSlot };
+  }
+
+  // ---- 默认自动存档兼容门面（映射到 'auto'） ----
+  loadSave(username) {
+    return this.loadSlot(username, 'auto');
+  }
+
+  writeSave(username, stateObj, meta = {}) {
+    return this.writeSlot(username, 'auto', stateObj, meta);
   }
 
   clearSave(username) {
-    localStorage.removeItem(profileSaveKey(username));
+    return this.deleteSlot(username, 'auto');
   }
 }
 
@@ -130,19 +221,37 @@ class RemoteStorageAdapter {
     return data;
   }
 
-  async loadSave(username) {
-    return this.request(`/save/${encodeURIComponent(username)}`);
+  async listSlots(username) {
+    return this.request(`/save/${encodeURIComponent(username)}/slots`);
   }
 
-  async writeSave(username, stateObj) {
-    return this.request(`/save/${encodeURIComponent(username)}`, {
+  async writeSlot(username, slotId, stateObj, meta = {}) {
+    return this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`, {
       method: 'PUT',
-      body: JSON.stringify(stateObj)
+      body: JSON.stringify({ state: stateObj, meta: extractMetaFromState(stateObj, meta) })
     });
   }
 
+  async loadSlot(username, slotId) {
+    return this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`);
+  }
+
+  async deleteSlot(username, slotId) {
+    return this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async loadSave(username) {
+    return this.loadSlot(username, 'auto');
+  }
+
+  async writeSave(username, stateObj, meta = {}) {
+    return this.writeSlot(username, 'auto', stateObj, meta);
+  }
+
   async clearSave(username) {
-    return this.request(`/save/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    return this.deleteSlot(username, 'auto');
   }
 }
 
