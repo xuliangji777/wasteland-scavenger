@@ -1,0 +1,264 @@
+<view class="container">
+  <!-- 顶部状态栏 -->
+  <view class="status-bar">
+    <view class="status-row">
+      <text>💰 {{gold}}</text>
+      <text>🎒 {{bagNum}}/{{bagMax}}</text>
+      <text>⚡ {{energy}}/{{energyMax}}</text>
+      <text>🍞 {{food}}/{{foodMax}}</text>
+    </view>
+    <view class="status-row sub">
+      <text>{{weatherText}}</text>
+      <text wx:if="{{mapWarn}}">🚨 警戒: {{warnLevel}}%</text>
+      <text wx:if="{{tideTime>0}}">☢️ 辐射潮: {{tideTime}}s</text>
+    </view>
+  </view>
+
+  <!-- 结局进度 -->
+  <view class="ending-progress">
+    <text>📊 结局进度 {{endingProgress}}%</text>
+    <view class="progress-bar">
+      <view class="progress-fill" style="width:{{endingProgress}}%"></view>
+    </view>
+  </view>
+
+  <!-- 地图切换 -->
+  <view class="map-section">
+    <view class="section-title">📍 {{mapName}}</view>
+    <scroll-view scroll-x class="map-scroll">
+      <button
+        wx:for="{{mapList}}"
+        wx:key="id"
+        class="map-btn {{mapId===item.id?'active':''}}"
+        bindtap="changeMap"
+        data-id="{{item.id}}"
+        disabled="{{!item.unlock}}"
+      >
+        {{item.name}}{{item.unlock?'':' 🔒'}}
+      </button>
+    </scroll-view>
+  </view>
+
+  <!-- 每日任务入口 -->
+  <view class="daily-bar" bindtap="openDaily">
+    📅 每日任务 {{dailyDone}}/{{dailyTotal}} | 点击查看
+  </view>
+
+  <!-- 隐藏入口提示 -->
+  <view wx:if="{{hasHiddenEntrance}}" class="hidden-entrance" bindtap="enterHidden">
+    🚪 发现隐秘密室！点击进入
+  </view>
+
+  <!-- 垃圾拾取区 -->
+  <view class="garbage-area">
+    <block wx:for="{{garbageList}}" wx:key="uniqueId">
+      <view class="gar-item quality-{{item.quality}}" bindtap="pickItem" data-index="{{index}}">
+        {{item.name}}
+        <text class="quality-tag">{{item.qualityText}}</text>
+      </view>
+    </block>
+  </view>
+
+  <!-- 底部功能按钮 -->
+  <view class="btn-grid">
+    <button bindtap="sellAll">🏪 出售物资</button>
+    <button bindtap="openSkill">⚡ 技能树</button>
+    <button bindtap="openDisassemble">🔧 拆解零件</button>
+    <button bindtap="openShop">🛒 商店</button>
+    <button bindtap="openNpc">💬 NPC对话</button>
+    <button bindtap="openLoan">💰 借贷</button>
+    <button bindtap="openRank">🏆 排行榜</button>
+    <button bindtap="openTeam">🤝 协作悬赏</button>
+    <button bindtap="openCollection">📖 古董图鉴</button>
+    <button bindtap="saveAndRefresh">🔄 刷新</button>
+  </view>
+
+  <!-- 商店弹窗 -->
+  <view wx:if="{{showShop}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">🛒 废土杂货铺</view>
+      <view class="shop-list">
+        <button bindtap="buyBag">背包扩容 +4格 | {{bagPrice}}金</button>
+        <button bindtap="buyTool">拆解钳 | {{toolPrice}}金</button>
+        <button bindtap="buyFlash">强光手电 | {{flashPrice}}金</button>
+        <button bindtap="buyGloves">防护手套 | {{glovePrice}}金</button>
+        <button bindtap="buyBread">压缩饼干 +30饱食 | {{breadPrice}}金</button>
+        <button bindtap="buyEnergy">功能饮料 +50体力 | {{energyPrice}}金</button>
+      </view>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- 技能树弹窗 -->
+  <view wx:if="{{showSkill}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">⚡ 技能树 (技能点: {{skillPoint}})</view>
+      <view class="skill-list">
+        <button bindtap="levelSkill" data-id="0">快速拾取 Lv.{{skillList[0].level}}/3</button>
+        <button bindtap="levelSkill" data-id="1">鹰眼术 Lv.{{skillList[1].level}}/3</button>
+        <button bindtap="levelSkill" data-id="2">背包客 Lv.{{skillList[2].level}}/3</button>
+        <button bindtap="levelSkill" data-id="3">拆解大师 Lv.{{skillList[3].level}}/3</button>
+        <button bindtap="levelSkill" data-id="4">逃跑大师 Lv.{{skillList[4].level}}/3</button>
+        <button bindtap="levelSkill" data-id="5">幸运儿 Lv.{{skillList[5].level}}/3</button>
+      </view>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- NPC对话弹窗 -->
+  <view wx:if="{{showNpc}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">💬 {{currentNpc.name}}</view>
+      <view class="dialog-text">{{currentNpc.talk}}</view>
+      <view class="option-list">
+        <button wx:for="{{currentNpc.options}}" wx:key="index" bindtap="npcSelect" data-idx="{{index}}">
+          {{item}}
+        </button>
+      </view>
+      <button class="close-btn" bindtap="closePanel">离开</button>
+    </view>
+  </view>
+
+  <!-- 借贷弹窗 -->
+  <view wx:if="{{showLoan}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">💰 债主黑哥</view>
+      <view class="dialog-text">
+        当前负债: {{debt}}金币<br/>
+        借款利息: 日息20%
+      </view>
+      <view class="option-list">
+        <button bindtap="borrowMoney">借500金币</button>
+        <button bindtap="repayMoney">还款</button>
+      </view>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- 每日任务弹窗 -->
+  <view wx:if="{{showDaily}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">📅 每日任务</view>
+      <view class="task-list">
+        <block wx:for="{{dailyTasks}}" wx:key="id">
+          <view class="task-item {{item.done?'done':''}}">
+            <view class="task-name">{{item.name}}</view>
+            <view class="task-progress">进度: {{item.progress}}/{{item.target}}</view>
+            <view class="task-reward">奖励: {{item.reward}}金币 + {{item.sp}}技能点</view>
+            <button wx:if="{{!item.done && item.progress>=item.target}}" bindtap="claimTask" data-id="{{item.id}}">领取奖励</button>
+            <text wx:if="{{item.done}}" class="claimed">✅ 已领取</text>
+          </view>
+        </block>
+      </view>
+      <view class="panel-title sub">📆 周常任务</view>
+      <view class="task-list">
+        <view class="task-item {{weeklyTask.done?'done':''}}">
+          <view class="task-name">{{weeklyTask.name}}</view>
+          <view class="task-progress">进度: {{weeklyTask.progress}}/{{weeklyTask.target}}</view>
+          <view class="task-reward">奖励: {{weeklyTask.reward}}金币 + {{weeklyTask.sp}}技能点</view>
+          <button wx:if="{{!weeklyTask.done && weeklyTask.progress>=weeklyTask.target}}" bindtap="claimWeekly">领取奖励</button>
+          <text wx:if="{{weeklyTask.done}}" class="claimed">✅ 已领取</text>
+        </view>
+      </view>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- 排行榜弹窗 -->
+  <view wx:if="{{showRank}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">🏆 战绩排行榜</view>
+      <view class="rank-tip">本地历史最佳战绩</view>
+      <view class="rank-list">
+        <block wx:for="{{rankList}}" wx:key="time">
+          <view class="rank-item">
+            <text class="rank-no">第{{index+1}}名</text>
+            <text>金币: {{item.gold}}</text>
+            <text>结局: {{item.ending}}</text>
+          </view>
+        </block>
+        <view wx:if="{{rankList.length===0}}" class="empty">暂无记录，快去创造传奇吧</view>
+      </view>
+      <button class="share-btn" open-type="share">📤 分享战绩给好友</button>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- 协作悬赏弹窗 -->
+  <view wx:if="{{showTeam}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">🤝 每日协作悬赏</view>
+      <view class="team-task">
+        <view class="task-name">{{teamTask.name}}</view>
+        <view class="task-desc">{{teamTask.desc}}</view>
+        <view class="task-progress">
+          进度: {{teamTask.progress}}/{{teamTask.target}}
+          <view class="progress-bar small">
+            <view class="progress-fill" style="width:{{teamTask.progress/teamTask.target*100}}%"></view>
+          </view>
+        </view>
+        <view class="task-reward">奖励: 必得稀有品质物资</view>
+      </view>
+      <view class="team-tip">分享给好友，好友点击即可助力进度</view>
+      <button class="share-btn" open-type="share">📤 邀请好友助力</button>
+      <button wx:if="{{teamTask.progress>=teamTask.target && !teamTask.claimed}}" bindtap="claimTeam">领取奖励</button>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- 随机事件弹窗 -->
+  <view wx:if="{{showEvent}}" class="mask">
+    <view class="panel">
+      <view class="panel-title event-title">{{eventData.title}}</view>
+      <view class="dialog-text">{{eventData.content}}</view>
+      <view class="option-list">
+        <button wx:for="{{eventData.options}}" wx:key="index" bindtap="eventSelect" data-idx="{{index}}">
+          {{item}}
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 拆解弹窗 -->
+  <view wx:if="{{showDisassemble}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">🔧 拆解工作台</view>
+      <view wx:if="{{hasDisItem}}">
+        <text>成功率: {{disRate*100}}% | 暴击概率: {{critRate*100}}%</text>
+        <button bindtap="doDisassemble">开始拆解</button>
+      </view>
+      <view wx:else><text>没有可拆解的物资</text></view>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- 图鉴弹窗 -->
+  <view wx:if="{{showCollection}}" class="mask">
+    <view class="panel">
+      <view class="panel-title">📖 战前古董图鉴 ({{colUnlocked}}/6)</view>
+      <view class="col-list">
+        <block wx:for="{{allCollection}}" wx:key="id">
+          <view class="col-item {{item.unlocked?'':'locked'}}">
+            {{item.unlocked?item.name:'???'}}
+            <text class="col-desc">{{item.unlocked?item.desc:'未发现'}}</text>
+          </view>
+        </block>
+      </view>
+      <button class="close-btn" bindtap="closePanel">关闭</button>
+    </view>
+  </view>
+
+  <!-- 追捕警告 -->
+  <view wx:if="{{isChasing}}" class="chasing-warning">
+    ⚠️ 掠夺者来了！快跑！
+  </view>
+
+  <!-- 结局弹窗 -->
+  <view wx:if="{{showEnding}}" class="mask ending-mask">
+    <view class="panel ending-panel">
+      <view class="ending-title">{{endingData.title}}</view>
+      <view class="ending-text">{{endingData.content}}</view>
+      <button bindtap="restartGame">重新开始</button>
+    </view>
+  </view>
+</view>

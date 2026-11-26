@@ -1,0 +1,355 @@
+.container {
+  padding: 24rpx;
+  box-sizing: border-box;
+  min-height: 100vh;
+}
+
+/* 状态栏 */
+.status-bar {
+  padding: 16rpx;
+  background: #2a2a2a;
+  border-radius: 12rpx;
+  margin-bottom: 16rpx;
+}
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+}
+.status-row.sub {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #aaa;
+}
+.status-row.sub text:last-child {
+  color: #ff6b6b;
+}
+
+/* 结局进度 */
+.ending-progress {
+  margin-bottom: 16rpx;
+  font-size: 24rpx;
+}
+.progress-bar {
+  height: 8rpx;
+  background: #333;
+  border-radius: 4rpx;
+  margin-top: 6rpx;
+  overflow: hidden;
+}
+.progress-bar.small {
+  height: 6rpx;
+  margin-top: 8rpx;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4a90e2, #ffd700);
+  transition: width 0.3s;
+}
+
+/* 地图区 */
+.map-section { margin-bottom: 14rpx; }
+.section-title { font-size: 28rpx; margin-bottom: 10rpx; }
+.map-scroll { white-space: nowrap; }
+.map-btn {
+  display: inline-block;
+  width: 200rpx;
+  margin-right: 10rpx;
+  background: #3a3a3a;
+  color: #fff;
+}
+.map-btn.active { background: #4a90e2; }
+.map-btn[disabled] { background: #222; color: #666; }
+
+/* 每日任务栏 */
+.daily-bar {
+  background: #3a2e22;
+  color: #ffb74d;
+  padding: 12rpx 20rpx;
+  border-radius: 10rpx;
+  margin-bottom: 16rpx;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+/* 隐藏入口 */
+.hidden-entrance {
+  background: #5a3a7a;
+  color: #e0b3ff;
+  padding: 16rpx;
+  border-radius: 10rpx;
+  text-align: center;
+  margin-bottom: 16rpx;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 垃圾区 */
+.garbage-area {
+  background: #2d2d2d;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  min-height: 420rpx;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14rpx;
+  margin-bottom: 18rpx;
+}
+.gar-item {
+  background: #444;
+  padding: 30rpx 8rpx;
+  text-align: center;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  position: relative;
+  word-break: break-all;
+}
+.quality-tag {
+  position: absolute;
+  top: 4rpx;
+  right: 6rpx;
+  font-size: 20rpx;
+}
+/* 品质颜色 */
+.quality-common { border: 2rpx solid #888; }
+.quality-common .quality-tag { color: #aaa; }
+.quality-fine { border: 2rpx solid #4cd964; background: #2e4a33; }
+.quality-fine .quality-tag { color: #4cd964; }
+.quality-rare { border: 2rpx solid #af52de; background: #3e2e4a; }
+.quality-rare .quality-tag { color: #af52de; }
+.quality-legend { border: 2rpx solid #ff9500; background: #4a3a22; animation: glow 2s infinite; }
+.quality-legend .quality-tag { color: #ff9500; }
+@keyframes glow {
+  0%,100% { box-shadow: 0 0 8rpx #ff9500; }
+  50% { box-shadow: 0 0 20rpx #ff9500; }
+}
+
+/* 按钮网格 */
+.btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10rpx;
+}
+.btn-grid button {
+  background: #3a3a3a;
+  color: #fff;
+  padding: 18rpx 0;
+  font-size: 26rpx;
+}
+
+/* 弹窗通用 */
+.mask {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.panel {
+  width: 85%;
+  max-height: 80vh;
+  background: #2a2a2a;
+  color: #fff;
+  padding: 30rpx;
+  border-radius: 16rpx;
+  overflow-y: auto;
+}
+.panel-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 20rpx;
+  padding-bottom: 14rpx;
+  border-bottom: 1rpx solid #444;
+}
+.panel-title.sub {
+  font-size: 28rpx;
+  margin-top: 20rpx;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.event-title { color: #ff6b6b; }
+.close-btn {
+  margin-top: 18rpx;
+  background: #555;
+  color: #fff;
+  width: 100%;
+}
+.share-btn {
+  background: #07c160;
+  color: #fff;
+  width: 100%;
+  margin-top: 16rpx;
+}
+.dialog-text {
+  line-height: 1.6;
+  margin-bottom: 18rpx;
+  padding: 14rpx;
+  background: #333;
+  border-radius: 10rpx;
+}
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.option-list button {
+  background: #4a90e2;
+  color: #fff;
+}
+
+/* 商店、技能 */
+.shop-list, .skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.shop-list button, .skill-list button {
+  background: #3a3a3a;
+  color: #fff;
+  text-align: left;
+  padding-left: 26rpx;
+}
+
+/* 任务列表 */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.task-item {
+  background: #333;
+  padding: 16rpx;
+  border-radius: 10rpx;
+}
+.task-item.done {
+  background: #2e4a33;
+}
+.task-name {
+  font-weight: bold;
+  margin-bottom: 6rpx;
+}
+.task-progress, .task-reward {
+  font-size: 24rpx;
+  color: #ccc;
+  margin-bottom: 4rpx;
+}
+.claimed {
+  color: #4cd964;
+  font-size: 24rpx;
+}
+
+/* 排行榜 */
+.rank-tip {
+  text-align: center;
+  color: #aaa;
+  font-size: 24rpx;
+  margin-bottom: 16rpx;
+}
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.rank-item {
+  background: #333;
+  padding: 14rpx;
+  border-radius: 8rpx;
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+}
+.rank-no {
+  color: #ffd700;
+  font-weight: bold;
+}
+.empty {
+  text-align: center;
+  color: #666;
+  padding: 40rpx 0;
+}
+
+/* 协作任务 */
+.team-task {
+  background: #333;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  margin-bottom: 16rpx;
+}
+.team-task .task-name {
+  font-size: 30rpx;
+  color: #ffd700;
+  margin-bottom: 10rpx;
+}
+.team-task .task-desc {
+  font-size: 24rpx;
+  color: #ccc;
+  margin-bottom: 12rpx;
+  line-height: 1.5;
+}
+.team-tip {
+  text-align: center;
+  color: #aaa;
+  font-size: 24rpx;
+  margin-bottom: 12rpx;
+}
+
+/* 图鉴 */
+.col-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.col-item {
+  padding: 14rpx;
+  background: #3a3a3a;
+  border-radius: 8rpx;
+  display: flex;
+  flex-direction: column;
+}
+.col-item.locked { color: #666; background: #222; }
+.col-desc { font-size: 22rpx; color: #999; margin-top: 4rpx; }
+
+/* 追捕警告 */
+.chasing-warning {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 0, 0, 0.9);
+  color: #fff;
+  padding: 30rpx 60rpx;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  z-index: 1000;
+  animation: shake 0.3s infinite;
+}
+@keyframes shake {
+  0%,100% { transform: translate(-50%, -50%) rotate(0deg); }
+  25% { transform: translate(-52%, -50%) rotate(-2deg); }
+  75% { transform: translate(-48%, -50%) rotate(2deg); }
+}
+
+/* 结局 */
+.ending-mask { background: rgba(0,0,0,0.92); }
+.ending-panel {
+  text-align: center;
+  padding: 60rpx 40rpx;
+}
+.ending-title {
+  font-size: 38rpx;
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 26rpx;
+}
+.ending-text {
+  line-height: 1.8;
+  margin-bottom: 36rpx;
+  font-size: 28rpx;
+}

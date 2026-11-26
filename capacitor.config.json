@@ -1,0 +1,10 @@
+{
+  "appId": "com.wasteland.scavenger",
+  "appName": "末世拾荒",
+  "webDir": "web",
+  "bundledWebRuntime": false,
+  "android": {
+    "backgroundColor": "#090c10",
+    "allowMixedContent": true
+  }
+}

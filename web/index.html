@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>末世拾荒</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 全屏大气天气粒子画布 -->
+  <canvas id="fx-canvas"></canvas>
+
+  <!-- 追捕/辐射全屏警戒遮罩 -->
+  <div id="alert-vignette" class="alert-vignette hidden"></div>
+
+  <!-- 浮动文字与Toast -->
+  <div id="float-layer" class="float-layer"></div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- App 主框架（移动端全屏，桌面端居中掌机/手机视窗） -->
+  <div class="app-frame">
+    <!-- App 顶部导航栏 -->
+    <header class="app-topbar">
+      <div class="topbar-left">
+        <span class="app-logo">☢️</span>
+        <div class="topbar-title">
+          <strong>末世拾荒</strong>
+          <small id="day-weather-line"><span id="day-badge">第1天</span> · <span id="weather-badge">☀️ 晴天</span></small>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button id="btn-account" class="app-chip-btn" title="账号与存档">
+          👤 <span id="hud-username">废土游客</span>
+        </button>
+        <button id="btn-sound" class="app-icon-btn" title="音效">🔊</button>
+        <button id="btn-help" class="app-icon-btn" title="指南">❔</button>
+        <button id="btn-reset" class="app-icon-btn danger" title="重置">↺</button>
+      </div>
+    </header>
+
+    <!-- App 紧凑状态栏 (HUD) -->
+    <section class="app-hud">
+      <div class="hud-pills">
+        <div class="hud-pill gold">
+          <span class="pill-lbl">💰 金币</span>
+          <strong id="hud-gold">80</strong>
+          <small id="hud-debt-wrap" class="debt-tag">债:<span id="hud-debt">0</span></small>
+        </div>
+        <div class="hud-pill bag">
+          <span class="pill-lbl">🎒 背包</span>
+          <strong><span id="hud-bag">0</span>/<span id="hud-bag-max">10</span></strong>
+          <div class="pill-bar"><div id="bar-bag" class="pill-fill bag-fill" style="width:0%"></div></div>
+        </div>
+        <div class="hud-pill energy">
+          <span class="pill-lbl">⚡ 体力</span>
+          <strong><span id="hud-energy">100</span>/<span id="hud-energy-max">100</span></strong>
+          <div class="pill-bar"><div id="bar-energy" class="pill-fill energy-fill" style="width:100%"></div></div>
+        </div>
+        <div class="hud-pill food">
+          <span class="pill-lbl">🍞 饱食</span>
+          <strong><span id="hud-food">100</span>/<span id="hud-food-max">100</span></strong>
+          <div class="pill-bar"><div id="bar-food" class="pill-fill food-fill" style="width:100%"></div></div>
+        </div>
+      </div>
+
+      <div class="hud-quest-bar">
+        <span class="quest-badge">主线</span>
+        <span id="hud-quest" class="quest-text">寻找阿哲线索 (0/5)</span>
+        <span class="ending-pct">探索 <strong id="hud-ending-pct">0%</strong></span>
+      </div>
+      <div class="ending-track"><div id="bar-ending" class="ending-fill" style="width:0%"></div></div>
+    </section>
+
+    <!-- App 可滚动内容区（4个底部 Tab 切换） -->
+    <main class="app-content">
+      <!-- TAB 1: 拾荒现场 -->
+      <section id="tab-scavenge" class="tab-view active">
+        <!-- 隐藏密室横幅 -->
+        <button id="btn-hidden-entrance" class="banner-btn hidden-banner hidden">
+          🚪 雷达探测到隐秘密室！点击立即潜入
+        </button>
+
+        <!-- 当前区域场景卡 -->
+        <div class="card scavenge-card" id="scavenge-scene">
+          <div class="scene-header">
+            <div class="scene-title-wrap">
+              <span id="scene-icon" class="scene-big-icon">🏚️</span>
+              <div class="scene-info">
+                <div class="scene-name-row">
+                  <h2 id="map-title">城郊废土堆</h2>
+                  <div class="hazard-tags" id="map-hazards"></div>
+                </div>
+                <p id="map-desc" class="map-desc"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 区域危机条 -->
+          <div id="hazard-meters" class="hazard-meters hidden">
+            <div id="warn-meter" class="hazard-box hidden">
+              <span>🚨 警戒：<strong id="hud-warn">0%</strong></span>
+              <div class="pill-bar"><div id="bar-warn" class="pill-fill warn-fill" style="width:0%"></div></div>
+            </div>
+            <div id="tide-meter" class="hazard-box hidden">
+              <span>☢️ 辐射潮：<strong id="hud-tide">60s</strong></span>
+              <div class="pill-bar"><div id="bar-tide" class="pill-fill tide-fill" style="width:100%"></div></div>
+            </div>
+          </div>
+
+          <div class="scene-toolbar">
+            <button class="btn btn-primary btn-sm" data-action="openNpc">
+              💬 <span id="npc-name-hint">商人老黄</span>
+            </button>
+            <button class="btn btn-amber btn-sm" data-action="sellAll">
+              🏪 变卖 (<span id="sell-preview-val">+0金</span>)
+            </button>
+            <button id="btn-refresh" class="btn btn-secondary btn-sm">🔄 换堆</button>
+          </div>
+
+          <div class="scavenge-subbar">
+            <span>点击物资拾取</span>
+            <span id="pick-cost-hint" class="cost-hint">⚡ -6 / 次</span>
+          </div>
+
+          <div id="garbage-grid" class="garbage-grid"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: 全景战术地图 -->
+      <section id="tab-map" class="tab-view">
+        <div class="card world-map-card">
+          <div class="card-head">
+            <h2>🗺️ 废土全景沙盘</h2>
+            <button id="btn-weather-refresh" class="btn btn-sm btn-secondary">🌤️ 气象总览</button>
+          </div>
+          <p class="map-tip">点击节点切换探索区域，节点右上角显示各地实时独立天气</p>
+
+          <div id="world-map-board" class="world-map-board">
+            <svg id="world-map-svg" class="world-map-svg" viewBox="0 0 1000 520" preserveAspectRatio="none">
+              <defs>
+                <radialGradient id="radZoneGrad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="rgba(76, 217, 100, 0.34)" />
+                  <stop offset="100%" stop-color="rgba(76, 217, 100, 0)" />
+                </radialGradient>
+                <radialGradient id="vaultGlowGrad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="rgba(192, 108, 255, 0.36)" />
+                  <stop offset="100%" stop-color="rgba(192, 108, 255, 0)" />
+                </radialGradient>
+                <linearGradient id="riverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#0f3b3e" />
+                  <stop offset="50%" stop-color="#145a46" />
+                  <stop offset="100%" stop-color="#0e332f" />
+                </linearGradient>
+                <pattern id="gridPat" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(56, 189, 248, 0.07)" stroke-width="1"/>
+                </pattern>
+              </defs>
+              <rect width="1000" height="520" fill="url(#gridPat)" />
+              <path d="M 460 0 C 495 140, 560 220, 520 320 C 490 390, 540 460, 590 520" fill="none" stroke="url(#riverGrad)" stroke-width="36" stroke-linecap="round" opacity="0.85" />
+              <path d="M 170 343 Q 260 400 350 385 T 660 395" fill="none" stroke="rgba(56, 189, 248, 0.3)" stroke-width="4" stroke-dasharray="8 6" />
+              <circle cx="840" cy="228" r="115" fill="url(#radZoneGrad)" />
+              <circle cx="860" cy="405" r="95" fill="url(#vaultGlowGrad)" />
+              <g id="map-routes-layer"></g>
+            </svg>
+            <div class="radar-sweep"></div>
+            <div id="map-nodes-layer" class="map-nodes-layer"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: 背包与装备 -->
+      <section id="tab-bag" class="tab-view">
+        <div class="card">
+          <div class="card-head">
+            <h3>🧰 随身装备</h3>
+            <span id="rep-badge" class="pill-badge">声望: 0</span>
+          </div>
+          <div id="gear-list" class="gear-grid"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>🎒 背包物资</h3>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="bag-value-hint" class="val-hint">估值: 0金</span>
+              <button class="btn btn-amber btn-sm" data-action="sellAll">一键变卖</button>
+            </div>
+          </div>
+          <div id="bag-list" class="bag-list">
+            <div class="empty-tip">背包空空如也，快去废土捡点东西吧！</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: 营地设施与日志 -->
+      <section id="tab-camp" class="tab-view">
+        <div class="card">
+          <div class="card-head">
+            <h3>🏕️ 营地功能中心</h3>
+          </div>
+          <div class="camp-menu-grid">
+            <button class="camp-tile" data-action="openShop">
+              <span class="tile-icon">🛒</span>
+              <strong>杂货铺</strong>
+              <small>装备与补给</small>
+            </button>
+            <button class="camp-tile" data-action="openDisassemble">
+              <span class="tile-icon">🔧</span>
+              <strong>拆解工坊</strong>
+              <small id="dis-count-hint">0 可拆</small>
+            </button>
+            <button class="camp-tile" data-action="openSkill">
+              <span class="tile-icon">⚡</span>
+              <strong>技能树</strong>
+              <small id="sp-badge">点数: 1</small>
+            </button>
+            <button class="camp-tile" data-action="openDaily">
+              <span class="tile-icon">📅</span>
+              <strong>每日任务</strong>
+              <small id="hud-daily-done">0/3</small>
+            </button>
+            <button class="camp-tile" data-action="openStory">
+              <span class="tile-icon">📜</span>
+              <strong>剧情档案</strong>
+              <small id="story-count-hint">0/5 信物</small>
+            </button>
+            <button class="camp-tile" data-action="openCollection">
+              <span class="tile-icon">📖</span>
+              <strong>古董图鉴</strong>
+              <small id="col-count-hint">0/8 收录</small>
+            </button>
+            <button class="camp-tile" data-action="openLoan">
+              <span class="tile-icon">💰</span>
+              <strong>黑哥借贷</strong>
+              <small>日息 20%</small>
+            </button>
+            <button class="camp-tile" data-action="openTeam">
+              <span class="tile-icon">🤝</span>
+              <strong>协作悬赏</strong>
+              <small>每日空投</small>
+            </button>
+            <button class="camp-tile" data-action="openRank">
+              <span class="tile-icon">🏆</span>
+              <strong>战绩排行</strong>
+              <small>本地殿堂</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>📻 废土日志</h3>
+            <button id="btn-clear-log" class="btn-text">清空</button>
+          </div>
+          <div id="log-list" class="log-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 原生 App 底部 4 大导航栏 -->
+    <nav class="app-bottom-nav">
+      <button class="nav-tab active" data-tab="scavenge">
+        <span class="nav-ico">🔍</span>
+        <span>拾荒</span>
+      </button>
+      <button class="nav-tab" data-tab="map">
+        <span class="nav-ico">🗺️</span>
+        <span>地图</span>
+      </button>
+      <button class="nav-tab" data-tab="bag">
+        <span class="nav-ico">🎒</span>
+        <span>背包</span>
+      </button>
+      <button class="nav-tab" data-tab="camp">
+        <span class="nav-ico">🏕️</span>
+        <span>营地</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- 通用底部/居中弹窗 -->
+  <div id="modal-backdrop" class="modal-backdrop hidden">
+    <div id="modal-box" class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-title">标题</h3>
+        <button id="modal-close" class="modal-close-x">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+      <div id="modal-footer" class="modal-footer"></div>
+    </div>
+  </div>
+
+  <div id="chase-banner" class="chase-banner hidden">
+    ⚠️ 掠夺者追上来了！正在全力甩开……
+  </div>
+
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>

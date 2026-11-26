@@ -1,0 +1,18 @@
+{
+  "name": "末世拾荒 · Wasteland Scavenger",
+  "short_name": "末世拾荒",
+  "description": "废土生存拾荒与战术沙盘探索手游",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090c10",
+  "theme_color": "#0b0f14",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
