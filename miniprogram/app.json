@@ -1,0 +1,42 @@
+{
+  "pages": [
+    "pages/boot/boot"
+  ],
+  "subpackages": [
+    {
+      "root": "pkg_game",
+      "name": "pkg_game",
+      "pages": [
+        "pages/world/world"
+      ]
+    },
+    {
+      "root": "pkg_maps",
+      "name": "pkg_maps",
+      "pages": [
+        "pages/dummy/dummy"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/boot/boot": {
+      "network": "all",
+      "packages": [
+        "pkg_game",
+        "pkg_maps"
+      ]
+    }
+  },
+  "window": {
+    "pageOrientation": "landscape",
+    "navigationStyle": "custom",
+    "navigationBarTitleText": "墨土拾荒录",
+    "navigationBarBackgroundColor": "#050709",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#050709",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

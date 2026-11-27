@@ -1,0 +1,8 @@
+{
+  "navigationStyle": "custom",
+  "pageOrientation": "landscape",
+  "disableScroll": true,
+  "backgroundColor": "#050709",
+  "backgroundColorTop": "#050709",
+  "backgroundColorBottom": "#050709"
+}

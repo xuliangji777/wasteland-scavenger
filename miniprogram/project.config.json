@@ -1,0 +1,42 @@
+{
+  "description": "《墨土拾荒录》原生个人微信小程序工程配置",
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "projectname": "motu-shihuanglu",
+  "miniprogramRoot": "./",
+  "libVersion": "3.4.0",
+  "packOptions": {
+    "ignore": [
+      {
+        "value": ".DS_Store",
+        "type": "glob"
+      }
+    ],
+    "include": []
+  },
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "uglifyFileName": false,
+    "urlCheck": false,
+    "coverView": true,
+    "lazyloadPlaceholderEnable": false,
+    "preloadBackgroundData": false,
+    "autoAudits": false,
+    "checkInvalidKey": true,
+    "checkSiteMap": true,
+    "uploadWithSourceMap": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "useCompilerPlugins": false,
+    "ignoreUploadUnusedFiles": false
+  },
+  "condition": {}
+}

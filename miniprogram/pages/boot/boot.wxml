@@ -1,0 +1,60 @@
+<view class="boot-root">
+  <!-- ==================== 第一幕：100% 实底黑墨 · 老年饼工作室 4.5s 开屏 ==================== -->
+  <view wx:if="{{phase === 'splash'}}" class="studio-splash {{splashFading ? 'is-fading' : ''}}">
+    <view class="splash-aura"></view>
+
+    <view class="splash-stage">
+      <view class="splash-emblem-wrap">
+        <view class="emblem-ring-outer"></view>
+        <view class="emblem-ring-inner"></view>
+        <image class="splash-app-icon" src="/assets/app_icon.png" mode="aspectFit" />
+        <view class="splash-seal-stamp">
+          <text class="seal-char">老</text>
+          <text class="seal-char">年</text>
+          <text class="seal-char">饼</text>
+          <text class="seal-char">印</text>
+        </view>
+      </view>
+
+      <view class="splash-text-block">
+        <text class="splash-studio-title">老年饼工作室</text>
+        <text class="splash-studio-sub">LAONIANBING STUDIO · 诚意出品</text>
+        <view class="splash-ink-divider"></view>
+        <text class="splash-game-title">墨土拾荒录</text>
+      </view>
+    </view>
+
+    <view class="btn-skip-splash" bindtap="onSkipSplash">跳过 ▸</view>
+  </view>
+
+  <!-- ==================== 第二幕：古龙风四幕水墨序章 ==================== -->
+  <view wx:if="{{phase === 'prologue'}}" class="opening-prologue {{prologueFading ? 'is-fading' : ''}}" bindtap="onNextSlide">
+    <view class="prologue-mist"></view>
+
+    <view class="prologue-scroll-card" catchtap="onCardTap">
+      <view class="prologue-head">
+        <text class="prologue-chapter-seal">{{currentSlide.chapter}}</text>
+        <view class="btn-prologue-skip" catchtap="onSkipPrologue">跳过序章</view>
+      </view>
+
+      <view class="prologue-body">
+        <text class="prologue-title">{{currentSlide.title}}</text>
+        <view class="prologue-ink-rule"></view>
+        <text class="prologue-text">{{currentSlide.text}}</text>
+      </view>
+
+      <view class="prologue-footer">
+        <view class="prologue-dots">
+          <view
+            wx:for="{{slides}}"
+            wx:key="chapter"
+            class="prologue-dot {{index === slideIndex ? 'active' : ''}} {{index < slideIndex ? 'passed' : ''}}"
+          ></view>
+        </view>
+        <view class="btn-prologue-next" catchtap="onNextSlide">
+          {{slideIndex < slides.length - 1 ? '下一页 ▸' : '踏入墨土 ▸'}}
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

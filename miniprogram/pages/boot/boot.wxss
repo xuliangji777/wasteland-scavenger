@@ -1,0 +1,341 @@
+/* 100% 实底黑墨开屏 + 古龙四幕水墨序章（横屏原生适配） */
+.boot-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #050709;
+  overflow: hidden;
+  z-index: 999;
+}
+
+/* ==================== 老年饼工作室 4.5s 开屏 ==================== */
+.studio-splash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #050709;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+}
+
+.studio-splash.is-fading {
+  opacity: 0;
+}
+
+.splash-aura {
+  position: absolute;
+  width: 440rpx;
+  height: 440rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 162, 74, 0.16) 0%, rgba(212, 162, 74, 0.03) 55%, rgba(5, 7, 9, 0) 75%);
+  pointer-events: none;
+}
+
+.splash-stage {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 54rpx;
+  padding: 0 40rpx;
+  animation: splashFadeIn 0.85s ease-out both;
+}
+
+.splash-emblem-wrap {
+  position: relative;
+  width: 210rpx;
+  height: 210rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emblem-ring-outer {
+  position: absolute;
+  width: 204rpx;
+  height: 204rpx;
+  border-radius: 50%;
+  border: 3rpx solid rgba(212, 162, 74, 0.68);
+  box-shadow: 0 0 28rpx rgba(212, 162, 74, 0.22);
+}
+
+.emblem-ring-inner {
+  position: absolute;
+  width: 178rpx;
+  height: 178rpx;
+  border-radius: 50%;
+  border: 1.5rpx dashed rgba(242, 230, 207, 0.32);
+}
+
+.splash-app-icon {
+  width: 148rpx;
+  height: 148rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(212, 162, 74, 0.75);
+  box-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.72);
+}
+
+.splash-seal-stamp {
+  position: absolute;
+  right: -12rpx;
+  bottom: 4rpx;
+  width: 58rpx;
+  height: 58rpx;
+  background-color: #b53a2e;
+  border: 2rpx solid #e89b8e;
+  border-radius: 8rpx;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 4rpx;
+  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.65);
+  transform: rotate(-8deg);
+  animation: sealStamp 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both;
+}
+
+.seal-char {
+  width: 50%;
+  text-align: center;
+  font-size: 18rpx;
+  font-weight: 800;
+  color: #fce9df;
+  line-height: 22rpx;
+}
+
+.splash-text-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.splash-studio-title {
+  font-size: 56rpx;
+  font-weight: 900;
+  letter-spacing: 10rpx;
+  color: #f3d286;
+  text-shadow: 0 4rpx 18rpx rgba(212, 162, 74, 0.35), 0 2rpx 4rpx rgba(0, 0, 0, 0.9);
+}
+
+.splash-studio-sub {
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  letter-spacing: 5rpx;
+  color: rgba(235, 220, 192, 0.72);
+}
+
+.splash-ink-divider {
+  width: 320rpx;
+  height: 2rpx;
+  margin: 22rpx 0 18rpx;
+  background: linear-gradient(90deg, #d4a24a 0%, rgba(212, 162, 74, 0.35) 65%, rgba(212, 162, 74, 0) 100%);
+}
+
+.splash-game-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  letter-spacing: 14rpx;
+  color: #efe3cb;
+  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.85);
+}
+
+.btn-skip-splash {
+  position: absolute;
+  top: 28rpx;
+  right: 36rpx;
+  padding: 10rpx 24rpx;
+  font-size: 22rpx;
+  letter-spacing: 3rpx;
+  color: rgba(242, 230, 207, 0.85);
+  border: 1.5rpx solid rgba(212, 162, 74, 0.45);
+  border-radius: 32rpx;
+  background-color: rgba(16, 18, 22, 0.72);
+}
+
+/* ==================== 古龙风四幕水墨序章 ==================== */
+.opening-prologue {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #050709;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx 48rpx;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+.opening-prologue.is-fading {
+  opacity: 0;
+}
+
+.prologue-mist {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(ellipse at 50% 42%, rgba(212, 162, 74, 0.08) 0%, rgba(5, 7, 9, 0.96) 72%);
+  pointer-events: none;
+}
+
+.prologue-scroll-card {
+  position: relative;
+  width: 82%;
+  max-width: 960rpx;
+  min-height: 360rpx;
+  padding: 36rpx 56rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-top: 2rpx solid rgba(212, 162, 74, 0.45);
+  border-bottom: 2rpx solid rgba(212, 162, 74, 0.45);
+  background: linear-gradient(180deg, rgba(16, 15, 13, 0.92) 0%, rgba(10, 11, 13, 0.96) 100%);
+  animation: slideEnter 0.45s ease-out both;
+}
+
+.prologue-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prologue-chapter-seal {
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 5rpx;
+  color: #d4a24a;
+  padding: 4rpx 16rpx;
+  border-left: 4rpx solid #b53a2e;
+}
+
+.btn-prologue-skip {
+  font-size: 22rpx;
+  letter-spacing: 2rpx;
+  color: rgba(235, 220, 192, 0.68);
+  padding: 8rpx 18rpx;
+}
+
+.prologue-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 20rpx 0 24rpx;
+}
+
+.prologue-title {
+  font-size: 42rpx;
+  font-weight: 900;
+  letter-spacing: 8rpx;
+  color: #f6dca0;
+  text-shadow: 0 3rpx 12rpx rgba(0, 0, 0, 0.9);
+}
+
+.prologue-ink-rule {
+  width: 180rpx;
+  height: 2rpx;
+  margin: 14rpx 0 18rpx;
+  background: linear-gradient(90deg, #b53a2e 0%, #d4a24a 55%, rgba(212, 162, 74, 0) 100%);
+}
+
+.prologue-text {
+  font-size: 26rpx;
+  line-height: 1.85;
+  letter-spacing: 2rpx;
+  color: #eadec8;
+}
+
+.prologue-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prologue-dots {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.prologue-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background-color: rgba(235, 220, 192, 0.22);
+  transition: all 0.25s ease;
+}
+
+.prologue-dot.passed {
+  background-color: rgba(212, 162, 74, 0.55);
+}
+
+.prologue-dot.active {
+  width: 34rpx;
+  border-radius: 8rpx;
+  background-color: #d4a24a;
+}
+
+.btn-prologue-next {
+  padding: 12rpx 34rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: #16120c;
+  background: linear-gradient(135deg, #f1cf7c 0%, #c89535 100%);
+  border-radius: 36rpx;
+  box-shadow: 0 4rpx 16rpx rgba(212, 162, 74, 0.32);
+}
+
+@keyframes splashFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12rpx) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sealStamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.9) rotate(-22deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(0.94) rotate(-7deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-8deg);
+  }
+}
+
+@keyframes slideEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

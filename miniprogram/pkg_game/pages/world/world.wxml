@@ -1,0 +1,1029 @@
+<!-- 《墨土拾荒录》v20 · 纯原生微信小程序 1080P 横屏无框水墨主舞台 -->
+<view class="rpg-root {{screenShake ? 'fx-shake' : ''}}">
+  <!-- 100% 全屏 2.5D 水墨大世界 Canvas 2D -->
+  <canvas
+    id="world-canvas"
+    type="2d"
+    class="world-canvas"
+    bindtap="onCanvasTap"
+  />
+
+  <!-- 场景切换水墨横幅 -->
+  <view class="scene-banner {{sceneBanner.show ? 'show' : ''}}" wx:if="{{sceneBanner.title}}">
+    <text class="scene-banner-region">{{sceneBanner.region}}</text>
+    <text class="scene-banner-title">{{sceneBanner.title}}</text>
+  </view>
+
+  <!-- 浮空 Toast 提示 -->
+  <view class="toast-wrap" wx:if="{{toast.show}}">
+    <view class="toast-pill toast-{{toast.type}}">
+      <text class="toast-text">{{toast.text}}</text>
+    </view>
+  </view>
+
+  <!-- ==================== 浮空无框顶部 HUD（大世界探索态） ==================== -->
+  <view class="hud-top" wx:if="{{!inBattle}}">
+    <!-- 左上：主角玉环徽章 + 血息斜切槽 + 遥测 + 浮空主线 -->
+    <view class="hud-left">
+      <view class="hud-hero-row">
+        <view class="hero-medallion" bindtap="openModal" data-modal="bag">
+          <image class="hero-portrait" src="/assets/portrait_hero.jpg" mode="aspectFill" />
+          <view class="hero-lv-seal">Lv.{{hero.level}}</view>
+        </view>
+
+        <view class="hud-gauges">
+          <view class="gauge-row">
+            <text class="gauge-lbl">血</text>
+            <view class="gauge-track">
+              <view class="gauge-fill hp-fill" style="width: {{hero.hpPct}}%;"></view>
+            </view>
+            <text class="gauge-val">{{hero.hp}}/{{hero.maxHp}}</text>
+          </view>
+
+          <view class="gauge-row">
+            <text class="gauge-lbl">息</text>
+            <view class="gauge-track">
+              <view class="gauge-fill mp-fill" style="width: {{hero.mpPct}}%;"></view>
+            </view>
+            <text class="gauge-val">{{hero.energy}}/{{hero.maxEnergy}}</text>
+          </view>
+
+          <view class="exp-hairline">
+            <view class="exp-hairline-fill" style="width: {{hero.expPct}}%;"></view>
+          </view>
+
+          <view class="hud-telemetry">
+            <text class="tele-item">食 <text class="tele-num food">{{hero.food}}</text></text>
+            <text class="tele-dot">·</text>
+            <text class="tele-item">币 <text class="tele-num gold">{{hero.gold}}</text></text>
+            <text class="tele-dot">·</text>
+            <text class="tele-item">囊 <text class="tele-num">{{hero.bagCount}}/{{hero.bagMax}}</text></text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 浮空无框主线追踪 -->
+      <view class="hud-quest-line" bindtap="openModal" data-modal="quests">
+        <text class="quest-seal">主线</text>
+        <text class="quest-text">{{questSummary}}</text>
+      </view>
+
+      <!-- 危机与护驾浮空印记 -->
+      <view class="hud-pills">
+        <text class="pill-tag guardian" wx:if="{{activeGuardianName}}">护驾·{{activeGuardianName}}</text>
+        <text class="pill-tag shield" wx:if="{{hero.radShield > 0}}">抗辐×{{hero.radShield}}</text>
+        <text class="pill-tag warn" wx:if="{{hero.warn > 0}}">警戒 {{hero.warn}}%</text>
+        <text class="pill-tag tide" wx:if="{{mapInfo.hasTide}}">辐射潮 {{hero.tideSec}}s</text>
+      </view>
+    </view>
+
+    <!-- 右上：水墨地标书法 + 天数天气 + 存/设浮空印 -->
+    <view class="hud-right">
+      <view class="loc-block" bindtap="openModal" data-modal="worldmap">
+        <view class="loc-row-main">
+          <text class="loc-map">{{mapInfo.name}}</text>
+          <text class="loc-day">第{{hero.day}}天</text>
+        </view>
+        <view class="loc-row-sub">
+          <text class="loc-region">{{mapInfo.regionName}}</text>
+          <text class="tele-dot">·</text>
+          <text class="loc-weather" style="color: {{weatherInfo.color}};">{{weatherInfo.name}}</text>
+          <text class="tele-dot">·</text>
+          <text class="loc-ending">天命 {{endingPct}}%</text>
+        </view>
+      </view>
+
+      <view class="hud-sys-btns">
+        <view class="sys-glyph-btn" bindtap="openModal" data-modal="save">存</view>
+        <view class="sys-glyph-btn" bindtap="openModal" data-modal="settings">设</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ==================== 底部无框操控层（挖孔屏安全区十字键 + 功能坞 + 交互键） ==================== -->
+  <view class="hud-bottom" wx:if="{{!inBattle && !activeModal && !dialog.open}}">
+    <!-- 左下：挖孔屏安全区放大半透明十字键（静息 0.36 / 触控 0.92） -->
+    <view class="dpad-safe-wrap {{dpadActive ? 'active' : ''}}">
+      <view class="dpad-grid">
+        <view class="dpad-spacer"></view>
+        <view
+          class="dpad-btn dpad-up {{dpadDir === 'up' ? 'pressed' : ''}}"
+          data-dx="0" data-dy="-1" data-dir="up"
+          catchtouchstart="onDpadStart"
+          catchtouchend="onDpadEnd"
+          catchtouchcancel="onDpadEnd"
+        >▲</view>
+        <view class="dpad-spacer"></view>
+
+        <view
+          class="dpad-btn dpad-left {{dpadDir === 'left' ? 'pressed' : ''}}"
+          data-dx="-1" data-dy="0" data-dir="left"
+          catchtouchstart="onDpadStart"
+          catchtouchend="onDpadEnd"
+          catchtouchcancel="onDpadEnd"
+        >◀</view>
+        <view class="dpad-core">墨</view>
+        <view
+          class="dpad-btn dpad-right {{dpadDir === 'right' ? 'pressed' : ''}}"
+          data-dx="1" data-dy="0" data-dir="right"
+          catchtouchstart="onDpadStart"
+          catchtouchend="onDpadEnd"
+          catchtouchcancel="onDpadEnd"
+        >▶</view>
+
+        <view class="dpad-spacer"></view>
+        <view
+          class="dpad-btn dpad-down {{dpadDir === 'down' ? 'pressed' : ''}}"
+          data-dx="0" data-dy="1" data-dir="down"
+          catchtouchstart="onDpadStart"
+          catchtouchend="onDpadEnd"
+          catchtouchcancel="onDpadEnd"
+        >▼</view>
+        <view class="dpad-spacer"></view>
+      </view>
+    </view>
+
+    <!-- 底部居中：无框浮空书法功能坞 -->
+    <view class="ink-dock">
+      <view class="dock-item accent" bindtap="openModal" data-modal="worldmap">
+        <text class="dock-seal">图</text>
+        <text class="dock-lbl">舆图</text>
+      </view>
+      <view class="dock-item crucible" bindtap="openModal" data-modal="crucible">
+        <text class="dock-seal">壶</text>
+        <text class="dock-lbl">墨壶</text>
+      </view>
+      <view class="dock-item" bindtap="openModal" data-modal="bag">
+        <text class="dock-seal">囊</text>
+        <text class="dock-lbl">行囊</text>
+      </view>
+      <view class="dock-item" bindtap="openModal" data-modal="skills">
+        <text class="dock-seal">武</text>
+        <text class="dock-lbl">武学</text>
+      </view>
+      <view class="dock-item" bindtap="openModal" data-modal="quests">
+        <text class="dock-seal">卷</text>
+        <text class="dock-lbl">剧情</text>
+      </view>
+      <view class="dock-item" bindtap="openModal" data-modal="save">
+        <text class="dock-seal">碑</text>
+        <text class="dock-lbl">存档</text>
+      </view>
+      <view class="dock-item" bindtap="openModal" data-modal="settings">
+        <text class="dock-seal">设</text>
+        <text class="dock-lbl">设置</text>
+      </view>
+    </view>
+
+    <!-- 右下：无框水墨交互键 + 搜寻新迹 -->
+    <view class="action-cluster">
+      <view class="ink-interact-btn {{nearestTarget ? 'ready' : ''}}" bindtap="onInteractTap">
+        <text class="interact-seal">{{nearestTarget ? '探' : '寻'}}</text>
+        <text class="interact-text">{{nearestTarget ? nearestTarget.label : '探索周围'}}</text>
+      </view>
+      <view class="ink-refresh-btn" bindtap="onRefreshLoot">
+        <text class="refresh-seal">迹</text>
+        <text class="refresh-text">搜寻新迹</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ==================== NPC 对话浮层（无框半透泼墨条） ==================== -->
+  <view class="dialog-overlay" wx:if="{{dialog.open && !inBattle}}">
+    <view class="dialog-strip">
+      <view class="dialog-portrait-ring">
+        <image class="dialog-portrait-img" src="{{dialog.portrait}}" mode="aspectFill" />
+      </view>
+      <view class="dialog-body">
+        <view class="dialog-head">
+          <view class="dialog-speaker-wrap">
+            <text class="dialog-speaker">{{dialog.name}}</text>
+            <text class="dialog-title">{{dialog.title}}</text>
+          </view>
+          <view class="dialog-close" bindtap="closeDialog">✕</view>
+        </view>
+        <text class="dialog-text">{{dialog.text}}</text>
+        <view class="dialog-opts">
+          <view
+            class="dialog-opt-btn {{index === 0 ? 'primary' : ''}}"
+            wx:for="{{dialog.options}}"
+            wx:key="index"
+            data-index="{{index}}"
+            bindtap="onDialogOptionTap"
+          >{{item.text}}</view>
+          <view class="dialog-opt-btn" bindtap="closeDialog">告辞</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ==================== 纯泼墨全屏 2.5D 回合战斗界 ==================== -->
+  <view class="battle-overlay" wx:if="{{inBattle}}">
+    <image class="battle-bg" src="/pkg_game/assets/bg_battle.jpg" mode="aspectFill" />
+    <view class="battle-vignette"></view>
+
+    <!-- 顶部双边参战纹章 + 决印 -->
+    <view class="bat-top">
+      <!-- 敌方纹章血条 -->
+      <view class="bat-side enemy-side">
+        <view class="bat-crest enemy-crest">
+          <image class="bat-crest-img" src="{{battle.enemySprite}}" mode="aspectFit" />
+        </view>
+        <view class="bat-gauge-col">
+          <view class="bat-name-line">
+            <text class="bat-name">{{battle.enemy.name}}</text>
+            <text class="bat-badge {{battle.enemy.isBoss ? 'boss' : ''}}">{{battle.enemy.isBoss ? '区域首领' : (battle.canCapture ? '可收妖' : '强敌')}}</text>
+          </view>
+          <view class="bat-bar-track">
+            <view class="bat-bar-fill enemy-hp" style="width: {{battle.enemyHpPct}}%;"></view>
+          </view>
+          <view class="bat-meta-line">
+            <text class="bat-hp-txt">气血 {{battle.enemyHp}} / {{battle.enemyMaxHp}}</text>
+            <view class="bat-status-tags">
+              <text class="st-tag burn" wx:if="{{battle.enemyStatus.burn > 0}}">灼{{battle.enemyStatus.burn}}</text>
+              <text class="st-tag poison" wx:if="{{battle.enemyStatus.poison > 0}}">毒{{battle.enemyStatus.poison}}</text>
+              <text class="st-tag def" wx:if="{{battle.enemyStatus.defDown > 0}}">破甲</text>
+              <text class="st-tag stun" wx:if="{{battle.enemyStatus.stun > 0}}">眩晕</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 中央决印 -->
+      <view class="bat-vs-center">
+        <view class="vs-seal-oct">决</view>
+        <text class="bat-turn-lbl">{{battle.turnText}}</text>
+      </view>
+
+      <!-- 我方主角纹章血息 -->
+      <view class="bat-side hero-side">
+        <view class="bat-gauge-col right">
+          <view class="bat-name-line right">
+            <text class="bat-shield-tag" wx:if="{{battle.heroShield > 0}}">盾 {{battle.heroShield}}</text>
+            <text class="bat-name">沈砚</text>
+          </view>
+          <view class="bat-bar-track">
+            <view class="bat-bar-fill hero-hp" style="width: {{hero.hpPct}}%;"></view>
+          </view>
+          <view class="bat-meta-line right">
+            <text class="bat-hp-txt">{{hero.hp}} / {{hero.maxHp}} 血</text>
+          </view>
+          <view class="bat-bar-track mp">
+            <view class="bat-bar-fill hero-mp" style="width: {{hero.mpPct}}%;"></view>
+          </view>
+          <view class="bat-meta-line right">
+            <text class="bat-hp-txt">{{hero.energy}} / {{hero.maxEnergy}} 息</text>
+          </view>
+        </view>
+        <view class="bat-crest hero-crest">
+          <image class="bat-crest-img cover" src="/assets/portrait_hero.jpg" mode="aspectFill" />
+          <text class="bat-lv-tag">Lv.{{hero.level}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 2.5D 错落战阵舞台（左敌 · 中右拔刀主角 · 前右护驾灵兽） -->
+    <view class="bat-arena">
+      <!-- 招式流派剑气/雷火横幅 -->
+      <view class="bat-flash-banner branch-{{battleVfx.branch}}" wx:if="{{battleVfx.flashText}}">
+        <text class="bat-flash-txt">{{battleVfx.flashText}}</text>
+      </view>
+
+      <!-- 左侧敌方（面向右） -->
+      <view class="fighter-slot enemy-slot {{battleVfx.enemyAnim}}">
+        <image
+          class="fighter-sprite enemy-sprite {{captureAnim.active ? 'sucking' : ''}}"
+          src="{{battle.enemySprite}}"
+          mode="aspectFit"
+        />
+        <view class="fighter-shadow"></view>
+        <view class="dmg-float {{battleVfx.enemyDmgType}}" wx:if="{{battleVfx.enemyDmg}}">{{battleVfx.enemyDmg}}</view>
+      </view>
+
+      <!-- 纯泼墨天工墨壶收妖法阵（倒悬青铜壶 + 泼墨旋涡 + 3D地面五行轮） -->
+      <view class="capture-fx-layer" wx:if="{{captureAnim.active}}">
+        <image class="capture-wheel-ground" src="/pkg_game/assets/sprites/wuxing_ink_wheel.png" mode="aspectFit" />
+        <image class="capture-vortex" src="/pkg_game/assets/sprites/capture_ink_vortex.png" mode="aspectFit" />
+        <image class="capture-vessel-inverted" src="/pkg_game/assets/sprites/crucible_vessel.png" mode="aspectFit" />
+        <text class="capture-caption">{{captureAnim.caption}}</text>
+      </view>
+
+      <!-- 中右拔刀主角（hero_battle.png，面向左） -->
+      <view class="fighter-slot hero-slot {{battleVfx.heroAnim}}">
+        <image
+          class="fighter-sprite hero-sprite"
+          src="/pkg_game/assets/sprites/hero_battle.png"
+          mode="aspectFit"
+        />
+        <view class="fighter-shadow"></view>
+        <view class="dmg-float {{battleVfx.heroDmgType}}" wx:if="{{battleVfx.heroDmg}}">{{battleVfx.heroDmg}}</view>
+      </view>
+
+      <!-- 前景右护驾灵兽 -->
+      <view class="fighter-slot guardian-slot {{battleVfx.guardianAnim}}" wx:if="{{battle.guardian}}">
+        <image
+          class="fighter-sprite guardian-sprite"
+          src="{{battle.guardianSprite}}"
+          mode="aspectFit"
+        />
+        <view class="fighter-shadow small"></view>
+        <text class="guardian-plate">{{battle.guardian.name}}</text>
+      </view>
+    </view>
+
+    <!-- 战斗底部：左下无框墨卷战报 + 左翼绝学/丹药扇面 + 右下「泼墨飞白太极战阵」 -->
+    <view class="bat-bottom">
+      <view class="bat-log-scroll">
+        <text class="bat-log-txt">{{battle.log}}</text>
+      </view>
+
+      <!-- 左翼展开：四系绝学圆章 或 丹药补给 -->
+      <view class="bat-subpanel" wx:if="{{battleSubMode === 'skills'}}">
+        <view class="bat-branch-tabs">
+          <view
+            class="branch-tab {{battleSkillBranch === item.id ? 'active' : ''}}"
+            wx:for="{{skillBranches}}"
+            wx:key="id"
+            data-branch="{{item.id}}"
+            bindtap="onSelectBattleBranch"
+          >{{item.name}}</view>
+        </view>
+        <scroll-view class="bat-skill-list" scroll-x="true" enable-flex="true">
+          <view
+            class="bat-skill-medallion {{item.locked || !item.canAfford ? 'disabled' : ''}}"
+            wx:for="{{battleBranchSkills}}"
+            wx:key="id"
+            data-id="{{item.id}}"
+            bindtap="onBattleUseSkill"
+          >
+            <view class="skill-orb branch-{{item.category}}">
+              <view class="sprite-clip" style="width:68rpx;height:68rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_skills.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+              </view>
+            </view>
+            <text class="sk-med-name">{{item.name}}</text>
+            <text class="sk-med-cost">{{item.locked ? ('Lv.' + item.unlockLv) : (item.mpCost + '息')}}</text>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="bat-subpanel" wx:if="{{battleSubMode === 'items'}}">
+        <view class="bat-branch-tabs">
+          <text class="branch-tab active">丹药与行囊补给</text>
+        </view>
+        <scroll-view class="bat-skill-list" scroll-x="true" enable-flex="true">
+          <view class="bat-empty-hint" wx:if="{{battleConsumables.length === 0}}">行囊中暂无可用丹药或补给</view>
+          <view
+            class="bat-skill-medallion"
+            wx:for="{{battleConsumables}}"
+            wx:key="key"
+            data-kind="{{item.kind}}"
+            data-key="{{item.key}}"
+            bindtap="onBattleUseItem"
+          >
+            <view class="skill-orb branch-mystic">
+              <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_items.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+              </view>
+            </view>
+            <text class="sk-med-name">{{item.name}}</text>
+            <text class="sk-med-cost">×{{item.count}}</text>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 右下纯透明「泼墨飞白太极战阵」 -->
+      <view class="wuxing-wheel {{battle.busy ? 'busy' : ''}}">
+        <image class="wuxing-wheel-bg" src="/pkg_game/assets/sprites/wuxing_ink_wheel.png" mode="aspectFit" />
+
+        <!-- 火 · 绝学 -->
+        <view class="wx-btn wx-fire {{battleSubMode === 'skills' ? 'active' : ''}}" bindtap="onBattleToggleSkills">
+          <view class="wx-orb fire">火</view>
+          <text class="wx-lbl">绝学</text>
+        </view>
+
+        <!-- 金 · 普攻 -->
+        <view class="wx-btn wx-metal" bindtap="onBattleAttack">
+          <view class="wx-orb metal">金</view>
+          <text class="wx-lbl">普攻</text>
+        </view>
+
+        <!-- 水 · 收妖 -->
+        <view class="wx-btn wx-water {{battle.canCapture ? 'pulse' : ''}}" bindtap="onBattleCapture">
+          <view class="wx-orb water">水</view>
+          <text class="wx-lbl">收妖</text>
+        </view>
+
+        <!-- 木 · 丹药 -->
+        <view class="wx-btn wx-wood {{battleSubMode === 'items' ? 'active' : ''}}" bindtap="onBattleToggleItems">
+          <view class="wx-orb wood">木</view>
+          <text class="wx-lbl">丹药</text>
+        </view>
+
+        <!-- 土 · 撤退 -->
+        <view class="wx-btn wx-earth" bindtap="onBattleRun">
+          <view class="wx-orb earth">土</view>
+          <text class="wx-lbl">撤退</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ==================== 全屏无框手绘殿堂层（activeModal） ==================== -->
+  <view class="chamber-overlay" wx:if="{{activeModal && !inBattle}}">
+    <!-- 按殿堂切换全屏手绘背景 -->
+    <image
+      class="chamber-bg"
+      src="{{activeModal === 'crucible' ? '/pkg_game/assets/bg_crucible.jpg' : (activeModal === 'worldmap' ? '/pkg_game/assets/bg_worldmap.jpg' : '/pkg_game/assets/bg_armory.jpg')}}"
+      mode="aspectFill"
+    />
+    <view class="chamber-wash {{activeModal}}"></view>
+
+    <!-- 殿堂顶部浮空书法标题栏 -->
+    <view class="chamber-header">
+      <view class="chamber-title-group">
+        <text class="chamber-seal">{{modalSeal}}</text>
+        <text class="chamber-title">{{modalTitle}}</text>
+        <text class="chamber-sub" wx:if="{{modalSub}}">{{modalSub}}</text>
+      </view>
+      <view class="chamber-close" bindtap="closeModal">✕ 返回江湖</view>
+    </view>
+
+    <!-- ========== 1. 天工墨壶 (crucible) ========== -->
+    <view class="chamber-body crucible-body" wx:if="{{activeModal === 'crucible'}}">
+      <view class="chamber-tabs">
+        <view class="c-tab {{crucibleTab === 'forge' ? 'active' : ''}}" data-tab="forge" bindtap="onCrucibleTab">阴阳炼化</view>
+        <view class="c-tab {{crucibleTab === 'guardians' ? 'active' : ''}}" data-tab="guardians" bindtap="onCrucibleTab">护驾灵兽 ({{guardiansView.unlockedCount}}/8)</view>
+        <view class="c-tab {{crucibleTab === 'recipes' ? 'active' : ''}}" data-tab="recipes" bindtap="onCrucibleTab">天工丹方 ({{recipesView.length}})</view>
+      </view>
+
+      <!-- 阴阳炼化台 -->
+      <view class="crucible-forge-grid" wx:if="{{crucibleTab === 'forge'}}">
+        <view class="crucible-altar">
+          <view class="altar-slots-row">
+            <!-- 阴位·坤 -->
+            <view class="altar-slot yin" data-slot="0" bindtap="onClearCrucibleSlot">
+              <text class="slot-pole">阴位·坤</text>
+              <block wx:if="{{crucibleView.slotA}}">
+                <image wx:if="{{crucibleView.slotA.imgSrc}}" class="slot-sprite" src="{{crucibleView.slotA.imgSrc}}" mode="aspectFit" />
+                <view wx:else class="sprite-clip" style="width:72rpx;height:72rpx;">
+                  <image class="sprite-sheet-img" src="{{crucibleView.slotA.sheet}}" style="left:-{{crucibleView.slotA.col * 100}}%;top:-{{crucibleView.slotA.row * 100}}%;" />
+                </view>
+                <text class="slot-item-name">{{crucibleView.slotA.name}}</text>
+                <text class="slot-elem">{{crucibleView.slotA.elem}}灵</text>
+              </block>
+              <text wx:else class="slot-empty">点选右侧入阴位</text>
+            </view>
+
+            <!-- 中央五行灵枢与青铜墨壶 -->
+            <view class="altar-center">
+              <image class="altar-wheel" src="/pkg_game/assets/sprites/wuxing_ink_wheel.png" mode="aspectFit" />
+              <image class="altar-vessel" src="/pkg_game/assets/sprites/crucible_vessel.png" mode="aspectFit" />
+              <text class="altar-omen">{{crucibleView.omen}}</text>
+              <text class="altar-preview" wx:if="{{crucibleView.matchName}}">丹方感应：{{crucibleView.matchName}}</text>
+              <view class="ink-cta-btn {{crucibleView.canFuse ? 'ready' : 'disabled'}}" bindtap="onExecuteFuse">起炉炼化</view>
+            </view>
+
+            <!-- 阳位·乾 -->
+            <view class="altar-slot yang" data-slot="1" bindtap="onClearCrucibleSlot">
+              <text class="slot-pole">阳位·乾</text>
+              <block wx:if="{{crucibleView.slotB}}">
+                <image wx:if="{{crucibleView.slotB.imgSrc}}" class="slot-sprite" src="{{crucibleView.slotB.imgSrc}}" mode="aspectFit" />
+                <view wx:else class="sprite-clip" style="width:72rpx;height:72rpx;">
+                  <image class="sprite-sheet-img" src="{{crucibleView.slotB.sheet}}" style="left:-{{crucibleView.slotB.col * 100}}%;top:-{{crucibleView.slotB.row * 100}}%;" />
+                </view>
+                <text class="slot-item-name">{{crucibleView.slotB.name}}</text>
+                <text class="slot-elem">{{crucibleView.slotB.elem}}灵</text>
+              </block>
+              <text wx:else class="slot-empty">点选右侧入阳位</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 右侧无框浮空素材池 -->
+        <view class="crucible-pool">
+          <view class="filter-row">
+            <text class="f-pill {{crucibleFilter === 'all' ? 'active' : ''}}" data-filter="all" bindtap="onCrucibleFilter">全部</text>
+            <text class="f-pill {{crucibleFilter === 'spirit' ? 'active' : ''}}" data-filter="spirit" bindtap="onCrucibleFilter">妖魂</text>
+            <text class="f-pill {{crucibleFilter === 'material' ? 'active' : ''}}" data-filter="material" bindtap="onCrucibleFilter">物资</text>
+            <text class="f-pill {{crucibleFilter === 'equip' ? 'active' : ''}}" data-filter="equip" bindtap="onCrucibleFilter">装备</text>
+          </view>
+          <scroll-view class="pool-scroll" scroll-y="true">
+            <view class="pool-grid">
+              <view
+                class="pool-entry {{item.selected ? 'selected' : ''}}"
+                wx:for="{{crucibleView.pool}}"
+                wx:key="key"
+                data-key="{{item.key}}"
+                bindtap="onPickCrucibleEntry"
+              >
+                <image wx:if="{{item.imgSrc}}" class="pool-sprite" src="{{item.imgSrc}}" mode="aspectFit" />
+                <view wx:else class="sprite-clip" style="width:58rpx;height:58rpx;">
+                  <image class="sprite-sheet-img" src="{{item.sheet}}" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+                </view>
+                <text class="pool-name" style="color: {{item.color}};">{{item.name}}</text>
+                <text class="pool-meta">{{item.elem}} · {{item.countText}}</text>
+              </view>
+            </view>
+            <view class="empty-tip" wx:if="{{crucibleView.pool.length === 0}}">暂无可入炉的妖魂或物资，去荒原收妖拾荒吧。</view>
+          </scroll-view>
+        </view>
+      </view>
+
+      <!-- 护驾灵兽页 -->
+      <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{crucibleTab === 'guardians'}}">
+        <view class="float-list">
+          <view class="float-row {{item.active ? 'highlight' : ''}}" wx:for="{{guardiansView.list}}" wx:key="id">
+            <image class="row-sprite" src="{{item.sprite}}" mode="aspectFit" />
+            <view class="row-main">
+              <view class="row-title-line">
+                <text class="row-title" style="color: {{item.color}};">{{item.name}}</text>
+                <text class="row-badge">{{item.skillName}}</text>
+                <text class="row-badge active" wx:if="{{item.active}}">出战中</text>
+              </view>
+              <text class="row-desc">{{item.desc}}</text>
+            </view>
+            <view class="row-actions">
+              <view
+                wx:if="{{item.unlocked}}"
+                class="ink-sm-btn {{item.active ? 'ghost' : 'primary'}}"
+                data-id="{{item.id}}"
+                bindtap="onToggleGuardian"
+              >{{item.active ? '收回' : '出战'}}</view>
+              <text wx:else class="locked-lbl">未炼成</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <!-- 27 条天工丹方页 -->
+      <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{crucibleTab === 'recipes'}}">
+        <view class="float-list">
+          <view class="float-row" wx:for="{{recipesView}}" wx:key="id">
+            <view class="row-main">
+              <view class="row-title-line">
+                <text class="row-title" style="color: {{item.color}};">{{item.name}}</text>
+                <text class="row-badge">{{item.typeLabel}}</text>
+              </view>
+              <text class="row-desc">{{item.formula}} · {{item.desc}}</text>
+            </view>
+            <view class="row-actions">
+              <view
+                class="ink-sm-btn {{item.canQuickFill ? 'primary' : 'ghost'}}"
+                data-id="{{item.id}}"
+                bindtap="onQuickFillRecipe"
+              >{{item.canQuickFill ? '一键入炉' : '缺素材'}}</view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ========== 2. 天下舆图 (worldmap) ========== -->
+    <view class="chamber-body worldmap-body" wx:if="{{activeModal === 'worldmap'}}">
+      <view class="wm-canvas-stage">
+        <view
+          class="wm-seal-node {{item.unlocked ? 'unlocked' : 'locked'}} {{worldMapView.selectedRegionId === item.id ? 'selected' : ''}} {{item.isCurrent ? 'current' : ''}}"
+          wx:for="{{worldMapView.regions}}"
+          wx:key="id"
+          style="left: {{item.worldPos.x}}%; top: {{item.worldPos.y}}%;"
+          data-id="{{item.id}}"
+          bindtap="onSelectWorldRegion"
+        >
+          <view class="wm-seal-ring">第{{item.act}}域</view>
+          <text class="wm-seal-name">{{item.name}}</text>
+        </view>
+      </view>
+
+      <view class="wm-drawer" wx:if="{{worldMapView.selected}}">
+        <view class="wm-drawer-head">
+          <text class="wm-r-title">{{worldMapView.selected.name}}</text>
+          <text class="wm-r-sub">{{worldMapView.selected.subtitle}} · {{worldMapView.selected.weatherName}}</text>
+        </view>
+
+        <view wx:if="{{!worldMapView.selected.unlocked}}" class="wm-unlock-bar">
+          <text class="row-desc">此域尚未通行，可消耗 {{worldMapView.selected.unlockCost}} 废土币打通驿路，或推进主线自动解锁。</text>
+          <view class="ink-cta-btn ready" data-id="{{worldMapView.selected.id}}" bindtap="onUnlockRegion">花费 {{worldMapView.selected.unlockCost}} 币解锁</view>
+        </view>
+
+        <scroll-view class="wm-submaps" scroll-y="true" wx:else>
+          <view
+            class="wm-submap-link {{item.isCurrent ? 'current' : ''}}"
+            wx:for="{{worldMapView.subMaps}}"
+            wx:key="id"
+            data-id="{{item.id}}"
+            bindtap="onTravelToMap"
+          >
+            <view class="wm-sm-info">
+              <text class="wm-sm-name">{{item.name}}</text>
+              <text class="wm-sm-tag">{{item.kindLabel}}</text>
+            </view>
+            <text class="wm-sm-go">{{item.isCurrent ? '身处此地' : '踏入 ▸'}}</text>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- ========== 3. 行囊与异纹神兵 (bag) ========== -->
+    <view class="chamber-body bag-body" wx:if="{{activeModal === 'bag'}}">
+      <!-- 左侧主角石台 + 四大无框神兵槽 -->
+      <view class="armory-hero-dais">
+        <view class="dais-slots-col">
+          <view class="gear-slot" data-slot="weapon" bindtap="onUnequipSlot">
+            <text class="gear-slot-lbl">武器</text>
+            <block wx:if="{{bagView.equipped.weapon}}">
+              <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_gear.png" style="left:-{{bagView.equipped.weapon.col * 100}}%;top:-{{bagView.equipped.weapon.row * 100}}%;" />
+              </view>
+              <text class="gear-slot-name" style="color:{{bagView.equipped.weapon.color}};">{{bagView.equipped.weapon.name}}</text>
+            </block>
+            <text wx:else class="gear-slot-empty">空</text>
+          </view>
+
+          <view class="gear-slot" data-slot="armor" bindtap="onUnequipSlot">
+            <text class="gear-slot-lbl">护甲</text>
+            <block wx:if="{{bagView.equipped.armor}}">
+              <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_gear.png" style="left:-{{bagView.equipped.armor.col * 100}}%;top:-{{bagView.equipped.armor.row * 100}}%;" />
+              </view>
+              <text class="gear-slot-name" style="color:{{bagView.equipped.armor.color}};">{{bagView.equipped.armor.name}}</text>
+            </block>
+            <text wx:else class="gear-slot-empty">空</text>
+          </view>
+        </view>
+
+        <view class="dais-hero-center">
+          <image class="dais-hero-img" src="/pkg_game/assets/sprites/hero.png" mode="aspectFit" />
+          <view class="dais-stats">
+            <text>攻 {{bagView.stats.atk}} · 防 {{bagView.stats.def}}</text>
+            <text>暴 {{bagView.stats.critPct}}% · 穿 {{bagView.stats.penPct}}%</text>
+          </view>
+        </view>
+
+        <view class="dais-slots-col">
+          <view class="gear-slot" data-slot="mech" bindtap="onUnequipSlot">
+            <text class="gear-slot-lbl">机甲</text>
+            <block wx:if="{{bagView.equipped.mech}}">
+              <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_gear.png" style="left:-{{bagView.equipped.mech.col * 100}}%;top:-{{bagView.equipped.mech.row * 100}}%;" />
+              </view>
+              <text class="gear-slot-name" style="color:{{bagView.equipped.mech.color}};">{{bagView.equipped.mech.name}}</text>
+            </block>
+            <text wx:else class="gear-slot-empty">空</text>
+          </view>
+
+          <view class="gear-slot" data-slot="relic" bindtap="onUnequipSlot">
+            <text class="gear-slot-lbl">秘宝</text>
+            <block wx:if="{{bagView.equipped.relic}}">
+              <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_gear.png" style="left:-{{bagView.equipped.relic.col * 100}}%;top:-{{bagView.equipped.relic.row * 100}}%;" />
+              </view>
+              <text class="gear-slot-name" style="color:{{bagView.equipped.relic.color}};">{{bagView.equipped.relic.name}}</text>
+            </block>
+            <text wx:else class="gear-slot-empty">空</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 右侧三栏：神兵装备库 / 行囊百宝 / 丹药匣 -->
+      <view class="armory-list-pane">
+        <view class="chamber-tabs">
+          <view class="c-tab {{bagTab === 'equip' ? 'active' : ''}}" data-tab="equip" bindtap="onBagTab">神兵装备库 ({{bagView.equipBag.length}})</view>
+          <view class="c-tab {{bagTab === 'items' ? 'active' : ''}}" data-tab="items" bindtap="onBagTab">行囊百宝 ({{hero.bagCount}}/{{hero.bagMax}})</view>
+          <view class="c-tab {{bagTab === 'elixirs' ? 'active' : ''}}" data-tab="elixirs" bindtap="onBagTab">丹药匣 ({{bagView.elixirs.length}})</view>
+        </view>
+
+        <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{bagTab === 'equip'}}">
+          <view class="float-list">
+            <view class="float-row" wx:for="{{bagView.equipBag}}" wx:key="uid">
+              <view class="sprite-clip" style="width:66rpx;height:66rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_gear.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+              </view>
+              <view class="row-main">
+                <view class="row-title-line">
+                  <text class="row-title" style="color:{{item.color}};">{{item.name}}</text>
+                  <text class="row-badge">{{item.slotLabel}}</text>
+                </view>
+                <text class="row-desc">{{item.statLine}}</text>
+              </view>
+              <view class="row-actions">
+                <view class="ink-sm-btn primary" data-uid="{{item.uid}}" bindtap="onEquipFromBag">装备</view>
+                <view class="ink-sm-btn ghost" data-uid="{{item.uid}}" bindtap="onSellEquip">售{{item.sellPrice}}</view>
+              </view>
+            </view>
+            <view class="empty-tip" wx:if="{{bagView.equipBag.length === 0}}">装备库空空如也，去天工墨壶炼化或搜刮重炮残骸吧。</view>
+          </view>
+        </scroll-view>
+
+        <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{bagTab === 'items'}}">
+          <view class="bag-toolbar">
+            <view class="ink-sm-btn primary" bindtap="onSellAllTrash">一键售出废品</view>
+          </view>
+          <view class="float-list">
+            <view class="float-row" wx:for="{{bagView.items}}" wx:key="uid">
+              <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_items.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+              </view>
+              <view class="row-main">
+                <view class="row-title-line">
+                  <text class="row-title" style="color:{{item.color}};">[{{item.qName}}] {{item.name}}</text>
+                </view>
+                <text class="row-desc">{{item.desc}}</text>
+              </view>
+              <view class="row-actions">
+                <view class="ink-sm-btn primary" wx:if="{{item.isConsumable}}" data-uid="{{item.uid}}" bindtap="onUseBagItem">服用</view>
+                <view class="ink-sm-btn ghost" wx:if="{{item.sellPrice > 0}}" data-uid="{{item.uid}}" bindtap="onSellBagItem">售{{item.sellPrice}}</view>
+              </view>
+            </view>
+            <view class="empty-tip" wx:if="{{bagView.items.length === 0}}">行囊空空如也。</view>
+          </view>
+        </scroll-view>
+
+        <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{bagTab === 'elixirs'}}">
+          <view class="float-list">
+            <view class="float-row" wx:for="{{bagView.elixirs}}" wx:key="id">
+              <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_items.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+              </view>
+              <view class="row-main">
+                <text class="row-title" style="color:{{item.color}};">{{item.name}} ×{{item.count}}</text>
+                <text class="row-desc">{{item.desc}}</text>
+              </view>
+              <view class="row-actions">
+                <view class="ink-sm-btn primary" data-id="{{item.id}}" bindtap="onUseElixir">服用</view>
+              </view>
+            </view>
+            <view class="empty-tip" wx:if="{{bagView.elixirs.length === 0}}">丹药匣暂无灵丹，可在天工墨壶炼制「九转青瘴丹」或「墨家行军丸」。</view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- ========== 4. 武学奇术阁 (skills) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'skills'}}">
+      <view class="chamber-tabs">
+        <view class="c-tab {{skillsTab === 'passive' ? 'active' : ''}}" data-tab="passive" bindtap="onSkillsTab">六大被动修为 (余 {{hero.skillPoints}} 点)</view>
+        <view class="c-tab {{skillsTab === 'combat' ? 'active' : ''}}" data-tab="combat" bindtap="onSkillsTab">四系战斗绝学 (16 招)</view>
+      </view>
+
+      <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{skillsTab === 'passive'}}">
+        <view class="float-list">
+          <view class="float-row" wx:for="{{skillsView.passive}}" wx:key="id">
+            <view class="seal-chip">{{item.seal}}</view>
+            <view class="row-main">
+              <view class="row-title-line">
+                <text class="row-title">{{item.name}}</text>
+                <text class="row-badge">Lv.{{item.lv}} / {{item.maxLevel}}</text>
+              </view>
+              <text class="row-desc">{{item.desc}}</text>
+            </view>
+            <view class="row-actions">
+              <view
+                wx:if="{{item.lv < item.maxLevel}}"
+                class="ink-sm-btn {{item.canUpgrade ? 'primary' : 'ghost'}}"
+                data-id="{{item.id}}"
+                bindtap="onUpgradePassiveSkill"
+              >悟道 ({{item.nextCost}}点)</view>
+              <text wx:else class="done-lbl">已圆满</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{skillsTab === 'combat'}}">
+        <view class="float-list">
+          <view class="float-row" wx:for="{{skillsView.combat}}" wx:key="id">
+            <view class="skill-orb branch-{{item.category}}">
+              <view class="sprite-clip" style="width:64rpx;height:64rpx;">
+                <image class="sprite-sheet-img" src="/assets/icons_skills.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+              </view>
+            </view>
+            <view class="row-main">
+              <view class="row-title-line">
+                <text class="row-title">{{item.name}}</text>
+                <text class="row-badge">{{item.mpCost}}息 · Lv.{{item.unlockLv}}{{item.unlocked ? '已领悟' : '解锁'}}</text>
+              </view>
+              <text class="row-desc">{{item.desc}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ========== 5. 主线支线与古董志怪 (quests) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'quests'}}">
+      <view class="chamber-tabs">
+        <view class="c-tab {{questTab === 'main' ? 'active' : ''}}" data-tab="main" bindtap="onQuestTab">五幕主线</view>
+        <view class="c-tab {{questTab === 'side' ? 'active' : ''}}" data-tab="side" bindtap="onQuestTab">八大支线</view>
+        <view class="c-tab {{questTab === 'story' ? 'active' : ''}}" data-tab="story" bindtap="onQuestTab">残卷古董</view>
+      </view>
+
+      <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{questTab === 'main'}}">
+        <view class="float-list">
+          <view class="act-block" wx:for="{{questsView.acts}}" wx:key="id">
+            <view class="act-head">
+              <text class="row-title">{{item.title}}</text>
+              <text class="done-lbl" wx:if="{{item.done}}">已完结</text>
+            </view>
+            <view class="step-line {{st.done ? 'done' : ''}}" wx:for="{{item.steps}}" wx:for-item="st" wx:key="id">
+              <text class="step-mark">{{st.done ? '✓' : '○'}}</text>
+              <text class="step-txt">{{st.title}} — {{st.desc}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{questTab === 'side'}}">
+        <view class="float-list">
+          <view class="float-row" wx:for="{{questsView.side}}" wx:key="id">
+            <view class="row-main">
+              <view class="row-title-line">
+                <text class="row-title">{{item.name}}</text>
+                <text class="row-badge">{{item.progress}}/{{item.targetCount}}</text>
+              </view>
+              <text class="row-desc">{{item.desc}}</text>
+            </view>
+            <view class="row-actions">
+              <text wx:if="{{item.claimed}}" class="done-lbl">已领赏</text>
+              <view
+                wx:elif="{{item.canClaim}}"
+                class="ink-sm-btn primary"
+                data-id="{{item.id}}"
+                bindtap="onClaimSideQuest"
+              >领取赏赐</view>
+              <text wx:else class="locked-lbl">进行中</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <scroll-view class="chamber-scroll" scroll-y="true" wx:if="{{questTab === 'story'}}">
+        <view class="float-list">
+          <view class="act-block">
+            <view class="act-head">
+              <text class="row-title">剧情信物 ({{questsView.storiesCount}}/5) · 战前古董 ({{questsView.collectionsCount}}/8)</text>
+              <view class="ink-sm-btn primary" wx:if="{{questsView.canEnding}}" bindtap="openEndingModal">见证天命终局</view>
+            </view>
+            <view class="story-entry" wx:for="{{questsView.stories}}" wx:key="id">
+              <text class="row-title">{{item.unlocked ? item.title : ('未寻获 · ' + item.relic)}}</text>
+              <text class="row-desc">{{item.unlocked ? item.text : '探索五域与首领密窟以寻回此段记忆。'}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ========== 6. 老黄杂货铺 (shop) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'shop'}}">
+      <view class="bag-toolbar">
+        <text class="row-title">持有废土币：{{hero.gold}}</text>
+        <view class="ink-sm-btn primary" bindtap="onSellAllTrash">一键售出废品</view>
+      </view>
+      <scroll-view class="chamber-scroll" scroll-y="true">
+        <view class="float-list">
+          <view class="float-row" wx:for="{{shopView}}" wx:key="itemId">
+            <view class="sprite-clip" style="width:64rpx;height:64rpx;">
+              <image class="sprite-sheet-img" src="/assets/icons_items.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+            </view>
+            <view class="row-main">
+              <text class="row-title">{{item.name}}</text>
+              <text class="row-desc">{{item.desc}}</text>
+            </view>
+            <view class="row-actions">
+              <view class="ink-sm-btn primary" data-id="{{item.itemId}}" data-price="{{item.price}}" bindtap="onBuyShopItem">买 {{item.price}}币</view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ========== 7. 回春医馆 (inn) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'inn'}}">
+      <view class="float-list">
+        <view class="float-row">
+          <view class="seal-chip">汤</view>
+          <view class="row-main">
+            <text class="row-title">草药安神汤（40 废土币）</text>
+            <text class="row-desc">立即回满气血 ({{hero.maxHp}}) 与内息 ({{hero.maxEnergy}})，饱食 +50。</text>
+          </view>
+          <view class="ink-sm-btn primary" data-tier="basic" bindtap="onInnRest">歇脚 40币</view>
+        </view>
+        <view class="float-row">
+          <view class="seal-chip">浴</view>
+          <view class="row-main">
+            <text class="row-title">秘制药浴 + 抗辐针（120 废土币）</text>
+            <text class="row-desc">全状态回满（含饱食 100），清零警戒，并获 1 层抗辐射护盾！</text>
+          </view>
+          <view class="ink-sm-btn primary" data-tier="pro" bindtap="onInnRest">药浴 120币</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ========== 8. 拆解坊 (disassemble) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'disassemble'}}">
+      <scroll-view class="chamber-scroll" scroll-y="true">
+        <view class="float-list">
+          <view class="float-row" wx:for="{{disView.list}}" wx:key="uid">
+            <view class="sprite-clip" style="width:62rpx;height:62rpx;">
+              <image class="sprite-sheet-img" src="/assets/icons_items.png" style="left:-{{item.col * 100}}%;top:-{{item.row * 100}}%;" />
+            </view>
+            <view class="row-main">
+              <text class="row-title" style="color:{{item.color}};">[{{item.qName}}] {{item.name}}</text>
+              <text class="row-desc">原价 {{item.baseVal}} 币 · 拆解成功率 {{disView.ratePct}}%（暴击 1.8×~2.8×）</text>
+            </view>
+            <view class="ink-sm-btn primary" data-uid="{{item.uid}}" bindtap="onDisassembleItem">拆解</view>
+          </view>
+          <view class="empty-tip" wx:if="{{disView.list.length === 0}}">行囊中暂无可拆解的电子件或军工残骸。</view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ========== 9. 黑哥钱庄 (loan) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'loan'}}">
+      <view class="float-list">
+        <view class="float-row">
+          <view class="seal-chip">钱</view>
+          <view class="row-main">
+            <text class="row-title">当前欠款：{{hero.debt}} 废土币 · 持有 {{hero.gold}} 币</text>
+            <text class="row-desc">应急周转 500 废土币（需还 600 废土币），全额还清后营地声望 +1。</text>
+          </view>
+          <view class="row-actions">
+            <view class="ink-sm-btn primary" wx:if="{{hero.debt <= 0}}" bindtap="onLoanBorrow">借 500币</view>
+            <view class="ink-sm-btn primary" wx:else bindtap="onLoanRepay">还清 {{hero.debt}}币</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ========== 10. 墨石记录碑 · 三档存/读档 (save) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'save'}}">
+      <scroll-view class="chamber-scroll" scroll-y="true">
+        <view class="float-list">
+          <view class="float-row" wx:for="{{saveView.slots}}" wx:key="slotId">
+            <view class="seal-chip">{{item.seal}}</view>
+            <view class="row-main">
+              <view class="row-title-line">
+                <text class="row-title">{{item.label}}</text>
+                <text class="row-badge" wx:if="{{item.exists}}">{{item.summary}}</text>
+              </view>
+              <text class="row-desc">{{item.exists ? ('记录于 ' + item.timeText) : '空碑位 · 尚未刻录江湖足迹'}}</text>
+            </view>
+            <view class="row-actions">
+              <view class="ink-sm-btn primary" wx:if="{{!item.isAuto}}" data-slot="{{item.slotId}}" bindtap="onSaveToSlot">刻录</view>
+              <view class="ink-sm-btn primary" wx:if="{{item.exists}}" data-slot="{{item.slotId}}" bindtap="onLoadFromSlot">读档</view>
+              <view class="ink-sm-btn ghost" wx:if="{{item.exists && !item.isAuto}}" data-slot="{{item.slotId}}" bindtap="onDeleteSlot">抹去</view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ========== 11. 设置与重开 (settings) ========== -->
+    <view class="chamber-body" wx:if="{{activeModal === 'settings'}}">
+      <view class="float-list">
+        <view class="float-row">
+          <view class="seal-chip">震</view>
+          <view class="row-main">
+            <text class="row-title">触控震动与音效反馈</text>
+            <text class="row-desc">开启微信原生触感震动，提升出剑、收妖与拾荒手感。</text>
+          </view>
+          <view class="ink-sm-btn {{settingsView.soundOn ? 'primary' : 'ghost'}}" bindtap="onToggleSound">{{settingsView.soundOn ? '已开启' : '已静音'}}</view>
+        </view>
+        <view class="float-row">
+          <view class="seal-chip">动</view>
+          <view class="row-main">
+            <text class="row-title">战斗震屏特效</text>
+            <text class="row-desc">暴击与绝学命中时触发水墨微震。</text>
+          </view>
+          <view class="ink-sm-btn {{settingsView.shakeOn ? 'primary' : 'ghost'}}" bindtap="onToggleShake">{{settingsView.shakeOn ? '已开启' : '已关闭'}}</view>
+        </view>
+        <view class="float-row">
+          <view class="seal-chip">序</view>
+          <view class="row-main">
+            <text class="row-title">重温工作室开屏与四幕序章</text>
+            <text class="row-desc">返回老年饼工作室开屏与古龙风开篇画卷（不丢失进度）。</text>
+          </view>
+          <view class="ink-sm-btn ghost" bindtap="onReplayBoot">重温序章</view>
+        </view>
+        <view class="float-row">
+          <view class="seal-chip">重</view>
+          <view class="row-main">
+            <text class="row-title">重开周目（清空当前进度）</text>
+            <text class="row-desc">从第一天墨石镇重新踏上废土拾荒之旅。</text>
+          </view>
+          <view class="ink-sm-btn danger" bindtap="onResetGame">重开周目</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- ========== 12. 天命终局 (ending) ========== -->
+    <view class="chamber-body ending-body" wx:if="{{activeModal === 'ending' && endingView}}">
+      <view class="ending-scroll">
+        <text class="ending-badge">{{endingView.badge}}</text>
+        <text class="ending-title">{{endingView.title}}</text>
+        <text class="ending-content">{{endingView.content}}</text>
+        <view class="ink-cta-btn ready" bindtap="closeModal">继续游历墨土</view>
+      </view>
+    </view>
+  </view>
+</view>
