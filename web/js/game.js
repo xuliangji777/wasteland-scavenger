@@ -26,7 +26,7 @@ import {
   TEAM_TASK_TPL,
   SIDE_QUESTS
 } from './data.js?v=13';
-import { InkWorldEngine } from './rpg_world.js?v=22';
+import { InkWorldEngine } from './rpg_world.js?v=23';
 import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';
@@ -5286,13 +5286,15 @@ function startHazardLoop() {
   }, 1000);
 }
 
-// ==================== 1920×1080 (1080P) 响应式 UI 缩放系统 ====================
+// ==================== 王者荣耀横屏人体工学多端 UI 缩放系统 (v23) ====================
 function apply1080pUiScale() {
   const vw = Math.max(320, window.innerWidth || 1280);
   const vh = Math.max(240, window.innerHeight || 720);
-  const uiScale = Math.max(0.52, Math.min(1.08, Math.min(vw / 1600, vh / 900)));
+  const uiScale = Math.max(0.72, Math.min(1.06, Math.min(vw / 1280, vh / 600)));
+  const battleWheelScale = Math.max(0.76, Math.min(1.06, Math.min(vw / 1180, vh / 540)));
   const root = document.documentElement;
   root.style.setProperty('--ui-scale', uiScale.toFixed(3));
+  root.style.setProperty('--wheel-scale', battleWheelScale.toFixed(3));
   if (vh <= 520) {
     root.setAttribute('data-density', 'compact');
   } else {

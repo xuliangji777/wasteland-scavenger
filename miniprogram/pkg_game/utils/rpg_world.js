@@ -200,7 +200,7 @@ class RpgWorld {
     this.dpr = clamp(Number(dpr) || 1, 1, 3);
     this.viewW = Math.max(320, Math.floor(width || 800));
     this.viewH = Math.max(240, Math.floor(height || 400));
-    this.cameraZoom = clamp(Math.min(this.viewW / 1520, this.viewH / 840), 0.46, 1.05);
+    this.cameraZoom = clamp(Math.min(this.viewW / 1260, this.viewH / 650), 0.60, 1.02);
     this.cameraX = 0;
     this.cameraY = 0;
 
@@ -515,7 +515,7 @@ class RpgWorld {
     if (width) this.viewW = Math.max(320, Math.floor(width));
     if (height) this.viewH = Math.max(240, Math.floor(height));
     if (dpr) this.dpr = clamp(Number(dpr) || 1, 1, 3);
-    this.cameraZoom = clamp(Math.min(this.viewW / 1520, this.viewH / 840), 0.46, 1.05);
+    this.cameraZoom = clamp(Math.min(this.viewW / 1260, this.viewH / 650), 0.60, 1.02);
     if (this.canvas && this.ctx) {
       this.canvas.width = Math.floor(this.viewW * this.dpr);
       this.canvas.height = Math.floor(this.viewH * this.dpr);
@@ -1910,7 +1910,7 @@ class RpgWorld {
     const breath = breathWave * 1.0;
     const spriteKey = this._getNpcSpriteKey(npcRef, npc);
     const sprite = this._getSprite(spriteKey);
-    const drawH = 68;
+    const drawH = 76;
 
     ctx.save();
     ctx.translate(npcRef.x, npcRef.y);
@@ -2129,7 +2129,7 @@ class RpgWorld {
     const idleScaleX = isIdle ? (1 - idleBreathWave * 0.006) : 1;
     const spriteKey = this._getEnemySpriteKey(tpl.spriteType);
     const sprite = this._getSprite(spriteKey);
-    const drawH = isBoss ? 92 : 68;
+    const drawH = isBoss ? 102 : 76;
 
     const spriteFlip = (spriteKey === 'enemy_demon')
       ? (en.facing < 0 ? -1 : 1)
@@ -2228,7 +2228,7 @@ class RpgWorld {
     const moving = Boolean(this.guardianPos.moving);
     const moveAmt = moving ? 1 : 0;
     const p = this.guardianPos.phase * 1.45;
-    const drawH = 42;
+    const drawH = 48;
     const spriteKey = this._getGuardianSpriteKey(g);
     const sprite = this._getSprite(spriteKey);
     const facing = this.guardianPos.facing || 1;
@@ -2290,7 +2290,7 @@ class RpgWorld {
     const flipX = h.facing === 'left' ? -1 : (h.facing === 'right' ? 1 : h.lastSide);
     const walkSprite = this._getSprite('hero_walk');
     const idleSprite = this._getSprite('hero');
-    const drawH = 72;
+    const drawH = 82;
 
     ctx.save();
     ctx.translate(h.x, h.y);
@@ -2425,10 +2425,10 @@ class RpgWorld {
   // ==================== 右上角零重叠水墨小地图 ====================
 
   _getMinimapRect() {
-    const uiScale = clamp(Math.min(this.viewW / 1600, this.viewH / 900), 0.52, 1.08);
-    const mw = Math.round(164 * uiScale);
-    const mh = Math.round(98 * uiScale);
-    const padX = Math.max(10, Math.round(16 * uiScale));
+    const uiScale = clamp(Math.min(this.viewW / 1280, this.viewH / 600), 0.72, 1.06);
+    const mw = Math.round(146 * uiScale);
+    const mh = Math.round(90 * uiScale);
+    const padX = Math.max(8, Math.round(14 * uiScale));
     const mx = this.viewW - mw - padX;
     const safeTop = this.cb.minimapTopOffset !== undefined
       ? Number(this.cb.minimapTopOffset)

@@ -43,8 +43,9 @@
   --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
   --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 
-  /* 1920×1080 (1080P) 参考设计 UI 缩放因子（由 game.js 动态写入） */
+  /* 王者荣耀横屏人体工学多端 UI 与战阵罗盘缩放因子（由 game.js 动态写入） */
   --ui-scale: 1;
+  --wheel-scale: 1;
 }
 
 * {
@@ -1162,51 +1163,53 @@ html, body {
   z-index: 16;
 }
 
-/* 四向触控十字键（避开左侧挖孔摄像头、闲置半透、触控高亮、拇指友好大尺寸） */
+/* 四向触控十字键（王者荣耀横屏拇指工学：152×152px、48×48px大键、避开挖孔、闲置半透、触控高亮） */
 .dpad-cross {
   position: fixed;
-  left: max(56px, calc(env(safe-area-inset-left, 0px) + 48px));
-  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  left: max(58px, calc(env(safe-area-inset-left, 0px) + 50px));
+  bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 14px));
   z-index: 17;
+  width: 152px;
+  height: 152px;
   display: grid;
-  grid-template-columns: repeat(3, 42px);
-  grid-template-rows: repeat(3, 42px);
-  gap: 3px;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 4px;
   pointer-events: auto;
-  opacity: 0.36;
+  opacity: 0.40;
   transition: opacity 0.18s ease;
   transform-origin: bottom left;
-  transform: scale(clamp(0.86, calc(var(--ui-scale, 1) * 1.45), 1.15));
+  transform: scale(clamp(0.92, calc(var(--ui-scale, 1) * 1.25), 1.12));
   will-change: transform, opacity;
 }
 .dpad-cross:hover,
 .dpad-cross:active,
 .dpad-cross:focus-within,
 .dpad-cross.is-active {
-  opacity: 0.92;
+  opacity: 0.95;
 }
 
 .dpad-btn {
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(18, 15, 13, 0.76) 0%, rgba(14, 12, 10, 0.42) 66%, transparent 100%);
-  border: none;
+  background: radial-gradient(circle, rgba(22, 18, 14, 0.86) 0%, rgba(16, 13, 10, 0.56) 70%, rgba(14, 12, 10, 0.16) 100%);
+  border: 1.5px solid rgba(229, 187, 92, 0.62);
   color: var(--paper-light);
-  font-size: 14px;
+  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   touch-action: none;
-  box-shadow: none;
-  transition: background 0.14s, transform 0.1s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.65), inset 0 0 8px rgba(229, 187, 92, 0.18);
+  transition: background 0.14s, border-color 0.14s, transform 0.1s;
 }
 .dpad-btn .dpad-ico {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: block;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.95));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.98)) drop-shadow(0 0 4px rgba(229, 187, 92, 0.45));
   transition: filter 0.14s ease, transform 0.14s ease;
 }
 .dpad-btn:hover {
@@ -2236,7 +2239,7 @@ html, body {
   position: absolute;
   left: calc(26px + env(safe-area-inset-left));
   bottom: calc(20px + env(safe-area-inset-bottom));
-  max-width: min(680px, calc((100vw - 52px) / var(--ui-scale, 1) - 266px));
+  max-width: min(680px, calc((100vw - 52px) / var(--ui-scale, 1) - 280px));
   font-size: 14px;
   line-height: 1.5;
   color: var(--paper-light);
@@ -2264,8 +2267,8 @@ html, body {
   position: absolute;
   left: calc(26px + env(safe-area-inset-left));
   bottom: calc(66px * var(--ui-scale, 1) + env(safe-area-inset-bottom));
-  width: min(740px, calc((100vw - 52px - env(safe-area-inset-left) - env(safe-area-inset-right)) / var(--ui-scale, 1) - 270px));
-  max-width: calc((100vw - 52px) / var(--ui-scale, 1) - 260px);
+  width: min(740px, calc((100vw - 52px - env(safe-area-inset-left) - env(safe-area-inset-right)) / var(--ui-scale, 1) - 282px));
+  max-width: calc((100vw - 52px) / var(--ui-scale, 1) - 278px);
   margin: 0;
   padding: 10px 16px 8px;
   background: linear-gradient(90deg, rgba(5, 8, 12, 0.86) 0%, rgba(7, 11, 16, 0.78) 76%, transparent 100%);
@@ -2435,7 +2438,7 @@ html, body {
   font-family: var(--font-serif);
   pointer-events: auto;
   transform-origin: bottom right;
-  transform: scale(var(--ui-scale, 1));
+  transform: scale(var(--wheel-scale, var(--ui-scale, 1)));
   will-change: transform;
 }
 .wuxing-ink-aura {
@@ -4467,10 +4470,13 @@ html, body {
   }
   .dpad-cross {
     bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 72px));
-    grid-template-columns: repeat(3, 44px);
-    grid-template-rows: repeat(3, 44px);
+    width: 152px;
+    height: 152px;
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(3, 48px);
+    gap: 4px;
   }
-  .dpad-btn { width: 44px; height: 44px; font-size: 15px; }
+  .dpad-btn { width: 48px; height: 48px; font-size: 16px; }
   .interact-btn { min-height: 46px; height: 46px; padding: 0 14px; font-size: 13px; }
   .ink-action-btn { min-height: 44px; height: 44px; padding: 0 10px; font-size: 11.5px; }
 
@@ -4640,12 +4646,15 @@ html, body {
     bottom: calc(8px + env(safe-area-inset-bottom));
   }
   .dpad-cross {
-    left: max(56px, calc(env(safe-area-inset-left, 0px) + 48px));
-    bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
-    grid-template-columns: repeat(3, 44px);
-    grid-template-rows: repeat(3, 44px);
+    left: max(58px, calc(env(safe-area-inset-left, 0px) + 50px));
+    bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 14px));
+    width: 152px;
+    height: 152px;
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(3, 48px);
+    gap: 4px;
   }
-  .dpad-btn { width: 44px; height: 44px; font-size: 14px; }
+  .dpad-btn { width: 48px; height: 48px; font-size: 16px; }
   .interact-btn,
   #btn-interact {
     min-height: 44px;
@@ -4661,9 +4670,9 @@ html, body {
   .ink-action-btn { min-height: 44px; height: 44px; padding: 0 8px; font-size: 11px; }
   .dialog-opt-btn { min-height: 44px; }
 
-  /* 底部功能坞化作无框浮空纯图标列，略微偏左避开右侧交互键与左侧十字键 */
+  /* 底部功能坞化作无框浮空图标列，居中避开左侧大十字键与右侧交互键 */
   .ink-dock {
-    left: 44%;
+    left: 51.5%;
     transform: translateX(-50%);
     bottom: calc(8px + env(safe-area-inset-bottom));
     width: auto;
@@ -6570,7 +6579,7 @@ html, body {
 .dpad-cross,
 .dpad-wrap {
   transform-origin: bottom left;
-  transform: scale(clamp(0.86, calc(var(--ui-scale, 1) * 1.45), 1.15));
+  transform: scale(clamp(0.92, calc(var(--ui-scale, 1) * 1.25), 1.12));
   will-change: transform, opacity;
 }
 
@@ -6654,33 +6663,37 @@ html[data-density="compact"] .stage-controls {
   bottom: calc(8px + env(safe-area-inset-bottom));
 }
 html[data-density="compact"] .dpad-cross {
-  left: max(56px, calc(env(safe-area-inset-left, 0px) + 48px));
-  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
-  grid-template-columns: repeat(3, 44px);
-  grid-template-rows: repeat(3, 44px);
+  left: max(58px, calc(env(safe-area-inset-left, 0px) + 50px));
+  bottom: max(18px, calc(env(safe-area-inset-bottom, 0px) + 14px));
+  width: 152px;
+  height: 152px;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 4px;
 }
 html[data-density="compact"] .dpad-btn {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
 }
 html[data-density="compact"] .ink-dock {
-  left: 50%;
+  left: 51.5%;
   bottom: calc(6px + env(safe-area-inset-bottom));
   max-width: calc((100vw - 16px) / var(--ui-scale, 1));
-  gap: 8px;
-  padding: 2px 6px;
+  gap: 2px;
+  padding: 2px 4px;
 }
 html[data-density="compact"] .ink-dock .dock-tab {
-  min-width: 48px;
+  min-width: 40px;
   width: auto;
-  min-height: 44px;
+  min-height: 40px;
   height: auto;
-  padding: 4px 6px;
+  padding: 3px 3px;
   gap: 2px;
 }
 html[data-density="compact"] .ink-dock .dock-tab small {
   display: block;
-  font-size: 11px;
+  font-size: 9.5px;
+  white-space: nowrap;
 }
 html[data-density="compact"] #rpg-battle-overlay .battle-hud-top {
   margin-bottom: calc(-32px * (1 - var(--ui-scale, 1)));

@@ -327,67 +327,71 @@ page {
   pointer-events: none;
 }
 
-/* 左下：挖孔屏安全区放大半透明十字键 */
+/* 左下：王者荣耀人体工学挖孔屏安全区拇指大十字键 (v23) */
 .dpad-safe-wrap {
   position: fixed;
-  left: max(56px, calc(env(safe-area-inset-left) + 48px));
-  bottom: 22rpx;
+  left: max(58px, calc(env(safe-area-inset-left) + 50px));
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 14px));
   pointer-events: auto;
-  opacity: 0.36;
+  opacity: 0.40;
   transition: opacity 0.16s ease;
 }
 .dpad-safe-wrap.active {
-  opacity: 0.92;
+  opacity: 0.95;
 }
 .dpad-grid {
+  width: 152px;
+  height: 152px;
   display: grid;
-  grid-template-columns: repeat(3, 66rpx);
-  grid-template-rows: repeat(3, 66rpx);
-  gap: 4rpx;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 4px;
   align-items: center;
   justify-items: center;
 }
 .dpad-btn {
-  width: 66rpx;
-  height: 66rpx;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26rpx;
-  color: #f2d388;
-  background: radial-gradient(circle, rgba(24, 19, 14, 0.72) 0%, rgba(24, 19, 14, 0.2) 100%);
-  border: 1.5rpx solid rgba(212, 162, 74, 0.55);
-  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.9);
+  font-size: 20px;
+  font-weight: 700;
+  color: #f6dc96;
+  background: radial-gradient(circle, rgba(24, 19, 14, 0.84) 0%, rgba(24, 19, 14, 0.34) 100%);
+  border: 1.5px solid rgba(229, 187, 92, 0.68);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
 }
 .dpad-btn.pressed {
-  background: radial-gradient(circle, rgba(212, 162, 74, 0.55) 0%, rgba(24, 19, 14, 0.45) 100%);
+  background: radial-gradient(circle, rgba(212, 162, 74, 0.62) 0%, rgba(24, 19, 14, 0.48) 100%);
   border-color: #5eead4;
   transform: scale(0.94);
 }
 .dpad-core {
-  width: 48rpx;
-  height: 48rpx;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20rpx;
-  color: rgba(229, 187, 92, 0.85);
-  background: rgba(12, 10, 8, 0.35);
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(229, 187, 92, 0.88);
+  background: rgba(12, 10, 8, 0.42);
 }
 
-/* 底部居中：无框浮空书法功能坞 */
+/* 底部居中：无框浮空书法功能坞（避开左侧大十字键与右侧交互键） */
 .ink-dock {
   position: fixed;
-  left: 50%;
+  left: 52%;
   bottom: 14rpx;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 18rpx;
+  gap: 14rpx;
   pointer-events: auto;
-  padding: 6rpx 24rpx;
+  padding: 6rpx 18rpx;
   background: radial-gradient(ellipse at center, rgba(10, 8, 6, 0.56) 0%, rgba(10, 8, 6, 0) 78%);
 }
 .dock-item {
