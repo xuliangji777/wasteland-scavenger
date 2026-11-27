@@ -1,4 +1,4 @@
-import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js';
+import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=11';
 import { sfx } from './audio.js?v=6';
 
 // ==================== 工具函数 ====================
@@ -77,6 +77,7 @@ function closestPointInPolys(px, py, polys) {
 
 const SPRITE_PATHS = {
   hero: 'assets/sprites/hero.png',
+  hero_walk: 'assets/sprites/hero_walk.png',
   npc_merchant: 'assets/sprites/npc_merchant.png',
   npc_hermit: 'assets/sprites/npc_hermit.png',
   shrine: 'assets/sprites/shrine.png',
@@ -85,6 +86,82 @@ const SPRITE_PATHS = {
   enemy_demon: 'assets/sprites/enemy_demon.png',
   chest: 'assets/sprites/chest.png'
 };
+
+// 默认各场景底图对应的严格可行走多边形（归一化 0..1 坐标，加载时按 map.width × map.height 缩放）
+const DEFAULT_WALKABLE_NORM = {
+  wasteland: [
+    // X 型荒原高速十字主干道与两侧宽阔路肩（避开左上巨型机甲、右上磁悬浮柱与空投舱、左下/右下全息牌与废车）
+    [[0.04, 0.38], [0.96, 0.38], [0.96, 0.72], [0.04, 0.72]],
+    // 中央开阔十字广场与南北两侧路肩
+    [[0.24, 0.24], [0.76, 0.24], [0.76, 0.86], [0.24, 0.86]],
+    // 北侧通往防空洞入口支路
+    [[0.44, 0.11], [0.60, 0.11], [0.60, 0.32], [0.44, 0.32]]
+  ],
+  cave: [
+    // 斜向金属栈桥 + 左上防爆门/终端混凝土肩道 + 右下控制台混凝土宽台（严格避开顶壁涡轮与底壁反应槽）
+    [[0.06, 0.64], [0.72, 0.14], [0.95, 0.28], [0.46, 0.92], [0.10, 0.88]]
+  ],
+  ruins: [
+    // 雨夜废都东西向柏油主街与两侧宽阔人行道肩（避开四角倾倒摩天楼与地铁深坑）
+    [[0.04, 0.38], [0.96, 0.38], [0.96, 0.72], [0.04, 0.72]],
+    // 中央交汇广场与酒馆/军械库门前宽阔石阶
+    [[0.18, 0.23], [0.82, 0.23], [0.82, 0.84], [0.18, 0.84]],
+    // 南北向主通道（含北侧隧道/雷坛与南侧密室入口）
+    [[0.36, 0.11], [0.74, 0.11], [0.74, 0.91], [0.36, 0.91]]
+  ],
+  swamp: [
+    // 蜿蜒架空毒泽栈道与东岸草庐高地 + 宽阔木台边沿（避开深潭毒崖）
+    [[0.04, 0.40], [0.28, 0.32], [0.58, 0.28], [0.86, 0.26], [0.96, 0.40], [0.96, 0.70], [0.78, 0.82], [0.44, 0.82], [0.20, 0.76], [0.04, 0.68]],
+    // 北侧通往沉没菌窟栈道支路
+    [[0.34, 0.11], [0.52, 0.11], [0.54, 0.36], [0.32, 0.36]],
+    // 南侧通往狐仙秘境栈道支路
+    [[0.55, 0.72], [0.72, 0.72], [0.70, 0.91], [0.56, 0.91]]
+  ],
+  town: [
+    // 新 bg_town.jpg 太极广场与主大道兜底（若未单独配置）
+    [[0.22, 0.46], [0.86, 0.46], [0.86, 0.80], [0.22, 0.80]]
+  ],
+  interior: [
+    [[0.08, 0.41], [0.92, 0.41], [0.92, 0.95], [0.08, 0.95]]
+  ]
+};
+
+export function resolveMapWalkablePolys(map) {
+  if (!map) return [];
+  if (Array.isArray(map.walkablePolys) && map.walkablePolys.length > 0) {
+    return map.walkablePolys;
+  }
+  const bg = String(map.bgAsset || '');
+  let key = 'ruins';
+  if (map.sceneType === 'cave' || bg.includes('bg_cave')) {
+    key = 'cave';
+  } else if (map.sceneType === 'interior' || bg.includes('bg_interior')) {
+    key = 'interior';
+  } else if (map.sceneType === 'town' || bg.includes('bg_town')) {
+    key = 'town';
+  } else if (bg.includes('bg_wasteland') || map.id === 'wasteland') {
+    key = 'wasteland';
+  } else if (bg.includes('bg_swamp') || map.id === 'swamp') {
+    key = 'swamp';
+  } else if (bg.includes('bg_ruins')) {
+    key = 'ruins';
+  }
+  const norm = DEFAULT_WALKABLE_NORM[key] || DEFAULT_WALKABLE_NORM.ruins;
+  const w = map.width || 1560;
+  const h = map.height || 1020;
+  return norm.map((poly) => poly.map(([nx, ny]) => [Math.round(nx * w), Math.round(ny * h)]));
+}
+
+function polyCentroid(poly) {
+  let sx = 0;
+  let sy = 0;
+  for (let i = 0; i < poly.length; i++) {
+    sx += poly[i][0];
+    sy += poly[i][1];
+  }
+  const n = Math.max(1, poly.length);
+  return { x: sx / n, y: sy / n };
+}
 
 // ==================== 2.5D 水墨俯斜视角世界引擎 ====================
 export class InkWorldEngine {
@@ -146,7 +223,7 @@ export class InkWorldEngine {
 
     // 护驾灵兽跟随状态
     this.guardian = null;
-    this.guardianPos = { x: 760, y: 515, phase: 0 };
+    this.guardianPos = { x: 760, y: 515, phase: 0, facing: 1, moving: false };
 
     // 输入状态
     this.keys = { up: false, down: false, left: false, right: false };
@@ -155,7 +232,10 @@ export class InkWorldEngine {
     this.clickRipples = [];
     this.footDust = [];
 
-    // 地图动态实体
+    // 地图动态实体与运行时碰撞缓存
+    this._walkablePolys = [];
+    this._activePortals = [];
+    this._activeNpc = null;
     this.lootNodes = [];
     this.enemies = [];
     this.savePoint = null;
@@ -208,6 +288,7 @@ export class InkWorldEngine {
   loadMap(map, opts = {}) {
     if (!map) return;
     this.map = map;
+    this._walkablePolys = resolveMapWalkablePolys(map);
     this.weatherId = opts.weatherId ?? (map.weatherPool?.[0] ?? 0);
     if (opts.guardian !== undefined) {
       this.guardian = opts.guardian;
@@ -216,22 +297,15 @@ export class InkWorldEngine {
       this.hero.weaponType = opts.heroWeaponType;
     }
 
+    // 先清空动态实体，避免出生点吸附时误判旧地图碰撞体
+    this.lootNodes = [];
+    this.savePoint = null;
+
     const sx = opts.spawnX ?? map.spawn?.x ?? map.width * 0.5;
     const sy = opts.spawnY ?? map.spawn?.y ?? map.height * 0.5;
-    this.hero.x = clamp(sx, 28, map.width - 28);
-    this.hero.y = clamp(sy, 40, map.height - 28);
-    if (map.walkablePolys?.length && this._collidesAt(this.hero.x, this.hero.y, this.hero.r)) {
-      const fallbackX = map.spawn?.x ?? map.width * 0.5;
-      const fallbackY = map.spawn?.y ?? map.height * 0.5;
-      if (!this._collidesAt(fallbackX, fallbackY, this.hero.r)) {
-        this.hero.x = fallbackX;
-        this.hero.y = fallbackY;
-      } else {
-        const pt = closestPointInPolys(fallbackX, fallbackY, map.walkablePolys);
-        this.hero.x = pt.x;
-        this.hero.y = pt.y;
-      }
-    }
+    const heroPt = this._snapToWalkable(sx, sy, this.hero.r);
+    this.hero.x = heroPt.x;
+    this.hero.y = heroPt.y;
     this.hero.targetX = null;
     this.hero.targetY = null;
     this.hero.moving = false;
@@ -242,35 +316,81 @@ export class InkWorldEngine {
 
     this.guardianPos.x = this.hero.x - 36;
     this.guardianPos.y = this.hero.y + 8;
+    this.guardianPos.facing = this.hero.lastSide || 1;
+    this.guardianPos.moving = false;
 
     // 预加载当前地图背景
     const bgPath = resolveBgPath(map.bgAsset);
     if (bgPath) this._getBgImage(bgPath);
 
-    // 搜刮点与残骸
-    if (Array.isArray(opts.lootNodes)) {
-      this.lootNodes = opts.lootNodes;
+    // 传送阵与 NPC 自动吸附到可行走区域（保证全 21 张地图 100% 可抵达且绝不落在墙上）
+    this._activePortals = (map.portals || []).map((p) => {
+      const pt = this._snapToWalkable(p.x, p.y, 12, { ignoreObstacles: true });
+      return { ...p, x: pt.x, y: pt.y };
+    });
+    if (map.npc && map.npc.id) {
+      const npcPt = this._snapToWalkable(map.npc.x, map.npc.y, 14);
+      this._activeNpc = { ...map.npc, x: npcPt.x, y: npcPt.y };
     } else {
-      this.lootNodes = (map.lootZones || []).map((z) => ({
-        ...z,
-        collected: false,
-        respawnAt: 0
-      }));
+      this._activeNpc = null;
     }
 
-    // 巡逻敌人与 Boss
+    // 搜刮点与残骸（自动吸附到可行走地面，且避开主角出生点）
+    const rawLoot = Array.isArray(opts.lootNodes)
+      ? opts.lootNodes
+      : (map.lootZones || []).map((z) => ({
+          ...z,
+          collected: false,
+          respawnAt: 0
+        }));
+    this.lootNodes = rawLoot.map((node) => {
+      const pt = this._snapToWalkable(node.x, node.y, 18);
+      node.x = pt.x;
+      node.y = pt.y;
+      if (dist(node.x, node.y, this.hero.x, this.hero.y) < 48) {
+        const nudged = this._snapToWalkable(node.x + 56, node.y + 24, 18);
+        node.x = nudged.x;
+        node.y = nudged.y;
+      }
+      return node;
+    });
+
+    // 巡逻敌人与 Boss（出生点与巡逻原点均吸附至可行走地面）
     if (Array.isArray(opts.enemies)) {
-      this.enemies = opts.enemies.map((e) => this._normalizeEnemy(e));
+      this.enemies = opts.enemies.map((e) => {
+        const en = this._normalizeEnemy(e);
+        const pt = this._snapToWalkable(en.x, en.y, 16);
+        const hpt = this._snapToWalkable(en.homeX, en.homeY, 16);
+        en.x = pt.x;
+        en.y = pt.y;
+        en.homeX = hpt.x;
+        en.homeY = hpt.y;
+        return en;
+      });
     } else {
       const list = [];
       for (const sp of map.enemySpawns || []) {
         const tpl = ENEMIES[sp.enemyId];
         if (!tpl) continue;
-        list.push(this._createEnemyFromSpawn(sp, tpl));
+        const en = this._createEnemyFromSpawn(sp, tpl);
+        const pt = this._snapToWalkable(en.x, en.y, 16);
+        en.x = pt.x;
+        en.y = pt.y;
+        en.homeX = pt.x;
+        en.homeY = pt.y;
+        list.push(en);
       }
       if (map.bossSpawn) {
         const tpl = ENEMIES[map.bossSpawn.enemyId];
-        if (tpl) list.push(this._createEnemyFromSpawn(map.bossSpawn, tpl));
+        if (tpl) {
+          const en = this._createEnemyFromSpawn(map.bossSpawn, tpl);
+          const pt = this._snapToWalkable(en.x, en.y, 18);
+          en.x = pt.x;
+          en.y = pt.y;
+          en.homeX = pt.x;
+          en.homeY = pt.y;
+          list.push(en);
+        }
       }
       this.enemies = list;
     }
@@ -620,9 +740,30 @@ export class InkWorldEngine {
     return 220;
   }
 
-  _collidesAt(cx, cy, r) {
+  _hitsObstacle(x, y, radius, opts = {}) {
     if (!this.map) return false;
-    const polys = this.map.walkablePolys;
+    for (const o of this.map.obstacles || []) {
+      if (circleIntersectsRect(x, y, radius, o.x, o.y, o.w, o.h)) return true;
+    }
+    if (!opts.ignoreDynamic) {
+      if (this.savePoint && dist(x, y, this.savePoint.x, this.savePoint.y) < radius + 20) {
+        return true;
+      }
+      for (const node of this.lootNodes) {
+        if (node.collected) continue;
+        if (dist(x, y, node.x, node.y) < radius + 20) return true;
+      }
+    }
+    return false;
+  }
+
+  _isWalkable(cx, cy, r = 14, opts = {}) {
+    return !this._collidesAt(cx, cy, r, opts);
+  }
+
+  _collidesAt(cx, cy, r, opts = {}) {
+    if (!this.map) return false;
+    const polys = this._walkablePolys?.length ? this._walkablePolys : resolveMapWalkablePolys(this.map);
     if (Array.isArray(polys) && polys.length > 0) {
       if (!isPointInPolys(cx, cy, polys)) return true;
       const footR = Math.min(r * 0.5, 9);
@@ -637,10 +778,67 @@ export class InkWorldEngine {
         if (circleIntersectsRect(cx, cy, r, b.x, b.y, b.w, b.h)) return true;
       }
     }
-    for (const o of this.map.obstacles || []) {
-      if (circleIntersectsRect(cx, cy, r, o.x, o.y, o.w, o.h)) return true;
+    if (!opts.ignoreObstacles && this._hitsObstacle(cx, cy, r, opts)) {
+      return true;
     }
     return false;
+  }
+
+  _snapToWalkable(x, y, margin = 12, opts = {}) {
+    const map = this.map;
+    if (!map) return { x, y };
+    const cx = clamp(x, 28, map.width - 28);
+    const cy = clamp(y, 40, map.height - 28);
+    const polys = this._walkablePolys?.length ? this._walkablePolys : resolveMapWalkablePolys(map);
+    const checkOpts = { ignoreDynamic: true, ignoreObstacles: Boolean(opts.ignoreObstacles) };
+    if (!polys.length) return { x: cx, y: cy };
+    if (!this._collidesAt(cx, cy, margin, checkOpts)) {
+      return { x: cx, y: cy };
+    }
+
+    const edgePt = closestPointInPolys(cx, cy, polys);
+    // 找距离最近的那个多边形质心，向内微推确保完整脚底半径落在可行走区内
+    let nearestCent = polyCentroid(polys[0]);
+    let bestCentD = dist(edgePt.x, edgePt.y, nearestCent.x, nearestCent.y);
+    for (let i = 1; i < polys.length; i++) {
+      const c = polyCentroid(polys[i]);
+      const d = dist(edgePt.x, edgePt.y, c.x, c.y);
+      if (d < bestCentD) {
+        bestCentD = d;
+        nearestCent = c;
+      }
+    }
+
+    const dirX = nearestCent.x - edgePt.x;
+    const dirY = nearestCent.y - edgePt.y;
+    const dirLen = Math.hypot(dirX, dirY) || 1;
+    const ux = dirX / dirLen;
+    const uy = dirY / dirLen;
+
+    for (const push of [16, 28, 42, 60, 84]) {
+      const tx = clamp(edgePt.x + ux * push, 28, map.width - 28);
+      const ty = clamp(edgePt.y + uy * push, 40, map.height - 28);
+      if (!this._collidesAt(tx, ty, margin, checkOpts)) {
+        return { x: Math.round(tx), y: Math.round(ty) };
+      }
+    }
+
+    // 螺旋搜索避开障碍物
+    const baseX = clamp(edgePt.x + ux * 20, 28, map.width - 28);
+    const baseY = clamp(edgePt.y + uy * 20, 40, map.height - 28);
+    for (let rad = 24; rad <= 160; rad += 24) {
+      for (let i = 0; i < 12; i++) {
+        const a = (i * Math.PI * 2) / 12;
+        const tx = clamp(baseX + Math.cos(a) * rad, 28, map.width - 28);
+        const ty = clamp(baseY + Math.sin(a) * rad, 40, map.height - 28);
+        if (!this._collidesAt(tx, ty, margin, checkOpts)) {
+          return { x: Math.round(tx), y: Math.round(ty) };
+        }
+      }
+    }
+
+    // 最终回退到质心
+    return { x: Math.round(nearestCent.x), y: Math.round(nearestCent.y) };
   }
 
   _moveWithSlide(entity, dx, dy, r) {
@@ -667,7 +865,8 @@ export class InkWorldEngine {
 
     // 针对斜角 2.5D 多边形边界，沿偏转角尝试丝滑贴边滑行
     const stepLen = Math.hypot(dx, dy);
-    if (stepLen > 0.05 && map.walkablePolys?.length) {
+    const polys = this._walkablePolys?.length ? this._walkablePolys : map.walkablePolys;
+    if (stepLen > 0.05 && polys?.length) {
       const baseAngle = Math.atan2(dy, dx);
       const offsets = [0.42, -0.42, 0.84, -0.84, 1.22, -1.22];
       for (const off of offsets) {
@@ -868,16 +1067,52 @@ export class InkWorldEngine {
     }
   }
 
+  _spawnEntityDust(x, y, vx, vy, isHeavy = false) {
+    const surface = this._getSurfaceType();
+    const palette = surface === 'swamp'
+      ? [118, 162, 132]
+      : surface === 'dirt'
+        ? [194, 170, 132]
+        : [198, 188, 170];
+    const count = isHeavy ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      this.footDust.push({
+        x: x + (Math.random() - 0.5) * 10,
+        y: y + (Math.random() - 0.5) * 4,
+        vx: -vx * (10 + Math.random() * 10) + (Math.random() - 0.5) * 14,
+        vy: -vy * (6 + Math.random() * 6) - (6 + Math.random() * 8),
+        r: (isHeavy ? 2.4 : 1.7) + Math.random() * 1.4,
+        age: 0,
+        maxAge: 0.28 + Math.random() * 0.18,
+        rgb: palette
+      });
+    }
+    if (this.footDust.length > 48) {
+      this.footDust.splice(0, this.footDust.length - 48);
+    }
+  }
+
   _updateGuardian(dt) {
     if (!this.guardian) return;
     const h = this.hero;
-    const followDist = 42;
+    const followDist = 46;
     const desiredX = h.x - (h.dirX || h.lastSide) * followDist;
-    const desiredY = h.y - (h.dirY || 0) * (followDist * 0.65) - 6;
-    const lerp = 1 - Math.pow(1 - 0.08, dt * 60);
+    const desiredY = h.y - (h.dirY || 0) * (followDist * 0.55) + 4;
+    const prevX = this.guardianPos.x;
+    const prevY = this.guardianPos.y;
+    const lerp = 1 - Math.pow(1 - 0.09, dt * 60);
     this.guardianPos.x += (desiredX - this.guardianPos.x) * lerp;
     this.guardianPos.y += (desiredY - this.guardianPos.y) * lerp;
-    this.guardianPos.phase += dt * 3.8;
+    const dx = this.guardianPos.x - prevX;
+    const dy = this.guardianPos.y - prevY;
+    const moved = Math.hypot(dx, dy);
+    this.guardianPos.moving = h.moving || moved > 0.35;
+    if (Math.abs(dx) > 0.2) {
+      this.guardianPos.facing = dx >= 0 ? 1 : -1;
+    } else if (h.moving) {
+      this.guardianPos.facing = h.facing === 'left' ? -1 : (h.facing === 'right' ? 1 : h.lastSide);
+    }
+    this.guardianPos.phase += dt * (this.guardianPos.moving ? 7.6 : 2.6);
   }
 
   _updateEnemies(dt) {
@@ -888,18 +1123,23 @@ export class InkWorldEngine {
           if (en.respawnTimer <= 0) {
             en.alive = true;
             en.hp = en.maxHp;
-            en.x = en.homeX;
-            en.y = en.homeY;
+            const pt = this._snapToWalkable(en.homeX, en.homeY, 16);
+            en.x = pt.x;
+            en.y = pt.y;
           }
         }
         continue;
       }
 
-      en.phase += dt * 4.5;
+      const isBoss = Boolean(en.data?.isBoss);
       en.aiTimer -= dt;
       if (en.aiPause > 0) {
         en.aiPause -= dt;
+        en.phase += dt * 2.2;
       } else {
+        // 巡逻移动时以 ~9.5–10.8 rad/s (p = en.phase * 1.45) 步频驱动肢体摆动
+        en.phase += dt * (isBoss ? 6.5 : 7.3);
+
         if (en.aiTimer <= 0) {
           en.aiTimer = 1.4 + Math.random() * 2.2;
           if (Math.random() < 0.25) {
@@ -920,14 +1160,49 @@ export class InkWorldEngine {
         const spd = en.speed > 20 ? en.speed * 0.78 : en.speed * 45;
         const px = en.x;
         const py = en.y;
-        this._moveWithSlide(en, en.vx * spd * dt, en.vy * spd * dt, 16);
+        const nx = clamp(en.x + en.vx * spd * dt, 24, this.map.width - 24);
+        const ny = clamp(en.y + en.vy * spd * dt, 36, this.map.height - 24);
 
-        // 若撞墙或越界，反向
-        if (dist(en.x, en.y, px, py) < 0.2 || dist(en.x, en.y, en.homeX, en.homeY) > en.patrolR + 18) {
-          en.vx = -en.vx;
-          en.vy = -en.vy;
-          en.aiTimer = 0.5;
+        if (this._isWalkable(nx, ny, 14)) {
+          en.x = nx;
+          en.y = ny;
+        } else {
+          this._moveWithSlide(en, en.vx * spd * dt, en.vy * spd * dt, 14);
         }
+
+        const moved = dist(en.x, en.y, px, py);
+        // 若撞墙、受阻或超出巡逻半径，立刻在可行走多边形内重新选取合法方向
+        if (moved < 0.2 || dist(en.x, en.y, en.homeX, en.homeY) > en.patrolR + 18) {
+          const toHome = Math.atan2(en.homeY - en.y, en.homeX - en.x);
+          let found = false;
+          for (let tries = 0; tries < 6; tries++) {
+            const cand = tries < 2
+              ? toHome + (tries === 0 ? 0 : (Math.random() - 0.5) * 1.2)
+              : Math.random() * Math.PI * 2;
+            const probeX = en.x + Math.cos(cand) * 26;
+            const probeY = en.y + Math.sin(cand) * 26;
+            if (this._isWalkable(probeX, probeY, 14)) {
+              en.vx = Math.cos(cand);
+              en.vy = Math.sin(cand);
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            en.vx = -en.vx;
+            en.vy = -en.vy;
+          }
+          en.aiTimer = 0.6 + Math.random() * 0.8;
+        } else {
+          // 踏步扬尘：随步频节拍在脚掌/机甲足底扬起淡尘
+          const strideBeat = Math.floor((en.phase * 1.45) / Math.PI);
+          if (en._lastStrideBeat === undefined) en._lastStrideBeat = strideBeat;
+          if (strideBeat > en._lastStrideBeat) {
+            en._lastStrideBeat = strideBeat;
+            this._spawnEntityDust(en.x, en.y + 2, en.vx, en.vy, isBoss);
+          }
+        }
+
         if (Math.abs(en.vx) > 0.12) {
           en.facing = en.vx >= 0 ? 1 : -1;
         }
@@ -935,7 +1210,7 @@ export class InkWorldEngine {
 
       // 遇敌判定
       if (this._encounterCooldown <= 0) {
-        const hitR = en.data?.isBoss ? 52 : 38;
+        const hitR = isBoss ? 52 : 38;
         if (dist(en.x, en.y, this.hero.x, this.hero.y) < hitR) {
           this._clearKeys();
           this.hero.targetX = null;
@@ -991,8 +1266,9 @@ export class InkWorldEngine {
     }
 
     // 2. NPC
-    if (this.map.npc && this.map.npc.id) {
-      const npcRef = this.map.npc;
+    const activeNpc = this._activeNpc || (this.map.npc?.id ? this.map.npc : null);
+    if (activeNpc && activeNpc.id) {
+      const npcRef = activeNpc;
       const npcData = this._getNpcData(npcRef.id);
       const d = dist(hx, hy, npcRef.x, npcRef.y);
       if (d < bestDist) {
@@ -1009,7 +1285,8 @@ export class InkWorldEngine {
     }
 
     // 3. 传送阵
-    for (const p of this.map.portals || []) {
+    const portals = this._activePortals?.length ? this._activePortals : (this.map.portals || []);
+    for (const p of portals) {
       const pr = Math.max(bestDist, (p.r || 42) + 24);
       const d = dist(hx, hy, p.x, p.y);
       if (d < Math.min(bestDist, pr)) {
@@ -1066,34 +1343,44 @@ export class InkWorldEngine {
     if (!map) return null;
     if (map.sceneType === 'interior') return null;
 
+    const portals = this._activePortals?.length ? this._activePortals : (map.portals || []);
+    const activeNpc = this._activeNpc || (map.npc?.id ? map.npc : null);
+
     const isClear = (cx, cy) => {
       if (cx < 64 || cx > map.width - 64 || cy < 84 || cy > map.height - 64) return false;
-      if (this._collidesAt(cx, cy, 28)) return false;
-      for (const p of map.portals || []) {
+      if (this._collidesAt(cx, cy, 22, { ignoreDynamic: true })) return false;
+      if (dist(cx, cy, this.hero.x, this.hero.y) < 52) return false;
+      for (const p of portals) {
         if (dist(cx, cy, p.x, p.y) < 62) return false;
       }
-      if (map.npc && dist(cx, cy, map.npc.x, map.npc.y) < 60) return false;
+      if (activeNpc && dist(cx, cy, activeNpc.x, activeNpc.y) < 60) return false;
+      for (const node of this.lootNodes) {
+        if (dist(cx, cy, node.x, node.y) < 48) return false;
+      }
       return true;
     };
 
     let candidates;
     if (map.id === 'town') {
+      const pt = this._snapToWalkable(790, 545, 20);
       return {
         type: 'save_point',
-        x: 790,
-        y: 545,
+        x: pt.x,
+        y: pt.y,
         label: '墨石记录碑 · 存档'
       };
     } else {
-      const sx = map.spawn?.x ?? map.width * 0.5;
-      const sy = map.spawn?.y ?? map.height * 0.5;
+      const sx = this.hero.x ?? map.spawn?.x ?? map.width * 0.5;
+      const sy = this.hero.y ?? map.spawn?.y ?? map.height * 0.5;
       candidates = [
         [sx + 110, sy - 20],
         [sx + 110, sy + 40],
         [sx - 110, sy - 20],
         [sx + 80, sy - 75],
         [sx + 80, sy + 75],
-        [sx, sy - 85]
+        [sx, sy - 85],
+        [sx + 135, sy - 65],
+        [sx + 65, sy - 55]
       ];
     }
 
@@ -1110,12 +1397,15 @@ export class InkWorldEngine {
       }
     }
 
-    const fallbackX = clamp((map.spawn?.x ?? 200) + 96, 64, map.width - 64);
-    const fallbackY = clamp((map.spawn?.y ?? 300) - 16, 84, map.height - 64);
+    const fallbackPt = this._snapToWalkable(
+      (this.hero.x ?? map.spawn?.x ?? 200) + 96,
+      (this.hero.y ?? map.spawn?.y ?? 300) - 24,
+      20
+    );
     return {
       type: 'save_point',
-      x: fallbackX,
-      y: fallbackY,
+      x: fallbackPt.x,
+      y: fallbackPt.y,
       label: '墨石记录碑 · 存档'
     };
   }
@@ -1268,7 +1558,8 @@ export class InkWorldEngine {
     const t = this._elapsed;
 
     // 传送阵地面罗盘/八卦水墨光纹
-    for (const p of map.portals || []) {
+    const portals = this._activePortals?.length ? this._activePortals : (map.portals || []);
+    for (const p of portals) {
       this._drawPortalGroundRune(ctx, p, t);
     }
 
@@ -1374,7 +1665,8 @@ export class InkWorldEngine {
     }
 
     // 3. 传送门石柱/牌坊
-    for (const p of map.portals || []) {
+    const portals = this._activePortals?.length ? this._activePortals : (map.portals || []);
+    for (const p of portals) {
       list.push({
         sortY: p.y,
         draw: (ctx) => this._drawPortalArch(ctx, p)
@@ -1400,8 +1692,9 @@ export class InkWorldEngine {
     }
 
     // 5. NPC
-    if (map.npc && map.npc.id) {
-      const npcRef = map.npc;
+    const activeNpc = this._activeNpc || (map.npc?.id ? map.npc : null);
+    if (activeNpc && activeNpc.id) {
+      const npcRef = activeNpc;
       list.push({
         sortY: npcRef.y,
         draw: (ctx) => this._drawNpc(ctx, npcRef)
@@ -1434,7 +1727,24 @@ export class InkWorldEngine {
     return list;
   }
 
-  // ==================== 2.5D 水墨建筑匾额（透出手绘底图真实建筑，绝不画方块） ====================
+  // ==================== 无框浮空水墨书法名牌辅助 ====================
+
+  _drawFloatingLabel(ctx, label, x, y, fillStyle = '#f5e9d2', font = 'bold 11.5px "Noto Serif SC", "Songti SC", serif', strokeW = 3.5) {
+    ctx.save();
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
+    ctx.lineWidth = strokeW;
+    ctx.strokeStyle = 'rgba(5, 7, 10, 0.92)';
+    ctx.strokeText(label, x, y);
+    ctx.fillStyle = fillStyle;
+    ctx.fillText(label, x, y);
+    ctx.restore();
+  }
+
+  // ==================== 2.5D 水墨建筑无框书法地标（零矩形框，透出手绘底图） ====================
 
   _drawBuilding(ctx, b) {
     const px = b.plaqueX ?? b.doorX ?? (b.x + b.w * 0.5);
@@ -1444,57 +1754,15 @@ export class InkWorldEngine {
     const near = dist(this.hero.x, this.hero.y, dx, dy) <= 95;
     const label = b.name || b.sign || '建筑';
 
-    ctx.save();
-    ctx.font = 'bold 12.5px "Noto Serif SC", "Songti SC", serif';
-    const textW = ctx.measureText(label).width;
-    const padL = 22; // 左侧预留朱砂印点空间
-    const padR = 12;
-    const boxW = textW + padL + padR;
-    const boxH = 26;
-    const bx = px - boxW * 0.5;
-    const by = py - boxH * 0.5;
-
-    // 淡雅投影
-    ctx.fillStyle = 'rgba(12, 9, 7, 0.55)';
-    ctx.beginPath();
-    ctx.roundRect(bx + 2, by + 3, boxW, boxH, 5);
-    ctx.fill();
-
-    // 轩辕剑三风格墨木底匾
-    const bgGrad = ctx.createLinearGradient(bx, by, bx, by + boxH);
-    bgGrad.addColorStop(0, near ? 'rgba(46, 35, 24, 0.94)' : 'rgba(28, 22, 17, 0.88)');
-    bgGrad.addColorStop(1, near ? 'rgba(30, 22, 16, 0.94)' : 'rgba(18, 14, 11, 0.88)');
-    ctx.fillStyle = bgGrad;
-    ctx.strokeStyle = near ? '#ebd08a' : '#c89b3c';
-    ctx.lineWidth = near ? 1.8 : 1.3;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 5);
-    ctx.fill();
-    ctx.stroke();
-
-    // 内细金线框
-    ctx.strokeStyle = 'rgba(232, 200, 128, 0.28)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.roundRect(bx + 2.5, by + 2.5, boxW - 5, boxH - 5, 3);
-    ctx.stroke();
-
-    // 朱砂印章小圆点
-    ctx.fillStyle = '#b53a2e';
-    ctx.beginPath();
-    ctx.arc(bx + 11.5, py, 4.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#f3d48c';
-    ctx.lineWidth = 0.9;
-    ctx.stroke();
-
-    // 匾额楷书名
-    ctx.fillStyle = near ? '#fff5dc' : '#f2e2c4';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, bx + padL, py + 0.5);
-
-    ctx.restore();
+    this._drawFloatingLabel(
+      ctx,
+      label,
+      px,
+      py,
+      near ? '#fff4d4' : '#ebd7ae',
+      'bold 13.5px "Noto Serif SC", "Songti SC", serif',
+      3.8
+    );
   }
 
   // ==================== 2.5D 水墨障碍物（手绘底图透出 · 仅极淡墨影/灵光） ====================
@@ -1577,30 +1845,18 @@ export class InkWorldEngine {
   _drawPortalArch(ctx, p) {
     const isCave = p.to?.startsWith('cave_');
     const isInterior = p.to?.startsWith('interior_');
-    const color = isCave ? '#b48ef0' : isInterior ? '#7ce8a4' : '#d49a3a';
+    const color = isCave ? '#d4b8ff' : isInterior ? '#a7f3d0' : '#f5d996';
     const bob = Math.sin(this._elapsed * 2.4 + p.x * 0.02) * 2.5;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-
-    // 仅绘淡雅水墨悬浮路牌（去除遮挡底图的粗黑石柱牌坊）
     const label = p.label || '传送阵';
-    ctx.font = 'bold 11.5px "Noto Serif SC", "Songti SC", serif';
-    const tw = ctx.measureText(label).width + 22;
-    const boxY = -44 + bob;
-    ctx.fillStyle = 'rgba(20, 16, 13, 0.86)';
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.roundRect(-tw * 0.5, boxY, tw, 22, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#f5e9d2';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, 0, boxY + 11.5);
-
-    ctx.restore();
+    this._drawFloatingLabel(
+      ctx,
+      label,
+      p.x,
+      p.y - 34 + bob,
+      color,
+      'bold 12px "Noto Serif SC", "Songti SC", serif',
+      3.6
+    );
   }
 
   // ==================== 墨石记录碑（存档点石碑 · 无 Emoji） ====================
@@ -1699,21 +1955,16 @@ export class InkWorldEngine {
       ctx.fill();
     }
 
-    // 碑顶淡雅名牌
-    ctx.font = 'bold 11px "Noto Serif SC", sans-serif';
-    const label = '墨石记录碑';
-    const tw = ctx.measureText(label).width + 14;
-    const tagY = -drawH - 14;
-    ctx.fillStyle = 'rgba(20, 24, 22, 0.86)';
-    ctx.strokeStyle = 'rgba(116, 232, 176, 0.78)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.roundRect(-tw * 0.5, tagY, tw, 19, 3);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#d6f8e5';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, 0, tagY + 13);
+    // 碑顶无框浮空书法名
+    this._drawFloatingLabel(
+      ctx,
+      '墨石记录碑',
+      0,
+      -drawH - 6,
+      '#b8f5d4',
+      'bold 11.5px "Noto Serif SC", "Songti SC", serif',
+      3.5
+    );
 
     ctx.restore();
   }
@@ -1775,17 +2026,17 @@ export class InkWorldEngine {
       ctx.stroke();
     }
 
-    // 悬浮名称（细小清晰）
+    // 无框悬浮书法名称
     const label = node.name || node.item?.name || '物资';
-    ctx.font = 'bold 10.5px "Noto Serif SC", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(18, 15, 12, 0.82)';
-    const tw = ctx.measureText(label).width + 12;
-    ctx.beginPath();
-    ctx.roundRect(-tw * 0.5, 8, tw, 16, 3);
-    ctx.fill();
-    ctx.fillStyle = qColor;
-    ctx.fillText(label, 0, 19.5);
+    this._drawFloatingLabel(
+      ctx,
+      label,
+      0,
+      16,
+      qColor,
+      'bold 11px "Noto Serif SC", "Songti SC", serif',
+      3.5
+    );
 
     ctx.restore();
   }
@@ -1832,21 +2083,228 @@ export class InkWorldEngine {
       ctx.stroke();
     }
 
-    // 头顶宣纸名牌
-    ctx.font = 'bold 11px "Noto Serif SC", sans-serif';
-    const nw = ctx.measureText(npc.name).width + 16;
-    const tagY = -drawH - 16 + breath;
-    ctx.fillStyle = 'rgba(232, 222, 200, 0.94)';
-    ctx.strokeStyle = '#2c251e';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.roundRect(-nw * 0.5, tagY, nw, 19, 3);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#1c1916';
-    ctx.textAlign = 'center';
-    ctx.fillText(npc.name, 0, tagY + 13);
+    // 头顶无框浮空书法名
+    this._drawFloatingLabel(
+      ctx,
+      npc.name,
+      0,
+      -drawH - 6 + breath,
+      '#fae7b8',
+      'bold 12px "Noto Serif SC", "Songti SC", serif',
+      3.5
+    );
 
+    ctx.restore();
+  }
+
+  // ==================== 关节分体步态与摆尾精灵渲染（怪物 & 护驾灵兽共用） ====================
+
+  _drawArticulatedSprite(ctx, spriteKey, img, drawH, t, p, moveAmt, seed = 0) {
+    const sw = img.naturalWidth;
+    const sh = img.naturalHeight;
+    const drawW = (sw / sh) * drawH;
+    const strideScale = drawH / 88;
+    const isIdle = moveAmt < 0.05;
+
+    if (spriteKey === 'enemy_beast') {
+      // 四足野兽/巨鼠王/啸天犬（原图朝左：前半身 0..0.50*sw，后半身 0.50*sw..sw，尾巴右上 0.62*sw..sw）
+      // 1. 摆动/甩动狼尾
+      const tailSrcX = sw * 0.62;
+      const tailSrcW = sw * 0.38;
+      const tailSrcH = sh * 0.52;
+      const tailPivX = -drawW * 0.5 + drawW * 0.68;
+      const tailPivY = -drawH * 0.56;
+      const tailRot = Math.sin(t * (isIdle ? 4.5 : 13) + seed) * (isIdle ? 0.14 : 0.28);
+      ctx.save();
+      ctx.translate(tailPivX, tailPivY);
+      ctx.rotate(tailRot);
+      ctx.drawImage(
+        img,
+        tailSrcX, 0, tailSrcW, tailSrcH,
+        (-drawW * 0.5 + drawW * 0.62) - tailPivX, -drawH - tailPivY,
+        drawW * 0.38, drawH * 0.52
+      );
+      ctx.restore();
+
+      // 2. 分体前爪 & 后爪（交替小跑/疾奔步幅，支撑脚紧贴 y = 0）
+      const splitRatio = 0.56;
+      const splitSrcY = sh * splitRatio;
+      const lowerSrcH = sh - splitSrcY;
+      const lowerDstH = drawH * (1 - splitRatio);
+      const hipY = -lowerDstH;
+
+      const fShift = Math.sin(p) * 12 * strideScale * moveAmt;
+      const fRot = Math.sin(p) * 0.30 * moveAmt;
+      const fLift = Math.max(0, Math.cos(p)) * 8 * strideScale * moveAmt;
+
+      const hShift = -Math.sin(p) * 12 * strideScale * moveAmt;
+      const hRot = -Math.sin(p) * 0.30 * moveAmt;
+      const hLift = Math.max(0, -Math.cos(p)) * 8 * strideScale * moveAmt;
+
+      // 后爪
+      ctx.save();
+      ctx.translate(drawW * 0.25 + hShift, hipY - hLift);
+      ctx.rotate(hRot);
+      ctx.drawImage(
+        img,
+        sw * 0.50, splitSrcY, sw * 0.50, lowerSrcH,
+        -drawW * 0.25, -1, drawW * 0.50, lowerDstH + 1
+      );
+      ctx.restore();
+
+      // 前爪
+      ctx.save();
+      ctx.translate(-drawW * 0.25 + fShift, hipY - fLift);
+      ctx.rotate(fRot);
+      ctx.drawImage(
+        img,
+        0, splitSrcY, sw * 0.50, lowerSrcH,
+        -drawW * 0.25, -1, drawW * 0.50, lowerDstH + 1
+      );
+      ctx.restore();
+
+      // 3. 躯干与咆哮兽首（避开尾部区域避免重影，轻微奔跑起伏俯仰）
+      const pitch = Math.sin(p) * 0.06 * moveAmt;
+      const heave = Math.abs(Math.cos(p)) * 2.2 * strideScale * moveAmt;
+      ctx.save();
+      ctx.translate(0, hipY - heave);
+      ctx.rotate(pitch);
+      ctx.drawImage(
+        img,
+        0, 0, sw * 0.68, sh * 0.60,
+        -drawW * 0.5, -drawH * splitRatio, drawW * 0.68, drawH * 0.60
+      );
+      ctx.restore();
+      return;
+    }
+
+    if (spriteKey === 'enemy_mech') {
+      // 双足重装机甲/掠夺者（原图朝左：髋部 splitY = 0.56*sh，左右足交替重踏）
+      const splitRatio = 0.56;
+      const splitSrcY = sh * splitRatio;
+      const lowerSrcH = sh - splitSrcY;
+      const lowerDstH = drawH * (1 - splitRatio);
+      const hipY = -lowerDstH;
+
+      const lShift = Math.sin(p) * 11 * strideScale * moveAmt;
+      const lRot = Math.sin(p) * 0.26 * moveAmt;
+      const lLift = Math.max(0, Math.cos(p)) * 7 * strideScale * moveAmt;
+
+      const rShift = -Math.sin(p) * 11 * strideScale * moveAmt;
+      const rRot = -Math.sin(p) * 0.26 * moveAmt;
+      const rLift = Math.max(0, -Math.cos(p)) * 7 * strideScale * moveAmt;
+
+      // 先画后摆腿，再画前迈腿
+      const drawLeg = (isLeft) => {
+        const shift = isLeft ? lShift : rShift;
+        const rot = isLeft ? lRot : rRot;
+        const lift = isLeft ? lLift : rLift;
+        const srcX = isLeft ? 0 : sw * 0.50;
+        const pivX = isLeft ? -drawW * 0.22 : drawW * 0.22;
+        const dstX = isLeft ? (-drawW * 0.5 - pivX) : (0 - pivX);
+        ctx.save();
+        ctx.translate(pivX + shift, hipY - lift);
+        ctx.rotate(rot);
+        ctx.drawImage(
+          img,
+          srcX, splitSrcY, sw * 0.50, lowerSrcH,
+          dstX, -1, drawW * 0.50, lowerDstH + 1
+        );
+        ctx.restore();
+      };
+
+      if (lShift < rShift) {
+        drawLeg(true);
+        drawLeg(false);
+      } else {
+        drawLeg(false);
+        drawLeg(true);
+      }
+
+      // 上半身装甲（伴随沉重脚步微晃）
+      const sway = Math.sin(p) * 0.04 * moveAmt;
+      const stompHeave = Math.abs(Math.sin(p)) * 1.8 * strideScale * moveAmt;
+      ctx.save();
+      ctx.translate(0, hipY - stompHeave);
+      ctx.rotate(sway);
+      ctx.drawImage(
+        img,
+        0, 0, sw, sh * 0.60,
+        -drawW * 0.5, -drawH * splitRatio, drawW, drawH * 0.60
+      );
+      ctx.restore();
+      return;
+    }
+
+    // 九尾狐 / 妖灵（原图朝右：后方九尾 0..0.44*sw, 0..0.72*sh；双腿 splitY = 0.64*sh；上半身 0.38*sw..sw, 0..0.66*sh）
+    // 1. 飘逸九尾多频摇曳
+    const tailPivX = -drawW * 0.5 + drawW * 0.40;
+    const tailPivY = -drawH * 0.46;
+    const tailSway = Math.sin(t * 3.8 + seed) * (isIdle ? 0.14 : 0.24)
+      + Math.sin(t * 7.2 + seed * 1.7) * (isIdle ? 0.03 : 0.06);
+    ctx.save();
+    ctx.translate(tailPivX, tailPivY);
+    ctx.rotate(tailSway);
+    ctx.drawImage(
+      img,
+      0, 0, sw * 0.44, sh * 0.72,
+      -drawW * 0.5 - tailPivX, -drawH - tailPivY,
+      drawW * 0.44, drawH * 0.72
+    );
+    ctx.restore();
+
+    // 2. 左右双腿交替轻盈迈步
+    const splitRatio = 0.64;
+    const splitSrcY = sh * splitRatio;
+    const lowerSrcH = sh - splitSrcY;
+    const lowerDstH = drawH * (1 - splitRatio);
+    const hipY = -lowerDstH;
+
+    const lShift = Math.sin(p) * 10 * strideScale * moveAmt;
+    const lRot = Math.sin(p) * 0.24 * moveAmt;
+    const lLift = Math.max(0, Math.cos(p)) * 6 * strideScale * moveAmt;
+
+    const rShift = -Math.sin(p) * 10 * strideScale * moveAmt;
+    const rRot = -Math.sin(p) * 0.24 * moveAmt;
+    const rLift = Math.max(0, -Math.cos(p)) * 6 * strideScale * moveAmt;
+
+    const drawDemonLeg = (isLeft) => {
+      const shift = isLeft ? lShift : rShift;
+      const rot = isLeft ? lRot : rRot;
+      const lift = isLeft ? lLift : rLift;
+      const srcX = isLeft ? 0 : sw * 0.50;
+      const pivX = isLeft ? -drawW * 0.18 : drawW * 0.18;
+      const dstX = isLeft ? (-drawW * 0.5 - pivX) : (0 - pivX);
+      ctx.save();
+      ctx.translate(pivX + shift, hipY - lift);
+      ctx.rotate(rot);
+      ctx.drawImage(
+        img,
+        srcX, splitSrcY, sw * 0.50, lowerSrcH,
+        dstX, -1, drawW * 0.50, lowerDstH + 1
+      );
+      ctx.restore();
+    };
+
+    if (lShift < rShift) {
+      drawDemonLeg(true);
+      drawDemonLeg(false);
+    } else {
+      drawDemonLeg(false);
+      drawDemonLeg(true);
+    }
+
+    // 3. 上半身与妖首
+    const torsoSway = Math.sin(p) * 0.05 * moveAmt;
+    const torsoHeave = Math.abs(Math.sin(p)) * 1.8 * strideScale * moveAmt;
+    ctx.save();
+    ctx.translate(0, hipY - torsoHeave);
+    ctx.rotate(torsoSway);
+    ctx.drawImage(
+      img,
+      sw * 0.38, 0, sw * 0.62, sh * 0.66,
+      -drawW * 0.5 + drawW * 0.38, -drawH * splitRatio, drawW * 0.62, drawH * 0.66
+    );
     ctx.restore();
   }
 
@@ -1857,7 +2315,8 @@ export class InkWorldEngine {
     const isBoss = Boolean(tpl.isBoss);
     const t = this._elapsed;
     const isIdle = en.aiPause > 0;
-    const bob = isIdle ? 0 : Math.abs(Math.sin(en.phase)) * (isBoss ? 4.5 : 3);
+    const moveAmt = isIdle ? 0 : 1;
+    const p = en.phase * 1.45;
     const idleBreathWave = Math.sin(t * 2.6 + en.homeX * 0.03);
     const idleScaleY = isIdle ? (1 + idleBreathWave * 0.015) : 1;
     const idleScaleX = isIdle ? (1 - idleBreathWave * 0.006) : 1;
@@ -1865,6 +2324,11 @@ export class InkWorldEngine {
     const spriteKey = this._getEnemySpriteKey(tpl.spriteType);
     const sprite = this._getSprite(spriteKey);
     const drawH = isBoss ? 118 : 88;
+
+    // 精确朝向修正：enemy_beast 与 enemy_mech 原图朝左，enemy_demon 原图朝右
+    const spriteFlip = (spriteKey === 'enemy_demon')
+      ? (en.facing < 0 ? -1 : 1)
+      : (en.facing > 0 ? -1 : 1);
 
     ctx.save();
     ctx.translate(en.x, en.y);
@@ -1901,45 +2365,41 @@ export class InkWorldEngine {
       ctx.stroke();
     }
 
-    // 透明 PNG 精灵绘制（按朝向翻转 + 静止呼吸缩放）
+    // 透明 PNG 分体肢体/尾巴动画绘制（足底牢牢贴地 y = 0）
     ctx.save();
-    ctx.translate(0, 6 - bob);
-    ctx.scale((en.facing < 0 ? -1 : 1) * idleScaleX, idleScaleY);
+    ctx.translate(0, 4);
+    ctx.scale(spriteFlip * idleScaleX, idleScaleY);
     if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
-      const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
-      ctx.drawImage(sprite.img, -drawW * 0.5, -drawH, drawW, drawH);
+      this._drawArticulatedSprite(ctx, spriteKey, sprite.img, drawH, t, p, moveAmt, en.homeX * 0.07);
     } else {
-      ctx.translate(0, -6);
+      ctx.translate(0, -4);
       ctx.scale(tpl.scale || 1, tpl.scale || 1);
       this._drawEnemySilhouette(ctx, tpl.spriteType, tpl.color || '#332d29', accent, t);
     }
     ctx.restore();
 
-    // 名称与血条
-    const labelY = -drawH - 6 - bob;
+    // 无框浮空书法名称（零矩形框）
+    const labelY = -drawH - 10;
     const label = isBoss ? `【首领】${tpl.name}` : tpl.name;
-    ctx.font = isBoss ? 'bold 12px "Noto Serif SC", sans-serif' : 'bold 10.5px "Noto Serif SC", sans-serif';
-    const tw = ctx.measureText(label).width + 14;
-    ctx.fillStyle = isBoss ? 'rgba(42, 14, 14, 0.9)' : 'rgba(22, 18, 16, 0.84)';
-    ctx.strokeStyle = isBoss ? '#e6b84c' : 'rgba(181, 58, 46, 0.72)';
-    ctx.lineWidth = isBoss ? 1.5 : 1;
-    ctx.beginPath();
-    ctx.roundRect(-tw * 0.5, labelY - 14, tw, 18, 3);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = isBoss ? '#f8e3b0' : '#f2c4bc';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, 0, labelY - 1);
+    this._drawFloatingLabel(
+      ctx,
+      label,
+      0,
+      labelY,
+      isBoss ? '#fce39c' : '#f7cbc2',
+      isBoss ? 'bold 12.5px "Noto Serif SC", "Songti SC", serif' : 'bold 11px "Noto Serif SC", "Songti SC", serif',
+      isBoss ? 3.8 : 3.5
+    );
 
     // Boss 血条（或受损敌人血条）
     if (isBoss || en.hp < en.maxHp) {
       const bw = isBoss ? 78 : 48;
-      const bh = isBoss ? 6 : 4;
+      const bh = isBoss ? 5 : 4;
       const pct = clamp(en.hp / Math.max(1, en.maxHp), 0, 1);
-      ctx.fillStyle = '#1a1412';
-      ctx.fillRect(-bw * 0.5, labelY + 7, bw, bh);
-      ctx.fillStyle = isBoss ? '#d9483b' : '#c95642';
-      ctx.fillRect(-bw * 0.5, labelY + 7, bw * pct, bh);
+      ctx.fillStyle = 'rgba(16, 12, 10, 0.85)';
+      ctx.fillRect(-bw * 0.5, labelY + 10, bw, bh);
+      ctx.fillStyle = isBoss ? '#e0483b' : '#c95642';
+      ctx.fillRect(-bw * 0.5, labelY + 10, bw * pct, bh);
     }
 
     ctx.restore();
@@ -2112,152 +2572,133 @@ export class InkWorldEngine {
     }
   }
 
-  // ==================== 护驾灵兽（跟随主角） ====================
+  // ==================== 护驾灵兽（真实手绘透明精灵随行奔跑 + 玉金灵光） ====================
+
+  _getGuardianSpriteKey(g) {
+    const id = g?.id || '';
+    if (id === 'guard_hound' || id === 'guard_miasma') return 'enemy_beast';
+    if (id === 'guard_puppet' || id === 'guard_zhurong' || id === 'guard_taotie' || id === 'guard_falcon') {
+      return 'enemy_mech';
+    }
+    return 'enemy_demon';
+  }
 
   _drawGuardian(ctx) {
     const g = this.guardian;
     if (!g) return;
     const gx = this.guardianPos.x;
     const gy = this.guardianPos.y;
-    const bob = Math.sin(this.guardianPos.phase) * 5;
-    const accent = g.accent || '#d49a3a';
-    const bodyColor = g.color || '#2e2924';
+    const t = this._elapsed;
+    const moving = Boolean(this.guardianPos.moving);
+    const moveAmt = moving ? 1 : 0;
+    const p = this.guardianPos.phase * 1.45;
+    const drawH = 54;
+    const spriteKey = this._getGuardianSpriteKey(g);
+    const sprite = this._getSprite(spriteKey);
+    const facing = this.guardianPos.facing || 1;
+    const spriteFlip = (spriteKey === 'enemy_demon')
+      ? (facing < 0 ? -1 : 1)
+      : (facing > 0 ? -1 : 1);
+    const idleWave = Math.sin(t * 2.8);
+    const idleScaleY = moving ? 1 : (1 + idleWave * 0.018);
+    const idleScaleX = moving ? 1 : (1 - idleWave * 0.008);
 
     ctx.save();
     ctx.translate(gx, gy);
 
-    // 地面淡光影
-    ctx.fillStyle = `${accent}33`;
+    // 柔和玉金灵气地面光晕 + 接地墨影
+    const pulse = 0.65 + 0.35 * Math.sin(t * 3.4);
+    ctx.save();
+    ctx.scale(1, 0.48);
+    const aura = ctx.createRadialGradient(0, 0, 3, 0, 0, 28);
+    aura.addColorStop(0, `rgba(116, 232, 176, ${(0.36 * pulse).toFixed(3)})`);
+    aura.addColorStop(0.55, `rgba(218, 174, 82, ${(0.22 * pulse).toFixed(3)})`);
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
     ctx.beginPath();
-    ctx.ellipse(0, 2, 12, 4.5, 0, 0, Math.PI * 2);
+    ctx.arc(0, 0, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(10, 8, 6, 0.46)';
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 15, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 浮空灵体与墨气尾迹
-    ctx.translate(0, -24 + bob);
-    const halo = ctx.createRadialGradient(0, 0, 3, 0, 0, 20);
-    halo.addColorStop(0, `${accent}66`);
-    halo.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = halo;
-    ctx.beginPath();
-    ctx.arc(0, 0, 20, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 灵兽核心身形
-    ctx.fillStyle = bodyColor;
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.arc(0, 0, 10.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // 篆书印记
-    ctx.fillStyle = '#fff5e0';
-    ctx.font = 'bold 10.5px "Noto Serif SC", serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(g.seal || '灵', 0, 3.8);
+    // 护驾灵兽透明精灵（真实小跑四肢/双足 + 摇尾 + 正确朝向）
+    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+      ctx.save();
+      ctx.translate(0, 3);
+      ctx.scale(spriteFlip * idleScaleX, idleScaleY);
+      this._drawArticulatedSprite(ctx, spriteKey, sprite.img, drawH, t, p, moveAmt, 1.37);
+      ctx.restore();
+    } else {
+      // 加载前极简灵光剪影回退
+      const glow = ctx.createRadialGradient(0, -22, 2, 0, -22, 18);
+      glow.addColorStop(0, 'rgba(132, 244, 192, 0.65)');
+      glow.addColorStop(1, 'rgba(218, 174, 82, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, -22, 18, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.restore();
   }
 
-  // ==================== 主角「沈砚」手绘透明精灵渲染（分体双足迈步 + 朱砂墨巾飘动） ====================
+  // ==================== 主角「沈砚」真 4 帧手绘行走精灵 + 朱砂墨巾飘动 ====================
 
   _drawHero(ctx) {
     const h = this.hero;
     const t = this._elapsed;
-    const moveBlend = h.moving ? 1 : clamp(h.walkPhase / 0.55, 0, 1);
-    const strideL = Math.sin(h.walkPhase) * moveBlend;
-    const strideR = -strideL;
-    const liftL = Math.max(0, Math.cos(h.walkPhase)) * 5 * moveBlend;
-    const liftR = Math.max(0, -Math.cos(h.walkPhase)) * 5 * moveBlend;
-    const tiltL = strideL * 0.14;
-    const tiltR = strideR * 0.14;
-
-    const bob = h.moving
-      ? Math.abs(Math.sin(h.walkPhase)) * 2.5
-      : 0;
+    const strideBounce = h.moving ? Math.abs(Math.sin(h.walkPhase)) * 1.5 : 0;
     const idleWave = Math.sin(t * 2.6);
     const idleBreathY = h.moving ? 1 : (1 + idleWave * 0.015);
     const idleBreathX = h.moving ? 1 : (1 - idleWave * 0.006);
-    const forwardLean = h.moving ? (0.045 + Math.sin(h.walkPhase * 2) * 0.014) : 0;
     const flipX = h.facing === 'left' ? -1 : (h.facing === 'right' ? 1 : h.lastSide);
-    const sprite = this._getSprite('hero');
+    const walkSprite = this._getSprite('hero_walk');
+    const idleSprite = this._getSprite('hero');
     const drawH = 96;
 
     ctx.save();
     ctx.translate(h.x, h.y);
 
-    // 脚下动态椭圆墨影（随支撑脚微移并呼吸缩放）
-    const shadowShiftX = (strideR - strideL) * 1.5 * flipX;
-    const shadowScale = (1 - bob * 0.028) * (h.moving ? 1 : (1 - idleWave * 0.025));
+    // 脚下接地椭圆墨影
+    const shadowScale = (1 - strideBounce * 0.025) * (h.moving ? 1 : (1 - idleWave * 0.025));
     ctx.fillStyle = 'rgba(10, 8, 6, 0.5)';
     ctx.beginPath();
-    ctx.ellipse(shadowShiftX, 3, 21 * shadowScale, 7 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3, 21 * shadowScale, 7 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
-      const img = sprite.img;
-      const sw = img.naturalWidth;
-      const sh = img.naturalHeight;
-      const drawW = (sw / sh) * drawH;
-      const splitRatio = 0.72;
-      const splitSrcY = Math.round(sh * splitRatio);
-      const lowerSrcH = sh - splitSrcY;
-      const halfSrcW = sw * 0.5;
-      const splitDstY = drawH * splitRatio;
-      const lowerDstH = drawH - splitDstY;
-      const halfDstW = drawW * 0.5;
-      const topY = -drawH + 5;
-      const hipY = topY + splitDstY;
+    if (h.moving && walkSprite && walkSprite.loaded && !walkSprite.error && walkSprite.img.naturalHeight > 0) {
+      // 真 4 帧手绘行走序列（hero_walk.png: 4 帧横向等宽，朝右行走，足底紧贴 y = 0）
+      const img = walkSprite.img;
+      const cellW = img.naturalWidth / 4;
+      const cellH = img.naturalHeight;
+      const drawW = (cellW / cellH) * drawH;
+      const frameIdx = Math.floor(h.walkPhase / (Math.PI * 0.55)) % 4;
 
       ctx.save();
+      ctx.translate(0, 3 - strideBounce);
       ctx.scale(flipX, 1);
 
-      // 移动时背后飘动的朱砂墨巾尾带
-      if (moveBlend > 0.05) {
-        this._drawHeroScarfWisp(ctx, -4, topY + drawH * 0.28 - bob, t, h.walkPhase, moveBlend);
-      }
+      // 背后飘动的朱砂墨巾尾带
+      this._drawHeroScarfWisp(ctx, -6, -drawH * 0.72, t, h.walkPhase, 1);
 
-      // 绘制左右独立足靴（先画后摆/抬起腿，再画前迈支撑腿增强层次）
-      const drawBoot = (isLeft) => {
-        const stride = isLeft ? strideL : strideR;
-        const lift = isLeft ? liftL : liftR;
-        const tilt = isLeft ? tiltL : tiltR;
-        const srcX = isLeft ? 0 : halfSrcW;
-        const dstXOffset = isLeft ? -halfDstW : 0;
-        const pivotX = isLeft ? -halfDstW * 0.35 : halfDstW * 0.35;
-
-        ctx.save();
-        ctx.translate(pivotX + stride * 6.5, hipY - lift - bob * 0.25);
-        ctx.rotate(tilt);
-        ctx.drawImage(
-          img,
-          srcX, splitSrcY, halfSrcW, lowerSrcH,
-          dstXOffset - pivotX, -0.5, halfDstW, lowerDstH + 0.5
-        );
-        ctx.restore();
-      };
-
-      if (strideL < strideR) {
-        drawBoot(true);
-        drawBoot(false);
-      } else {
-        drawBoot(false);
-        drawBoot(true);
-      }
-
-      // 上半身/斗篷：行进时前倾 + 双频步幅起伏；站立时柔和呼吸缩放
-      ctx.save();
-      ctx.translate(0, hipY - bob);
-      ctx.rotate(forwardLean);
-      ctx.scale(idleBreathX, idleBreathY);
       ctx.drawImage(
         img,
-        0, 0, sw, splitSrcY + 1,
-        -halfDstW, -splitDstY, drawW, splitDstY + 1.2
+        frameIdx * cellW, 0, cellW, cellH,
+        -drawW * 0.5, -drawH, drawW, drawH
       );
       ctx.restore();
-
+    } else if (idleSprite && idleSprite.loaded && !idleSprite.error && idleSprite.img.naturalHeight > 0) {
+      // 静止站立：hero.png 柔和呼吸，足底牢牢贴地
+      const img = idleSprite.img;
+      const drawW = (img.naturalWidth / img.naturalHeight) * drawH;
+      ctx.save();
+      ctx.translate(0, 4);
+      ctx.scale(flipX * idleBreathX, idleBreathY);
+      ctx.drawImage(img, -drawW * 0.5, -drawH, drawW, drawH);
       ctx.restore();
     } else {
       // 精灵加载前回退剪影
@@ -2265,7 +2706,7 @@ export class InkWorldEngine {
       ctx.strokeStyle = '#c89b3c';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.roundRect(-12, -52 - bob, 24, 50, 6);
+      ctx.roundRect(-12, -52 - strideBounce, 24, 50, 6);
       ctx.fill();
       ctx.stroke();
     }
@@ -2312,39 +2753,21 @@ export class InkWorldEngine {
     ctx.restore();
   }
 
-  // ==================== 交互浮动提示（宣纸朱印风格） ====================
+  // ==================== 无框浮空交互提示 ====================
 
   _drawInteractHint(ctx, target) {
     const bob = Math.sin(this._elapsed * 4.2) * 3;
     const text = `[E] ${target.label}`;
-    const y = target.y - 68 + bob;
-
-    ctx.save();
-    ctx.font = 'bold 12px "Noto Serif SC", sans-serif';
-    const w = ctx.measureText(text).width + 22;
-    const x = target.x - w * 0.5;
-
-    ctx.fillStyle = 'rgba(232, 222, 200, 0.95)';
-    ctx.strokeStyle = '#b53a2e';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.roundRect(x, y - 14, w, 24, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    // 底部小三角指向目标
-    ctx.fillStyle = '#b53a2e';
-    ctx.beginPath();
-    ctx.moveTo(target.x - 5, y + 10);
-    ctx.lineTo(target.x + 5, y + 10);
-    ctx.lineTo(target.x, y + 16);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#1c1916';
-    ctx.textAlign = 'center';
-    ctx.fillText(text, target.x, y + 2);
-    ctx.restore();
+    const y = target.y - 74 + bob;
+    this._drawFloatingLabel(
+      ctx,
+      text,
+      target.x,
+      y,
+      '#ffe9a8',
+      'bold 12.5px "Noto Serif SC", "Songti SC", serif',
+      3.8
+    );
   }
 
   // ==================== 天气粒子与水墨暗角 ====================
@@ -2443,7 +2866,8 @@ export class InkWorldEngine {
     }
 
     // 传送阵（青蓝菱形）
-    for (const p of map.portals || []) {
+    const portals = this._activePortals?.length ? this._activePortals : (map.portals || []);
+    for (const p of portals) {
       const px = mm.x + p.x * sx;
       const py = mm.y + p.y * sy;
       ctx.fillStyle = p.to?.startsWith('cave_') ? '#c084fc' : '#67e8f9';
@@ -2481,10 +2905,11 @@ export class InkWorldEngine {
     }
 
     // NPC（暖黄）
-    if (map.npc && map.npc.id) {
+    const activeNpc = this._activeNpc || (map.npc?.id ? map.npc : null);
+    if (activeNpc && activeNpc.id) {
       ctx.fillStyle = '#fde68a';
       ctx.beginPath();
-      ctx.arc(mm.x + map.npc.x * sx, mm.y + map.npc.y * sy, 3, 0, Math.PI * 2);
+      ctx.arc(mm.x + activeNpc.x * sx, mm.y + activeNpc.y * sy, 3, 0, Math.PI * 2);
       ctx.fill();
     }
 

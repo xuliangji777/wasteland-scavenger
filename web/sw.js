@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moshitu-rpg-v7';
+const CACHE_NAME = 'moshitu-rpg-v13';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,9 @@ const ASSETS = [
   './manifest.json',
   './icon.svg',
   './assets/app_icon.png',
+  './assets/icons_items.jpg',
+  './assets/icons_gear.jpg',
+  './assets/icons_skills.jpg',
   './assets/bg_town.jpg',
   './assets/bg_wasteland.jpg',
   './assets/bg_ruins.jpg',
@@ -20,10 +23,14 @@ const ASSETS = [
   './assets/bg_cave.jpg',
   './assets/bg_battle.jpg',
   './assets/bg_crucible.jpg',
+  './assets/bg_worldmap.jpg',
+  './assets/bg_armory.jpg',
   './assets/portrait_hero.jpg',
   './assets/portrait_laohuang.jpg',
   './assets/portrait_yinshi.jpg',
   './assets/sprites/hero.png',
+  './assets/sprites/hero_walk.png',
+  './assets/sprites/hero_battle.png',
   './assets/sprites/npc_merchant.png',
   './assets/sprites/npc_hermit.png',
   './assets/sprites/shrine.png',

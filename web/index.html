@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="assets/app_icon.png" />
   <link rel="apple-touch-icon" href="assets/app_icon.png" />
-  <link rel="stylesheet" href="css/style.css?v=7" />
+  <link rel="stylesheet" href="css/style.css?v=13" />
 </head>
 <body>
   <!-- ==================== 老年饼工作室 · 水墨开屏动画 ==================== -->
@@ -431,55 +431,76 @@
       <!-- ==================== 100% 全屏无框落地回合制战斗界面 ==================== -->
       <section id="rpg-battle-overlay" class="rpg-battle-overlay hidden" role="dialog" aria-label="墨土回合战斗">
         <div class="battle-vignette" aria-hidden="true"></div>
+        <canvas id="bat-ambient-canvas" class="battle-ambient-canvas" aria-hidden="true"></canvas>
 
-        <!-- 顶部浮空无框双边战况血条（绝无矩形黑盒） -->
+        <!-- 顶部浮空双边参战纹章与战况血条 -->
         <div class="battle-hud-top">
-          <!-- 左上：敌方浮空血条 -->
+          <!-- 左上：敌方纹章与血条 -->
           <div class="battle-gauge-side enemy-gauge-side">
-            <div class="battle-name-row">
-              <div id="bat-enemy-name" class="unit-name">变异荒原鼠</div>
-              <span id="bat-enemy-badge" class="enemy-badge">可收妖</span>
+            <div class="battle-unit-row enemy-unit-row">
+              <div class="battle-crest-wrap enemy-crest-wrap">
+                <div id="bat-enemy-crest" class="battle-unit-crest enemy-crest"></div>
+              </div>
+              <div class="battle-gauge-col enemy-gauge-col">
+                <div class="battle-name-row">
+                  <div id="bat-enemy-name" class="unit-name">变异荒原鼠</div>
+                  <span id="bat-enemy-badge" class="enemy-badge">可收妖</span>
+                </div>
+                <div class="battle-slant-bar enemy-bar">
+                  <div id="bat-enemy-hpbar" class="battle-slant-fill hp-fill" style="width:100%"></div>
+                </div>
+                <div class="battle-bar-meta">
+                  <span class="bar-tag">气血</span>
+                  <small id="bat-enemy-hp">45 / 45</small>
+                </div>
+                <div id="bat-enemy-status" class="unit-status-row"></div>
+              </div>
             </div>
-            <div class="battle-slant-bar enemy-bar">
-              <div id="bat-enemy-hpbar" class="battle-slant-fill hp-fill" style="width:100%"></div>
-            </div>
-            <div class="battle-bar-meta">
-              <span class="bar-tag">气血</span>
-              <small id="bat-enemy-hp">45 / 45</small>
-            </div>
-            <div id="bat-enemy-status" class="unit-status-row"></div>
           </div>
 
-          <!-- 中央水墨对决徽印 -->
-          <div class="battle-vs" aria-hidden="true">
-            <span class="vs-seal">决</span>
+          <!-- 中央青铜朱砂八角对决印与回合标 -->
+          <div class="battle-vs" aria-live="polite">
+            <div class="vs-seal-frame" aria-hidden="true">
+              <span class="vs-seal">决</span>
+            </div>
+            <span id="bat-turn-label" class="battle-turn-pill">我方回合</span>
           </div>
 
-          <!-- 右上：主角浮空血气内息条 + 护驾标识 -->
+          <!-- 右上：主角青铜玉环头像徽章 + 血气内息条 + 护驾标识 -->
           <div class="battle-gauge-side hero-gauge-side">
-            <div class="battle-name-row hero-name-row">
-              <span id="bat-hero-shield" class="shield-badge hidden">护盾 0</span>
-              <div class="unit-name">沈砚 <span class="lv-tag">Lv.<span id="bat-hero-lv">1</span></span></div>
-            </div>
-            <div class="battle-slant-bar hero-hp-bar">
-              <div id="bat-hero-hpbar" class="battle-slant-fill hp-fill" style="width:100%"></div>
-            </div>
-            <div class="battle-bar-meta hero-bar-meta">
-              <small id="bat-hero-hp">120 / 120</small>
-              <span class="bar-tag">气血</span>
-            </div>
-            <div class="battle-slant-bar hero-mp-bar">
-              <div id="bat-hero-mpbar" class="battle-slant-fill energy-fill" style="width:100%"></div>
-            </div>
-            <div class="battle-bar-meta hero-bar-meta">
-              <small id="bat-hero-mp">100 / 100</small>
-              <span class="bar-tag">内息</span>
-            </div>
-            <div id="bat-guardian-card" class="battle-guardian-card hidden">
-              <span class="guardian-seal">灵</span>
-              <div class="guardian-meta">
-                <strong class="guardian-name">护驾灵兽</strong>
-                <small class="guardian-skill">协同出战</small>
+            <div class="battle-unit-row hero-unit-row">
+              <div class="battle-gauge-col hero-gauge-col">
+                <div class="battle-name-row hero-name-row">
+                  <span id="bat-hero-shield" class="shield-badge hidden">护盾 0</span>
+                  <div class="unit-name">沈砚</div>
+                </div>
+                <div class="battle-slant-bar hero-hp-bar">
+                  <div id="bat-hero-hpbar" class="battle-slant-fill hp-fill" style="width:100%"></div>
+                </div>
+                <div class="battle-bar-meta hero-bar-meta">
+                  <small id="bat-hero-hp">120 / 120</small>
+                  <span class="bar-tag">气血</span>
+                </div>
+                <div class="battle-slant-bar hero-mp-bar">
+                  <div id="bat-hero-mpbar" class="battle-slant-fill energy-fill" style="width:100%"></div>
+                </div>
+                <div class="battle-bar-meta hero-bar-meta">
+                  <small id="bat-hero-mp">100 / 100</small>
+                  <span class="bar-tag">内息</span>
+                </div>
+                <div id="bat-guardian-card" class="battle-guardian-card hidden">
+                  <span class="guardian-seal">灵</span>
+                  <div class="guardian-meta">
+                    <strong class="guardian-name">护驾灵兽</strong>
+                    <small class="guardian-skill">协同出战</small>
+                  </div>
+                </div>
+              </div>
+              <div class="battle-crest-wrap hero-crest-wrap">
+                <div class="battle-unit-crest hero-crest">
+                  <img src="assets/portrait_hero.jpg" alt="沈砚" />
+                </div>
+                <span class="battle-lv-seal">Lv.<span id="bat-hero-lv">1</span></span>
               </div>
             </div>
           </div>
@@ -493,70 +514,94 @@
           <!-- 左侧落地敌方 -->
           <div class="battle-fighter enemy-fighter">
             <div id="bat-enemy-visual" class="battle-enemy-visual"></div>
+            <div class="fighter-aura enemy-aura" aria-hidden="true"></div>
             <div class="fighter-shadow enemy-shadow" aria-hidden="true"></div>
           </div>
 
-          <!-- 右侧落地主角（透明全身立绘直接立于石台，面向左方） -->
+          <!-- 右侧落地主角（专属拔刀临战立绘直接立于石台，面向左方） -->
           <div class="battle-fighter hero-fighter">
             <div class="hero-portrait-battle battle-hero-fighter">
-              <img id="bat-hero-portrait" src="assets/sprites/hero.png" alt="沈砚" />
+              <img id="bat-hero-portrait" src="assets/sprites/hero_battle.png" alt="沈砚" />
             </div>
+            <div class="fighter-aura hero-aura" aria-hidden="true"></div>
             <div class="fighter-shadow hero-shadow" aria-hidden="true"></div>
+          </div>
+
+          <!-- 右侧护驾灵兽（随行出战时立于沈砚身侧，面向左方协同作战） -->
+          <div id="bat-guardian-fighter" class="battle-fighter guardian-fighter hidden">
+            <div id="bat-guardian-visual" class="battle-guardian-visual"></div>
+            <div class="fighter-aura guardian-aura" aria-hidden="true"></div>
+            <div class="fighter-shadow guardian-shadow" aria-hidden="true"></div>
+            <div id="bat-guardian-nameplate" class="guardian-battle-name"></div>
           </div>
         </div>
 
-        <!-- 战斗底部黑曜青铜斜刃指令条 -->
+        <!-- 战斗底部「青铜墨卷战令台」 -->
         <div class="battle-bottom-panel">
-          <div id="bat-log" class="battle-log">遭遇强敌！凝神戒备，准备迎战！</div>
+          <div class="battle-deck-inner">
+            <div id="bat-log" class="battle-log">遭遇强敌！凝神戒备，准备迎战！</div>
 
-          <!-- 可展开子面板：16 项四系绝学/奇术 或 丹药补给 -->
-          <div id="bat-subpanel" class="battle-subpanel hidden"></div>
+            <!-- 可展开子面板：16 项四系绝学/奇术 或 丹药补给 -->
+            <div id="bat-subpanel" class="battle-subpanel hidden"></div>
 
-          <!-- 主指令栏：暗墨青铜斜切刀刃按键 -->
-          <div class="battle-commands">
-            <button class="bat-cmd primary" id="bat-btn-atk">
-              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                <path d="M19.5 4.5L10.5 13.5M19.5 4.5L18.2 9.4L12.6 15L9 11.4L14.6 5.8L19.5 4.5Z" stroke="#f2d28b" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.2)"/>
-                <path d="M7.4 13L11 16.6M6.5 17.5L4.5 19.5" stroke="#d4a24a" stroke-width="1.8" stroke-linecap="round"/>
-                <path d="M4.8 6.8L9.2 11.2M14.8 16.8L18.8 19.5" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2.5 1.8"/>
-                <circle cx="15.2" cy="8.8" r="1" fill="#5eead4"/>
-              </svg>
-              <span>普攻</span>
-            </button>
-            <button class="bat-cmd skill" id="bat-btn-skills">
-              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                <polygon points="12,2.5 18.8,6.2 18.8,17.8 12,21.5 5.2,17.8 5.2,6.2" stroke="#d4a24a" stroke-width="1.4" stroke-dasharray="3.5 2" fill="rgba(79,209,197,0.08)"/>
-                <path d="M13.6 4.8L8.2 12.6H12.2L10.4 19.2L16.2 11.2H12.2L13.6 4.8Z" stroke="#5eead4" stroke-width="1.65" stroke-linejoin="round" fill="rgba(94,234,212,0.24)"/>
-              </svg>
-              <span>绝学/奇术</span>
-            </button>
-            <button class="bat-cmd capture" id="bat-btn-capture">
-              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                <path d="M8.5 6.5H15.5L14.2 9.2C16.8 10.4 18 12.6 17.5 15.4C17 18 14.8 19.8 12 19.8C9.2 19.8 7 18 6.5 15.4C6 12.6 7.2 10.4 9.8 9.2L8.5 6.5Z" stroke="#d4a24a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.16)"/>
-                <path d="M9.8 4.2C10.8 2.8 13.2 2.8 14.2 4.2" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round"/>
-                <circle cx="12" cy="14.2" r="2.2" stroke="#5eead4" stroke-width="1.4" fill="rgba(94,234,212,0.25)"/>
-                <path d="M12 10.2V12M12 16.4V18" stroke="#4fd1c5" stroke-width="1.2" stroke-linecap="round"/>
-              </svg>
-              <span>收妖</span>
-            </button>
-            <button class="bat-cmd item" id="bat-btn-item">
-              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                <path d="M9.5 3.8H14.5M10.4 3.8V7.2L6.8 13.8C5.8 15.6 7.1 18.8 9.4 19.5H14.6C16.9 18.8 18.2 15.6 17.2 13.8L13.6 7.2V3.8" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" fill="rgba(212,162,74,0.12)"/>
-                <path d="M7.6 14.5C9.4 13.6 14.6 15.4 16.4 14.5L15.2 18.2H8.8L7.6 14.5Z" fill="rgba(94,234,212,0.34)" stroke="#5eead4" stroke-width="1.25" stroke-linejoin="round"/>
-                <circle cx="11.2" cy="11.4" r="1" fill="#5eead4"/>
-                <circle cx="13.8" cy="13.1" r="0.8" fill="#c44332"/>
-              </svg>
-              <span>丹药</span>
-            </button>
-            <button class="bat-cmd escape" id="bat-btn-run">
-              <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                <path d="M4.5 9.2H13.5C15.4 9.2 16.8 7.9 16.8 6.4C16.8 5 15.6 4 14.2 4C13 4 12.1 4.8 11.9 5.8" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round"/>
-                <path d="M3.5 13H17.5C19.4 13 20.6 14.2 20.6 15.8C20.6 17.3 19.3 18.5 17.7 18.5C16.3 18.5 15.3 17.6 15.1 16.5" stroke="#5eead4" stroke-width="1.65" stroke-linecap="round"/>
-                <path d="M6.5 16.8H11.8" stroke="#d4a24a" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2.4 2"/>
-                <path d="M16.5 10.6L19.2 13L16.5 15.4" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span>撤退</span>
-            </button>
+            <div class="battle-deck-divider" aria-hidden="true"></div>
+
+            <!-- 主指令栏：青铜墨玉圆形战令徽章 -->
+            <div class="battle-commands">
+              <button class="bat-cmd primary" id="bat-btn-atk">
+                <span class="bat-cmd-orb">
+                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                    <path d="M19.5 4.5L10.5 13.5M19.5 4.5L18.2 9.4L12.6 15L9 11.4L14.6 5.8L19.5 4.5Z" stroke="#f2d28b" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.22)"/>
+                    <path d="M7.4 13L11 16.6M6.5 17.5L4.5 19.5" stroke="#e5bb5c" stroke-width="1.8" stroke-linecap="round"/>
+                    <path d="M4.8 6.8L9.2 11.2M14.8 16.8L18.8 19.5" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2.5 1.8"/>
+                    <circle cx="15.2" cy="8.8" r="1" fill="#fde68a"/>
+                  </svg>
+                </span>
+                <span class="bat-cmd-label">普攻</span>
+              </button>
+              <button class="bat-cmd skill" id="bat-btn-skills">
+                <span class="bat-cmd-orb">
+                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                    <polygon points="12,2.5 18.8,6.2 18.8,17.8 12,21.5 5.2,17.8 5.2,6.2" stroke="#d4a24a" stroke-width="1.4" stroke-dasharray="3.5 2" fill="rgba(79,209,197,0.1)"/>
+                    <path d="M13.6 4.8L8.2 12.6H12.2L10.4 19.2L16.2 11.2H12.2L13.6 4.8Z" stroke="#5eead4" stroke-width="1.65" stroke-linejoin="round" fill="rgba(94,234,212,0.28)"/>
+                  </svg>
+                </span>
+                <span class="bat-cmd-label">绝学/奇术</span>
+              </button>
+              <button class="bat-cmd capture" id="bat-btn-capture">
+                <span class="bat-cmd-orb">
+                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                    <path d="M8.5 6.5H15.5L14.2 9.2C16.8 10.4 18 12.6 17.5 15.4C17 18 14.8 19.8 12 19.8C9.2 19.8 7 18 6.5 15.4C6 12.6 7.2 10.4 9.8 9.2L8.5 6.5Z" stroke="#d4a24a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(196,166,245,0.18)"/>
+                    <path d="M9.8 4.2C10.8 2.8 13.2 2.8 14.2 4.2" stroke="#c4a6f5" stroke-width="1.5" stroke-linecap="round"/>
+                    <circle cx="12" cy="14.2" r="2.2" stroke="#c4a6f5" stroke-width="1.4" fill="rgba(196,166,245,0.3)"/>
+                    <path d="M12 10.2V12M12 16.4V18" stroke="#e9d5ff" stroke-width="1.2" stroke-linecap="round"/>
+                  </svg>
+                </span>
+                <span class="bat-cmd-label">收妖</span>
+              </button>
+              <button class="bat-cmd item" id="bat-btn-item">
+                <span class="bat-cmd-orb">
+                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                    <path d="M9.5 3.8H14.5M10.4 3.8V7.2L6.8 13.8C5.8 15.6 7.1 18.8 9.4 19.5H14.6C16.9 18.8 18.2 15.6 17.2 13.8L13.6 7.2V3.8" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" fill="rgba(110,231,183,0.14)"/>
+                    <path d="M7.6 14.5C9.4 13.6 14.6 15.4 16.4 14.5L15.2 18.2H8.8L7.6 14.5Z" fill="rgba(110,231,183,0.36)" stroke="#6ee7b7" stroke-width="1.25" stroke-linejoin="round"/>
+                    <circle cx="11.2" cy="11.4" r="1" fill="#6ee7b7"/>
+                    <circle cx="13.8" cy="13.1" r="0.8" fill="#fde68a"/>
+                  </svg>
+                </span>
+                <span class="bat-cmd-label">丹药</span>
+              </button>
+              <button class="bat-cmd escape" id="bat-btn-run">
+                <span class="bat-cmd-orb">
+                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                    <path d="M4.5 9.2H13.5C15.4 9.2 16.8 7.9 16.8 6.4C16.8 5 15.6 4 14.2 4C13 4 12.1 4.8 11.9 5.8" stroke="#cbd5e1" stroke-width="1.65" stroke-linecap="round"/>
+                    <path d="M3.5 13H17.5C19.4 13 20.6 14.2 20.6 15.8C20.6 17.3 19.3 18.5 17.7 18.5C16.3 18.5 15.3 17.6 15.1 16.5" stroke="#94a3b8" stroke-width="1.65" stroke-linecap="round"/>
+                    <path d="M6.5 16.8H11.8" stroke="#d4a24a" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2.4 2"/>
+                    <path d="M16.5 10.6L19.2 13L16.5 15.4" stroke="#cbd5e1" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                <span class="bat-cmd-label">撤退</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -617,6 +662,6 @@
       }
     })();
   </script>
-  <script type="module" src="js/game.js?v=7"></script>
+  <script type="module" src="js/game.js?v=13"></script>
 </body>
 </html>

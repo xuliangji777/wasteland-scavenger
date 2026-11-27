@@ -25,8 +25,8 @@ import {
   WEEKLY_TASK_TPL,
   TEAM_TASK_TPL,
   SIDE_QUESTS
-} from './data.js';
-import { InkWorldEngine } from './rpg_world.js?v=6';
+} from './data.js?v=13';
+import { InkWorldEngine } from './rpg_world.js?v=13';
 import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';
@@ -1287,7 +1287,9 @@ function buildEnemySvg(tpl) {
   const src = getEnemySpritePath(tpl);
   const acc = tpl.accent || '#d49a3a';
   const isBoss = Boolean(tpl.isBoss);
-  return `<img class="battle-enemy-img${isBoss ? ' is-boss' : ''}" src="${src}" alt="${escapeHtml(tpl.name)}" draggable="false" style="--boss-accent:${acc}" />`;
+  const faceRight = src.includes('enemy_beast.png') || src.includes('enemy_mech.png');
+  const cls = `battle-enemy-img${isBoss ? ' is-boss' : ''}${faceRight ? ' face-right' : ''}`;
+  return `<img class="${cls}" src="${src}" alt="${escapeHtml(tpl.name)}" draggable="false" style="--boss-accent:${acc}" />`;
 }
 
 function triggerClassAnim(el, cls, durationMs = 260) {
@@ -1334,10 +1336,371 @@ function getBattleTargetPos(target, container, offsetX = 0, offsetY = 0) {
 
 function triggerBattleLunge(isHero) {
   if (isHero) {
-    triggerClassAnim($('bat-hero-portrait'), 'lunge-left', 240);
+    triggerClassAnim($('bat-hero-portrait'), 'lunge-left', 440);
   } else {
-    triggerClassAnim($('bat-enemy-visual'), 'lunge-right', 240);
+    triggerClassAnim($('bat-enemy-visual'), 'lunge-right', 420);
   }
+}
+
+function triggerGuardianLunge() {
+  const gv = $('bat-guardian-visual');
+  if (gv) triggerClassAnim(gv, 'lunge-left', 440);
+}
+
+function renderBattleGuardianFighter() {
+  const wrap = $('bat-guardian-fighter');
+  const vis = $('bat-guardian-visual');
+  const nameEl = $('bat-guardian-nameplate');
+  if (!wrap || !vis) return;
+  const guard = state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null;
+  if (!guard) {
+    wrap.classList.add('hidden');
+    vis.dataset.guardianId = '';
+    vis.innerHTML = '';
+    if (nameEl) nameEl.textContent = '';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  if (vis.dataset.guardianId !== guard.id) {
+    const src = _getGuardianSpriteSrc(guard.id);
+    // enemy_beast.png & enemy_mech.png naturally face LEFT; enemy_demon.png naturally faces RIGHT -> flip to face LEFT
+    const needsFlip = src.includes('enemy_demon.png');
+    vis.innerHTML = `<img class="guardian-sprite-img${needsFlip ? ' face-left' : ''}" src="${src}" alt="${escapeHtml(guard.name)}" />`;
+    vis.dataset.guardianId = guard.id;
+  }
+  if (nameEl) nameEl.textContent = guard.name;
+}
+
+function spawnGuardianAssistVfx(guard) {
+  const container = getBattleVfxContainer();
+  if (!container) return;
+  if (guard?.healHp && !guard?.baseDmg) {
+    const { x, y } = getBattleTargetPos('hero', container, 0, 6);
+    const aura = document.createElement('div');
+    aura.className = 'vfx-hero-buff-aura';
+    aura.style.left = `${Math.round(x)}px`;
+    aura.style.top = `${Math.round(y)}px`;
+    container.appendChild(aura);
+    setTimeout(() => aura.remove(), 680);
+    return;
+  }
+  const { x, y } = getBattleTargetPos('enemy', container, 0, 6);
+  const fx = document.createElement('div');
+  fx.className = 'vfx-guardian-slash';
+  fx.style.left = `${Math.round(x)}px`;
+  fx.style.top = `${Math.round(y)}px`;
+  fx.innerHTML = `
+    <svg viewBox="0 0 180 180" width="210" height="210" fill="none" aria-hidden="true">
+      <path d="M18 148 Q78 36 164 16 Q110 86 38 160 Z" fill="rgba(94,234,212,0.52)" stroke="#f3ce7a" stroke-width="3.2"/>
+      <path d="M32 140 Q88 52 156 26 Q104 84 44 148 Z" fill="rgba(243,206,122,0.42)" stroke="#ecfeff" stroke-width="2.2"/>
+      <path d="M26 42 Q94 74 156 146" stroke="#5eead4" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="148" cy="34" r="4.5" fill="#fef08a"/>
+      <circle cx="44" cy="146" r="3.8" fill="#5eead4"/>
+    </svg>`;
+  container.appendChild(fx);
+  setTimeout(() => fx.remove(), 600);
+}
+
+function getBranchCinemaDuration(branch) {
+  switch (branch) {
+    case 'firearm': return 950;
+    case 'mecha': return 1100;
+    case 'mystic': return 1150;
+    case 'martial':
+    default: return 850;
+  }
+}
+
+function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
+  const container = getBattleVfxContainer();
+  if (!container) return { impactMs: 240, totalMs: 850 };
+  const norm = branch === 'physical' ? 'martial' : branch;
+  const skillId = opts.skillId || '';
+  const isCrit = Boolean(opts.isCrit);
+  const cRect = container.getBoundingClientRect();
+  const cw = cRect.width || window.innerWidth;
+  const ch = cRect.height || window.innerHeight;
+  const ePos = getBattleTargetPos('enemy', container, 0, 6);
+  const hPos = getBattleTargetPos('hero', container, -28, 2);
+
+  if (norm === 'firearm') {
+    const totalMs = 950;
+    const isSnipe = skillId === 'sk_snipe';
+    const isShotgun = skillId === 'sk_shotgun';
+    const dx = hPos.x - ePos.x;
+    const dy = hPos.y - ePos.y;
+    const dist = Math.max(180, Math.hypot(dx, dy));
+    const angleDeg = Math.atan2(ePos.y - hPos.y, ePos.x - hPos.x) * (180 / Math.PI) + 180;
+
+    // 枪口多段火光
+    const burstTimes = isSnipe ? [320] : (isShotgun ? [80, 260] : [60, 210, 360]);
+    burstTimes.forEach((delay) => {
+      setTimeout(() => {
+        if (!battle) return;
+        const muzzle = document.createElement('div');
+        muzzle.className = 'vfx-firearm-muzzle';
+        muzzle.style.left = `${Math.round(hPos.x - 24)}px`;
+        muzzle.style.top = `${Math.round(hPos.y - 6)}px`;
+        muzzle.innerHTML = `
+          <svg viewBox="0 0 120 120" width="120" height="120" fill="none">
+            <polygon points="60,60 22,18 52,44 10,56 48,66 16,96 58,74 72,108 74,72 108,62 74,50 86,16" fill="rgba(249,115,22,0.86)" stroke="#fef08a" stroke-width="2.4"/>
+            <circle cx="60" cy="60" r="14" fill="#fff7ed"/>
+          </svg>`;
+        container.appendChild(muzzle);
+        setTimeout(() => muzzle.remove(), 260);
+      }, delay);
+    });
+
+    if (isSnipe) {
+      // 红光狙击激光锁定
+      const laser = document.createElement('div');
+      laser.className = 'vfx-firearm-sniper-beam';
+      laser.style.width = `${Math.round(dist)}px`;
+      laser.style.left = `${Math.round(hPos.x - dist)}px`;
+      laser.style.top = `${Math.round(hPos.y)}px`;
+      laser.style.transform = `rotate(${angleDeg.toFixed(1)}deg)`;
+      container.appendChild(laser);
+      setTimeout(() => laser.remove(), 540);
+    } else if (isShotgun) {
+      // 炽焰霰弹扇面喷射
+      setTimeout(() => {
+        if (!battle) return;
+        const cone = document.createElement('div');
+        cone.className = 'vfx-firearm-shotgun';
+        cone.style.left = `${Math.round((hPos.x + ePos.x) * 0.5)}px`;
+        cone.style.top = `${Math.round(ePos.y)}px`;
+        cone.innerHTML = `
+          <svg viewBox="0 0 340 220" width="340" height="220" fill="none">
+            <polygon points="330,110 24,22 46,110 24,198" fill="url(#sgFire)" opacity="0.88"/>
+            <defs>
+              <linearGradient id="sgFire" x1="100%" y1="50%" x2="0%" y2="50%">
+                <stop offset="0%" stop-color="#fff7ed"/>
+                <stop offset="35%" stop-color="#fbbf24" stop-opacity="0.9"/>
+                <stop offset="75%" stop-color="#f97316" stop-opacity="0.7"/>
+                <stop offset="100%" stop-color="#dc2626" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <line x1="316" y1="110" x2="36" y2="42" stroke="#fef08a" stroke-width="3.2" stroke-linecap="round"/>
+            <line x1="316" y1="110" x2="22" y2="86" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+            <line x1="316" y1="110" x2="20" y2="132" stroke="#fbbf24" stroke-width="3" stroke-linecap="round"/>
+            <line x1="316" y1="110" x2="40" y2="178" stroke="#f97316" stroke-width="2.8" stroke-linecap="round"/>
+          </svg>`;
+        container.appendChild(cone);
+        setTimeout(() => cone.remove(), 580);
+      }, 100);
+    } else {
+      // 急速三连曳光穿甲弹道
+      [70, 210, 350].forEach((delay, idx) => {
+        setTimeout(() => {
+          if (!battle) return;
+          const tracer = document.createElement('div');
+          tracer.className = 'vfx-firearm-tracer';
+          tracer.style.width = `${Math.round(Math.min(180, dist * 0.48))}px`;
+          tracer.style.left = `${Math.round(hPos.x - 120)}px`;
+          tracer.style.top = `${Math.round(hPos.y + (idx - 1) * 18)}px`;
+          tracer.style.setProperty('--tx', `${Math.round(ePos.x - hPos.x + 80)}px`);
+          container.appendChild(tracer);
+          setTimeout(() => tracer.remove(), 340);
+        }, delay);
+      });
+    }
+
+    // 命中爆裂火花 + 硝烟
+    const impactMs = isSnipe ? 360 : 320;
+    setTimeout(() => {
+      if (!battle) return;
+      const imp = document.createElement('div');
+      imp.className = `vfx-firearm-impact${isCrit ? ' is-crit-vfx' : ''}`;
+      imp.style.left = `${Math.round(ePos.x)}px`;
+      imp.style.top = `${Math.round(ePos.y)}px`;
+      imp.innerHTML = `
+        <svg viewBox="0 0 200 200" width="220" height="220" fill="none">
+          <circle cx="100" cy="100" r="46" fill="rgba(249,115,22,0.34)" stroke="#fef08a" stroke-width="2.8" stroke-dasharray="14 8"/>
+          <polygon points="100,26 114,76 168,60 124,100 172,134 116,120 100,174 84,120 28,134 76,100 32,60 86,76" fill="rgba(251,146,60,0.72)" stroke="#fff7ed" stroke-width="2"/>
+          <circle cx="100" cy="100" r="18" fill="#fffbeb"/>
+          <path d="M52 44 L30 22 M150 48 L174 26 M50 156 L26 178 M152 154 L176 176" stroke="#fed7aa" stroke-width="3" stroke-linecap="round"/>
+        </svg>`;
+      container.appendChild(imp);
+      setTimeout(() => imp.remove(), 600);
+    }, impactMs);
+    return { impactMs, totalMs };
+  }
+
+  if (norm === 'mecha') {
+    const totalMs = 1100;
+    const isMissile = skillId === 'sk_bits' || skillId === 'sk_cannon';
+    // Stage 1: 全息青蓝蓄能锁敌环 (0ms)
+    const charge = document.createElement('div');
+    charge.className = 'vfx-mecha-charge';
+    charge.style.left = `${Math.round(ePos.x)}px`;
+    charge.style.top = `${Math.round(ePos.y)}px`;
+    charge.innerHTML = `
+      <svg viewBox="0 0 200 200" width="210" height="210" fill="none">
+        <circle cx="100" cy="100" r="74" stroke="#22d3ee" stroke-width="2.8" stroke-dasharray="22 10"/>
+        <circle cx="100" cy="100" r="48" stroke="#5eead4" stroke-width="2" stroke-dasharray="12 6"/>
+        <path d="M36 52 L58 52 L58 34 M164 52 L142 52 L142 34 M36 148 L58 148 L58 166 M164 148 L142 148 L142 166" stroke="#67e8f9" stroke-width="3.2"/>
+        <line x1="100" y1="18" x2="100" y2="42" stroke="#ecfeff" stroke-width="2"/>
+        <line x1="100" y1="158" x2="100" y2="182" stroke="#ecfeff" stroke-width="2"/>
+        <line x1="18" y1="100" x2="42" y2="100" stroke="#ecfeff" stroke-width="2"/>
+        <line x1="158" y1="100" x2="182" y2="100" stroke="#ecfeff" stroke-width="2"/>
+      </svg>`;
+    container.appendChild(charge);
+    setTimeout(() => charge.remove(), 500);
+
+    // Stage 2: 持续穿透等离子激光束 或 弧形追踪浮游导弹 (260ms)
+    setTimeout(() => {
+      if (!battle) return;
+      if (isMissile) {
+        const ms = document.createElement('div');
+        ms.className = 'vfx-mecha-missiles';
+        ms.innerHTML = `
+          <svg viewBox="0 0 ${Math.round(cw)} ${Math.round(ch)}" width="${Math.round(cw)}" height="${Math.round(ch)}" fill="none">
+            <path class="missile-trail" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y - 24)} Q ${Math.round(cw * 0.5)} ${Math.round(ch * 0.08)} ${Math.round(ePos.x)} ${Math.round(ePos.y)}" stroke="#38bdf8" stroke-width="5.5" stroke-linecap="round"/>
+            <path class="missile-trail" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y)} Q ${Math.round(cw * 0.48)} ${Math.round(ch * 0.28)} ${Math.round(ePos.x)} ${Math.round(ePos.y + 8)}" stroke="#ecfeff" stroke-width="3.5" stroke-linecap="round"/>
+            <path class="missile-trail" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y + 22)} Q ${Math.round(cw * 0.52)} ${Math.round(ch * 0.64)} ${Math.round(ePos.x)} ${Math.round(ePos.y - 6)}" stroke="#5eead4" stroke-width="5" stroke-linecap="round"/>
+          </svg>`;
+        container.appendChild(ms);
+        setTimeout(() => ms.remove(), 740);
+      } else {
+        const dist = Math.max(200, Math.hypot(hPos.x - ePos.x, hPos.y - ePos.y));
+        const angleDeg = Math.atan2(ePos.y - hPos.y, ePos.x - hPos.x) * (180 / Math.PI) + 180;
+        const beam = document.createElement('div');
+        beam.className = 'vfx-mecha-beam';
+        beam.style.width = `${Math.round(dist + 40)}px`;
+        beam.style.left = `${Math.round(hPos.x - dist - 20)}px`;
+        beam.style.top = `${Math.round(hPos.y - 13)}px`;
+        beam.style.transform = `rotate(${angleDeg.toFixed(1)}deg)`;
+        container.appendChild(beam);
+        setTimeout(() => beam.remove(), 700);
+      }
+    }, 260);
+
+    // Stage 3: EMP 电磁震荡环 (400ms)
+    const impactMs = 400;
+    setTimeout(() => {
+      if (!battle) return;
+      const emp = document.createElement('div');
+      emp.className = 'vfx-mecha-emp';
+      emp.style.left = `${Math.round(ePos.x)}px`;
+      emp.style.top = `${Math.round(ePos.y)}px`;
+      container.appendChild(emp);
+      setTimeout(() => emp.remove(), 660);
+    }, impactMs);
+    return { impactMs, totalMs };
+  }
+
+  if (norm === 'mystic') {
+    const totalMs = 1150;
+    const isFireLotus = skillId === 'sk_fire';
+    // Stage 1: 凌空旋转金色道家符阵 (0ms)
+    const talisman = document.createElement('div');
+    talisman.className = 'vfx-mystic-talisman';
+    talisman.style.left = `${Math.round(ePos.x)}px`;
+    talisman.style.top = `${Math.round(ePos.y)}px`;
+    talisman.innerHTML = `
+      <svg viewBox="0 0 180 180" width="196" height="196" fill="none">
+        <polygon points="90,10 146,34 170,90 146,146 90,170 34,146 10,90 34,34" fill="rgba(212,162,74,0.14)" stroke="#f3ce7a" stroke-width="2.6" stroke-dasharray="14 6"/>
+        <circle cx="90" cy="90" r="56" stroke="#5eead4" stroke-width="2.2" stroke-dasharray="10 6"/>
+        <circle cx="90" cy="90" r="30" stroke="#fde68a" stroke-width="1.8"/>
+        <text x="90" y="99" text-anchor="middle" fill="#fef3c7" font-family="Songti SC, serif" font-size="30" font-weight="900">${isFireLotus ? '火' : '敕'}</text>
+      </svg>`;
+    container.appendChild(talisman);
+    setTimeout(() => talisman.remove(), 840);
+
+    // Stage 2: 丹火红莲绽放 OR 九天青金雷柱贯地 (320ms)
+    const impactMs = 420;
+    setTimeout(() => {
+      if (!battle) return;
+      if (isFireLotus) {
+        const lotus = document.createElement('div');
+        lotus.className = 'vfx-mystic-lotus';
+        lotus.style.left = `${Math.round(ePos.x)}px`;
+        lotus.style.top = `${Math.round(ePos.y)}px`;
+        lotus.innerHTML = `
+          <svg viewBox="0 0 220 220" width="248" height="248" fill="none">
+            <g transform="translate(110,110)">
+              ${[0, 45, 90, 135, 180, 225, 270, 315].map((deg) =>
+                `<path d="M0 0 Q-22 -46 0 -92 Q22 -46 0 0 Z" transform="rotate(${deg})" fill="rgba(239,68,68,0.55)" stroke="#fde047" stroke-width="2.4"/>`
+              ).join('')}
+              <circle cx="0" cy="0" r="24" fill="rgba(254,240,138,0.92)" stroke="#f97316" stroke-width="3"/>
+            </g>
+          </svg>`;
+        container.appendChild(lotus);
+        setTimeout(() => lotus.remove(), 800);
+      } else {
+        const thunder = document.createElement('div');
+        thunder.className = 'vfx-mystic-thunder';
+        thunder.style.left = `${Math.round(ePos.x)}px`;
+        thunder.innerHTML = `
+          <svg viewBox="0 0 180 420" width="200" height="100%" preserveAspectRatio="none" fill="none">
+            <rect x="74" y="0" width="32" height="420" fill="url(#thCol)" opacity="0.72"/>
+            <defs>
+              <linearGradient id="thCol" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#5eead4" stop-opacity="0"/>
+                <stop offset="50%" stop-color="#fef08a" stop-opacity="0.95"/>
+                <stop offset="100%" stop-color="#5eead4" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M96 0 L66 105 L108 135 L58 265 L104 285 L76 420" stroke="#5eead4" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M96 0 L66 105 L108 135 L58 265 L104 285 L76 420" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M84 40 L132 140 L98 188 L142 310" stroke="#fde047" stroke-width="3.2" stroke-linecap="round" opacity="0.9"/>
+          </svg>`;
+        container.appendChild(thunder);
+        setTimeout(() => thunder.remove(), 760);
+      }
+    }, 320);
+    return { impactMs, totalMs };
+  }
+
+  // 默认：古武 (martial, 850ms) — 双层水墨飞白新月斩 + 墨点飞溅
+  const totalMs = 850;
+  const arc1 = document.createElement('div');
+  arc1.className = `vfx-martial-arc arc-1${isCrit ? ' is-crit-vfx' : ''}`;
+  arc1.style.left = `${Math.round(ePos.x)}px`;
+  arc1.style.top = `${Math.round(ePos.y)}px`;
+  arc1.innerHTML = `
+    <svg viewBox="0 0 200 200" width="240" height="240" fill="none">
+      <path d="M18 166 Q82 42 182 18 Q122 96 42 178 Z" fill="rgba(16,13,11,0.9)" stroke="#b53a2e" stroke-width="3.6"/>
+      <path d="M26 158 Q88 52 176 24 Q116 88 38 168 Z" fill="rgba(217,76,61,0.56)" stroke="#fca5a5" stroke-width="2.2"/>
+      <path d="M40 144 Q98 60 168 32" stroke="#fff4e6" stroke-width="3.2" stroke-linecap="round"/>
+    </svg>`;
+  container.appendChild(arc1);
+  setTimeout(() => arc1.remove(), 580);
+
+  const impactMs = 210;
+  setTimeout(() => {
+    if (!battle) return;
+    const arc2 = document.createElement('div');
+    arc2.className = `vfx-martial-arc arc-2${isCrit ? ' is-crit-vfx' : ''}`;
+    arc2.style.left = `${Math.round(ePos.x + 6)}px`;
+    arc2.style.top = `${Math.round(ePos.y - 4)}px`;
+    arc2.innerHTML = `
+      <svg viewBox="0 0 200 200" width="265" height="265" fill="none">
+        <path d="M24 34 Q102 74 176 168 Q94 114 14 48 Z" fill="rgba(243,206,122,0.56)" stroke="#fef08a" stroke-width="3.2"/>
+        <path d="M36 44 Q104 82 166 156" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+      </svg>`;
+    container.appendChild(arc2);
+    setTimeout(() => arc2.remove(), 640);
+
+    const splat = document.createElement('div');
+    splat.className = 'vfx-ink-splatter';
+    splat.style.left = `${Math.round(ePos.x)}px`;
+    splat.style.top = `${Math.round(ePos.y)}px`;
+    splat.innerHTML = `
+      <svg viewBox="0 0 200 200" width="240" height="240" fill="none">
+        <circle cx="152" cy="46" r="6" fill="#181412" stroke="#d94c3d" stroke-width="1.6"/>
+        <circle cx="170" cy="74" r="3.5" fill="#fde047"/>
+        <circle cx="44" cy="154" r="5.5" fill="#181412" stroke="#f3ce7a" stroke-width="1.4"/>
+        <circle cx="32" cy="126" r="3.2" fill="#d94c3d"/>
+        <circle cx="136" cy="158" r="4.8" fill="#181412"/>
+        <circle cx="64" cy="42" r="3.8" fill="#f3ce7a"/>
+        <path d="M46 46 L22 24 M154 46 L178 24 M154 154 L178 178 M46 154 L22 178" stroke="#f3ce7a" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/>
+      </svg>`;
+    container.appendChild(splat);
+    setTimeout(() => splat.remove(), 680);
+  }, impactMs);
+
+  return { impactMs, totalMs };
 }
 
 function spawnBattleSlashVfx(target = 'enemy', variant = 'martial', isCrit = false) {
@@ -1426,7 +1789,7 @@ function spawnBattleSlashVfx(target = 'enemy', variant = 'martial', isCrit = fal
   }
 
   container.appendChild(fxEl);
-  setTimeout(() => fxEl.remove(), 480);
+  setTimeout(() => fxEl.remove(), branch === 'enemy' ? 640 : 540);
 }
 
 function spawnBattleDmgNum(target = 'enemy', text, styleType = 'physical', opts = {}) {
@@ -1471,6 +1834,11 @@ function setBattleButtonsEnabled(enabled) {
     if (capBtn) capBtn.disabled = !battle.tpl.capturable;
   }
   $('rpg-battle-overlay')?.classList.toggle('enemy-turn', !enabled);
+  const turnLbl = $('bat-turn-label');
+  if (turnLbl) {
+    turnLbl.textContent = enabled ? '我方回合' : '敌方回合';
+    turnLbl.classList.toggle('is-enemy-turn', !enabled);
+  }
 }
 
 function updateBattleUI() {
@@ -1528,10 +1896,176 @@ function updateBattleUI() {
   } else {
     gCard.classList.add('hidden');
   }
+  renderBattleGuardianFighter();
 }
 
 function logBattle(msg) {
   if ($('bat-log')) $('bat-log').textContent = msg;
+}
+
+let battleAmbientRaf = 0;
+let battleAmbientResizeHandler = null;
+
+function stopBattleAmbient() {
+  if (battleAmbientRaf) {
+    cancelAnimationFrame(battleAmbientRaf);
+    battleAmbientRaf = 0;
+  }
+  if (battleAmbientResizeHandler) {
+    window.removeEventListener('resize', battleAmbientResizeHandler);
+    battleAmbientResizeHandler = null;
+  }
+  const canvas = $('bat-ambient-canvas');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function startBattleAmbient() {
+  stopBattleAmbient();
+  const canvas = $('bat-ambient-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  let w = 0;
+  let h = 0;
+  let dpr = 1;
+
+  const resize = () => {
+    const rect = canvas.getBoundingClientRect();
+    w = Math.max(320, Math.round(rect.width || window.innerWidth));
+    h = Math.max(240, Math.round(rect.height || window.innerHeight));
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  resize();
+  battleAmbientResizeHandler = resize;
+  window.addEventListener('resize', resize);
+
+  // 24 drifting warm vermilion-gold battle embers
+  const embers = Array.from({ length: 24 }, () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    vx: -(0.35 + Math.random() * 0.75),
+    vy: -(0.22 + Math.random() * 0.55),
+    r: 1.1 + Math.random() * 2.1,
+    alpha: 0.28 + Math.random() * 0.55,
+    phase: Math.random() * Math.PI * 2,
+    hue: Math.random() < 0.55 ? 'ember' : 'gold'
+  }));
+
+  // 14 rising jade-cyan cable sparks near lower third
+  const sparks = Array.from({ length: 14 }, () => ({
+    x: Math.random() * w,
+    y: h * (0.64 + Math.random() * 0.34),
+    vx: (Math.random() - 0.5) * 0.28,
+    vy: -(0.45 + Math.random() * 0.65),
+    r: 0.9 + Math.random() * 1.6,
+    alpha: 0.32 + Math.random() * 0.55,
+    phase: Math.random() * Math.PI * 2
+  }));
+
+  // 4 slow-drifting translucent ink-mist bands along the stone floor
+  const mists = Array.from({ length: 4 }, (_, idx) => ({
+    x: (idx / 4) * w,
+    yRatio: 0.63 + idx * 0.065,
+    rxRatio: 0.28 + (idx % 2) * 0.12,
+    ry: 28 + idx * 9,
+    vx: (idx % 2 === 0 ? 1 : -1) * (0.14 + idx * 0.04),
+    alpha: 0.08 + (idx % 2) * 0.04,
+    tint: idx % 2 === 0 ? 'rgba(94, 234, 212,' : 'rgba(20, 24, 30,'
+  }));
+
+  let t = 0;
+  const tick = () => {
+    if (!battle) {
+      stopBattleAmbient();
+      return;
+    }
+    t += 0.016;
+    ctx.clearRect(0, 0, w, h);
+
+    // 1. Stone-floor ink-mist bands
+    for (let i = 0; i < mists.length; i++) {
+      const m = mists[i];
+      m.x += m.vx;
+      const rx = w * m.rxRatio;
+      if (m.vx > 0 && m.x - rx > w) m.x = -rx;
+      if (m.vx < 0 && m.x + rx < 0) m.x = w + rx;
+      const cy = h * m.yRatio + Math.sin(t * 0.5 + i) * 5;
+      ctx.save();
+      ctx.translate(m.x, cy);
+      ctx.scale(1, m.ry / Math.max(rx, 1));
+      const grad = ctx.createRadialGradient(0, 0, rx * 0.05, 0, 0, rx);
+      grad.addColorStop(0, `${m.tint}${m.alpha.toFixed(3)})`);
+      grad.addColorStop(0.55, `${m.tint}${(m.alpha * 0.45).toFixed(3)})`);
+      grad.addColorStop(1, `${m.tint}0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, rx, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 2. Drifting vermilion-gold battle embers
+    for (let i = 0; i < embers.length; i++) {
+      const p = embers[i];
+      p.x += p.vx + Math.sin(t * 1.4 + p.phase) * 0.25;
+      p.y += p.vy;
+      if (p.x < -12) p.x = w + 12;
+      if (p.y < -12) {
+        p.y = h + 10;
+        p.x = Math.random() * w;
+      }
+      const flicker = 0.65 + 0.35 * Math.sin(t * 3.8 + p.phase);
+      const a = p.alpha * flicker;
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.hue === 'ember' ? '#f97349' : '#f3ce7a';
+      ctx.shadowColor = p.hue === 'ember' ? 'rgba(232, 86, 58, 0.85)' : 'rgba(229, 187, 92, 0.85)';
+      ctx.shadowBlur = 7;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 3. Rising jade-cyan cable sparks near lower third
+    for (let i = 0; i < sparks.length; i++) {
+      const s = sparks[i];
+      s.x += s.vx + Math.sin(t * 2.1 + s.phase) * 0.2;
+      s.y += s.vy;
+      if (s.y < h * 0.42) {
+        s.y = h * (0.82 + Math.random() * 0.18);
+        s.x = Math.random() * w;
+      }
+      const fadeTop = clamp((s.y - h * 0.42) / (h * 0.22), 0, 1);
+      const flicker = 0.6 + 0.4 * Math.sin(t * 5.2 + s.phase);
+      ctx.save();
+      ctx.globalAlpha = s.alpha * fadeTop * flicker;
+      ctx.strokeStyle = 'rgba(94, 234, 212, 0.72)';
+      ctx.lineWidth = s.r * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.x - s.vx * 3, s.y + 5.5);
+      ctx.stroke();
+      ctx.fillStyle = '#99f6e4';
+      ctx.shadowColor = 'rgba(94, 234, 212, 0.9)';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    battleAmbientRaf = requestAnimationFrame(tick);
+  };
+
+  battleAmbientRaf = requestAnimationFrame(tick);
 }
 
 function startBattle(worldEnemy) {
@@ -1571,14 +2105,21 @@ function startBattle(worldEnemy) {
   const vfxLayer = $('bat-vfx-layer');
   if (vfxLayer) vfxLayer.innerHTML = '';
 
+  const enemyCrest = $('bat-enemy-crest');
+  if (enemyCrest) {
+    enemyCrest.innerHTML = renderVisualThumb('spirit', tpl, 44);
+    enemyCrest.classList.toggle('is-boss', !!tpl.isBoss);
+  }
+
   const enemyVisual = $('bat-enemy-visual');
   if (enemyVisual) {
-    enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'is-captured');
+    enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'is-captured', 'is-captured-done', 'capture-break-free');
     enemyVisual.innerHTML = buildEnemySvg(tpl);
   }
+  renderBattleGuardianFighter();
   const heroBatImg = $('bat-hero-portrait');
   if (heroBatImg) {
-    heroBatImg.src = 'assets/sprites/hero.png';
+    heroBatImg.src = 'assets/sprites/hero_battle.png';
     heroBatImg.style.objectFit = 'contain';
     heroBatImg.style.background = 'transparent';
     heroBatImg.classList.remove('hit', 'hit-flash', 'lunge-left');
@@ -1589,6 +2130,7 @@ function startBattle(worldEnemy) {
   logBattle(tpl.introLine || `遭遇「${tpl.name}」！凝神戒备，准备迎战！`);
   setBattleButtonsEnabled(true);
   updateBattleUI();
+  startBattleAmbient();
   sfx.alarm();
   sfx.playBgm?.('battle');
 }
@@ -1596,6 +2138,7 @@ function startBattle(worldEnemy) {
 function closeBattle() {
   battle = null;
   battleSubMode = null;
+  stopBattleAmbient();
   const vfxLayer = $('bat-vfx-layer');
   if (vfxLayer) vfxLayer.innerHTML = '';
   $('bat-subpanel')?.classList.add('hidden');
@@ -1652,10 +2195,13 @@ function calcDamageToEnemy(mult = 1, opts = {}) {
 
 function applyGuardianTurn(logs) {
   const guard = state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null;
-  if (!guard || battle.enemy.hp <= 0) return;
+  if (!guard || battle.enemy.hp <= 0) return false;
 
   const stats = getHeroStats();
-  if (guard.healHp) {
+  triggerGuardianLunge();
+  spawnGuardianAssistVfx(guard);
+
+  if (guard.healHp && !guard.baseDmg) {
     state.hp = Math.min(stats.maxHp, state.hp + guard.healHp);
     if (guard.healMp) state.energy = Math.min(stats.maxEnergy, state.energy + guard.healMp);
     if (guard.effect === 'cleanse') {
@@ -1663,8 +2209,9 @@ function applyGuardianTurn(logs) {
       battle.heroStatus.poison = 0;
     }
     spawnBattleDmgNum('hero', `+${guard.healHp} HP`, 'heal');
+    sfx.pick?.('fine');
     logs.push(`护驾【${guard.name}】施展「${guard.skillName}」回复 ${guard.healHp} 气血！`);
-    return;
+    return true;
   }
 
   if (guard.shield) {
@@ -1676,8 +2223,8 @@ function applyGuardianTurn(logs) {
   const dmg = guard.ignoreDef ? raw : Math.max(5, Math.round(raw - battle.enemy.def * 0.4));
   battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
   triggerHitAnim(true);
-  spawnBattleSlashVfx('enemy', 'mystic');
   spawnBattleDmgNum('enemy', `-${dmg}`, 'mystic', { offsetY: -24 });
+  sfx.playCombatSfx?.('mystic', false);
 
   if (guard.effect === 'poison') battle.enemyStatus.poison = 3;
   if (guard.effect === 'armor_break' && Math.random() < 0.35) battle.enemyStatus.def_down = 2;
@@ -1686,6 +2233,7 @@ function applyGuardianTurn(logs) {
     spawnBattleDmgNum('hero', `+${guard.healHp} HP`, 'heal');
   }
   logs.push(`护驾【${guard.name}】发动「${guard.skillName}」造成 ${dmg} 伤害！`);
+  return true;
 }
 
 function handleBattleVictory(captured = false) {
@@ -1740,8 +2288,13 @@ function handleBattleVictory(captured = false) {
 
   const enemyVisual = $('bat-enemy-visual');
   if (enemyVisual) {
-    enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'is-captured');
-    enemyVisual.classList.add(captured ? 'is-captured' : 'is-defeated');
+    if (captured && (enemyVisual.classList.contains('is-captured') || enemyVisual.classList.contains('is-captured-done'))) {
+      enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'is-captured');
+      enemyVisual.classList.add('is-captured-done');
+    } else {
+      enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'is-captured', 'is-captured-done');
+      enemyVisual.classList.add(captured ? 'is-captured' : 'is-defeated');
+    }
   }
 
   setTimeout(() => sfx.ending(), 200);
@@ -1871,88 +2424,110 @@ function runEnemyTurn(prevLogs = []) {
 
   checkBossMidBattleEvents(logs);
 
-  // 护驾出击
-  applyGuardianTurn(logs);
-  if (battle.enemy.hp <= 0) {
+  // 护驾出击（独立节拍，让玩家清楚看到灵兽跃出协战）
+  const guardianActed = applyGuardianTurn(logs);
+  if (guardianActed) {
     updateBattleUI();
-    handleBattleVictory(false);
+    logBattle(logs.slice(-2).join(' '));
+  }
+  if (battle.enemy.hp <= 0) {
+    setTimeout(() => {
+      if (battle) handleBattleVictory(false);
+    }, guardianActed ? 560 : 120);
     return;
   }
 
-  // 主角回息
-  if (stats.mpRegen > 0) {
-    state.energy = Math.min(stats.maxEnergy, state.energy + stats.mpRegen);
-  }
+  const finishEnemyStrike = () => {
+    if (!battle) return;
 
-  // 敌方行动
-  if (battle.enemyStatus.stun > 0) {
-    battle.enemyStatus.stun -= 1;
-    spawnBattleDmgNum('enemy', '眩晕!', 'mystic', { offsetY: -18 });
-    logs.push(`${battle.tpl.name}陷入【眩晕】，无法行动！`);
+    // 主角回息
+    if (stats.mpRegen > 0) {
+      state.energy = Math.min(stats.maxEnergy, state.energy + stats.mpRegen);
+    }
+
+    let enemyStruck = false;
+    // 敌方行动
+    if (battle.enemyStatus.stun > 0) {
+      battle.enemyStatus.stun -= 1;
+      spawnBattleDmgNum('enemy', '眩晕!', 'mystic', { offsetY: -18 });
+      logs.push(`${battle.tpl.name}陷入【眩晕】，无法行动！`);
+    } else {
+      enemyStruck = true;
+      const tpl = battle.tpl;
+      const isSpecial = tpl.specialEvery && (battle.turn % tpl.specialEvery === 0);
+      const mult = isSpecial ? (tpl.specialMult || 1.5) : 1;
+      let rawDmg = Math.max(3, Math.round(battle.enemy.atk * mult - stats.def * 0.65));
+      let reduce = stats.dmgReduce + (battle.dmgReduceTurns > 0 ? 0.30 : 0);
+      rawDmg = Math.max(2, Math.round(rawDmg * (1 - clamp(reduce, 0, 0.78))));
+
+      let absorbed = 0;
+      if (battle.heroShield > 0) {
+        absorbed = Math.min(battle.heroShield, rawDmg);
+        battle.heroShield -= absorbed;
+        rawDmg -= absorbed;
+      }
+
+      state.hp = Math.max(0, state.hp - rawDmg);
+      triggerBattleLunge(false);
+      triggerHitAnim(false, isSpecial);
+      spawnBattleSlashVfx('hero', 'enemy');
+      if (rawDmg > 0) {
+        spawnBattleDmgNum('hero', isSpecial ? `${tpl.specialName || '重创'} -${rawDmg}` : `-${rawDmg}`, 'enemy-hit');
+      } else if (absorbed > 0) {
+        spawnBattleDmgNum('hero', '护盾格挡!', 'shield');
+      }
+      logs.push(isSpecial
+        ? `${tpl.name}发动绝招【${tpl.specialName}】，造成 ${rawDmg} 点重创！`
+        : `${tpl.name}发起猛攻，造成 ${rawDmg} 点伤害！`);
+
+      if (isSpecial && tpl.inflicts) {
+        battle.heroStatus[tpl.inflicts] = 2;
+        logs.push(`你陷入了【${tpl.inflicts === 'burn' ? '灼烧' : '剧毒'}】状态！`);
+      }
+    }
+
+    // 主角持续减益
+    if (battle.heroStatus.burn > 0) {
+      const d = Math.round(14 * (1 - stats.radResist));
+      state.hp = Math.max(0, state.hp - d);
+      battle.heroStatus.burn -= 1;
+      if (d > 0) spawnBattleDmgNum('hero', `灼烧 -${d}`, 'enemy-hit', { offsetY: -28 });
+    }
+    if (battle.heroStatus.poison > 0) {
+      const d = Math.round(14 * (1 - stats.radResist));
+      state.hp = Math.max(0, state.hp - d);
+      battle.heroStatus.poison -= 1;
+      if (d > 0) spawnBattleDmgNum('hero', `剧毒 -${d}`, 'enemy-hit', { offsetY: -28 });
+    }
+
+    if (battle.dmgReduceTurns > 0) battle.dmgReduceTurns -= 1;
+    if (battle.overdriveTurns > 0) battle.overdriveTurns -= 1;
+    battle.captureBonus = 0;
+    battle.turn += 1;
+
+    updateBattleUI();
+    updateHUD();
+    logBattle(logs.slice(-2).join(' '));
+
+    if (state.hp <= 0) {
+      setTimeout(() => {
+        if (battle) handleBattleDefeat();
+      }, 420);
+      return;
+    }
+
+    setTimeout(() => {
+      if (!battle) return;
+      battle.busy = false;
+      setBattleButtonsEnabled(true);
+    }, enemyStruck ? 520 : 280);
+  };
+
+  if (guardianActed) {
+    setTimeout(finishEnemyStrike, 540);
   } else {
-    const tpl = battle.tpl;
-    const isSpecial = tpl.specialEvery && (battle.turn % tpl.specialEvery === 0);
-    const mult = isSpecial ? (tpl.specialMult || 1.5) : 1;
-    let rawDmg = Math.max(3, Math.round(battle.enemy.atk * mult - stats.def * 0.65));
-    let reduce = stats.dmgReduce + (battle.dmgReduceTurns > 0 ? 0.30 : 0);
-    rawDmg = Math.max(2, Math.round(rawDmg * (1 - clamp(reduce, 0, 0.78))));
-
-    let absorbed = 0;
-    if (battle.heroShield > 0) {
-      absorbed = Math.min(battle.heroShield, rawDmg);
-      battle.heroShield -= absorbed;
-      rawDmg -= absorbed;
-    }
-
-    state.hp = Math.max(0, state.hp - rawDmg);
-    triggerBattleLunge(false);
-    triggerHitAnim(false, isSpecial);
-    spawnBattleSlashVfx('hero', 'enemy');
-    if (rawDmg > 0) {
-      spawnBattleDmgNum('hero', isSpecial ? `${tpl.specialName || '重创'} -${rawDmg}` : `-${rawDmg}`, 'enemy-hit');
-    } else if (absorbed > 0) {
-      spawnBattleDmgNum('hero', '护盾格挡!', 'shield');
-    }
-    logs.push(isSpecial
-      ? `${tpl.name}发动绝招【${tpl.specialName}】，造成 ${rawDmg} 点重创！`
-      : `${tpl.name}发起猛攻，造成 ${rawDmg} 点伤害！`);
-
-    if (isSpecial && tpl.inflicts) {
-      battle.heroStatus[tpl.inflicts] = 2;
-      logs.push(`你陷入了【${tpl.inflicts === 'burn' ? '灼烧' : '剧毒'}】状态！`);
-    }
+    finishEnemyStrike();
   }
-
-  // 主角持续减益
-  if (battle.heroStatus.burn > 0) {
-    const d = Math.round(14 * (1 - stats.radResist));
-    state.hp = Math.max(0, state.hp - d);
-    battle.heroStatus.burn -= 1;
-    if (d > 0) spawnBattleDmgNum('hero', `灼烧 -${d}`, 'enemy-hit', { offsetY: -28 });
-  }
-  if (battle.heroStatus.poison > 0) {
-    const d = Math.round(14 * (1 - stats.radResist));
-    state.hp = Math.max(0, state.hp - d);
-    battle.heroStatus.poison -= 1;
-    if (d > 0) spawnBattleDmgNum('hero', `剧毒 -${d}`, 'enemy-hit', { offsetY: -28 });
-  }
-
-  if (battle.dmgReduceTurns > 0) battle.dmgReduceTurns -= 1;
-  if (battle.overdriveTurns > 0) battle.overdriveTurns -= 1;
-  battle.captureBonus = 0;
-  battle.turn += 1;
-
-  updateBattleUI();
-  updateHUD();
-
-  if (state.hp <= 0) {
-    handleBattleDefeat();
-    return;
-  }
-
-  logBattle(logs.slice(-2).join(' '));
-  battle.busy = false;
-  setBattleButtonsEnabled(true);
 }
 
 function battlePlayerAttack() {
@@ -1967,12 +2542,9 @@ function battlePlayerAttack() {
   const branch = getEquippedWeaponBranch();
   const wType = state.equipped?.weapon?.weaponType || '';
   const isHeavy = Boolean(isCrit || wType === 'cannon' || wType === 'heavy' || wType === 'railgun');
-  battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
+
   triggerBattleLunge(true);
-  triggerHitAnim(true, isHeavy);
-  spawnBattleSlashVfx('enemy', branch, isCrit);
-  const dmgStyle = isCrit ? 'crit' : (branch === 'martial' ? 'physical' : branch);
-  spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
+  const { impactMs, totalMs } = spawnBattleCombatVfx(branch, { isCrit });
   if (typeof sfx.playCombatSfx === 'function') {
     sfx.playCombatSfx(branch, isHeavy);
   } else {
@@ -1980,23 +2552,39 @@ function battlePlayerAttack() {
   }
 
   const logs = [`沈砚挥兵直击，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`];
-  if (lifesteal > 0) {
-    const heal = Math.max(1, Math.round(dmg * lifesteal));
-    state.hp = Math.min(stats.maxHp, state.hp + heal);
-    spawnBattleDmgNum('hero', `+${heal} HP`, 'heal', { offsetY: -18 });
-    logs.push(`吸血回复 +${heal} 气血！`);
-  }
-  if (stats.proc === 'burn' && Math.random() < 0.25) {
-    battle.enemyStatus.burn = 2;
-    logs.push('武器触发【灼烧】！');
-  }
+  logBattle(`沈砚运转兵锋，蓄势直击【${battle.tpl.name}】！`);
 
-  updateBattleUI();
-  if (battle.enemy.hp <= 0) {
-    handleBattleVictory(false);
-    return;
-  }
-  setTimeout(() => runEnemyTurn(logs), 320);
+  // 命中瞬间结算顿挫与飘字
+  setTimeout(() => {
+    if (!battle) return;
+    battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
+    triggerHitAnim(true, isHeavy);
+    const dmgStyle = isCrit ? 'crit' : (branch === 'martial' ? 'physical' : branch);
+    spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
+
+    if (lifesteal > 0) {
+      const heal = Math.max(1, Math.round(dmg * lifesteal));
+      state.hp = Math.min(stats.maxHp, state.hp + heal);
+      spawnBattleDmgNum('hero', `+${heal} HP`, 'heal', { offsetY: -18 });
+      logs.push(`吸血回复 +${heal} 气血！`);
+    }
+    if (stats.proc === 'burn' && Math.random() < 0.25) {
+      battle.enemyStatus.burn = 2;
+      logs.push('武器触发【灼烧】！');
+    }
+
+    updateBattleUI();
+    logBattle(logs.join(' '));
+  }, impactMs);
+
+  setTimeout(() => {
+    if (!battle) return;
+    if (battle.enemy.hp <= 0) {
+      handleBattleVictory(false);
+      return;
+    }
+    runEnemyTurn(logs);
+  }, totalMs);
 }
 
 function battleUseSkill(skill) {
@@ -2020,61 +2608,86 @@ function battleUseSkill(skill) {
   const logs = [];
   const flavorPrefix = skill.flavor ? `${skill.flavor} ` : '';
 
-  if (skill.selfBuff === 'shield') {
-    const sh = (skill.baseShield || 45) + state.level * (skill.perLvShield || 8);
-    battle.heroShield += sh;
-    battle.dmgReduceTurns = 2;
-    spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
-    sfx.pick('rare');
-    logs.push(`${flavorPrefix}施展【${skill.name}】，获得 ${sh} 点护盾并减伤 30%！`);
-  } else if (skill.selfBuff === 'overdrive') {
-    const sh = skill.baseShield || 65;
-    battle.heroShield += sh;
-    battle.overdriveTurns = 3;
-    spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
-    spawnBattleDmgNum('hero', '狂涌 +30%', 'mystic', { offsetY: -30 });
-    sfx.pick('legend');
-    logs.push(`${flavorPrefix}启动【${skill.name}】，护盾 +${sh}，3 回合内攻击 +30%！`);
-  } else if (skill.selfBuff === 'heal') {
-    const heal = Math.round(stats.maxHp * (skill.healPct || 0.45));
-    state.hp = Math.min(stats.maxHp, state.hp + heal);
-    if (skill.cleanse) {
-      battle.heroStatus.burn = 0;
-      battle.heroStatus.poison = 0;
+  if (skill.selfBuff) {
+    const container = getBattleVfxContainer();
+    if (container) {
+      const { x, y } = getBattleTargetPos('hero', container, 0, 8);
+      const aura = document.createElement('div');
+      aura.className = 'vfx-hero-buff-aura';
+      aura.style.left = `${Math.round(x)}px`;
+      aura.style.top = `${Math.round(y)}px`;
+      container.appendChild(aura);
+      setTimeout(() => aura.remove(), 680);
     }
-    spawnBattleDmgNum('hero', `+${heal} HP`, 'heal');
-    sfx.pick('fine');
-    logs.push(`${flavorPrefix}运转【${skill.name}】，恢复 ${heal} 气血并净化负面状态！`);
-  } else {
-    const { dmg, isCrit, lifesteal } = calcDamageToEnemy(skill.mult || 1.6, {
-      critBonus: skill.critBonus,
-      guaranteedCrit: skill.guaranteedCrit,
-      armorPen: skill.armorPen,
-      ignoreDef: skill.ignoreDef,
-      isArtillery: skill.isArtillery,
-      isSkill: true
-    });
-    battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
-    const branch = skill.branch || skill.category || 'martial';
-    const isHeavy = Boolean(
-      (skill.mpCost || 0) >= 22 ||
-      skill.isArtillery ||
-      /cannon|railgun|missile|artillery/i.test(skill.id || '') ||
-      (skill.mult || 1) >= 2.2
-    );
-    const isMysticOrMecha = branch === 'mystic' || branch === 'mecha';
-    const dmgStyle = isCrit ? 'crit' : (isMysticOrMecha ? branch : (branch === 'firearm' ? 'firearm' : 'physical'));
 
-    triggerBattleLunge(true);
-    triggerHitAnim(true, isCrit || isHeavy);
-    spawnBattleSlashVfx('enemy', branch, isCrit);
-    spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
-    if (typeof sfx.playCombatSfx === 'function') {
-      sfx.playCombatSfx(branch, isHeavy);
-    } else {
-      sfx.disassemble(true, true);
+    if (skill.selfBuff === 'shield') {
+      const sh = (skill.baseShield || 45) + state.level * (skill.perLvShield || 8);
+      battle.heroShield += sh;
+      battle.dmgReduceTurns = 2;
+      spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
+      sfx.pick('rare');
+      logs.push(`${flavorPrefix}施展【${skill.name}】，获得 ${sh} 点护盾并减伤 30%！`);
+    } else if (skill.selfBuff === 'overdrive') {
+      const sh = skill.baseShield || 65;
+      battle.heroShield += sh;
+      battle.overdriveTurns = 3;
+      spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
+      spawnBattleDmgNum('hero', '狂涌 +30%', 'mystic', { offsetY: -30 });
+      sfx.pick('legend');
+      logs.push(`${flavorPrefix}启动【${skill.name}】，护盾 +${sh}，3 回合内攻击 +30%！`);
+    } else if (skill.selfBuff === 'heal') {
+      const heal = Math.round(stats.maxHp * (skill.healPct || 0.45));
+      state.hp = Math.min(stats.maxHp, state.hp + heal);
+      if (skill.cleanse) {
+        battle.heroStatus.burn = 0;
+        battle.heroStatus.poison = 0;
+      }
+      spawnBattleDmgNum('hero', `+${heal} HP`, 'heal');
+      sfx.pick('fine');
+      logs.push(`${flavorPrefix}运转【${skill.name}】，恢复 ${heal} 气血并净化负面状态！`);
     }
-    logs.push(`${flavorPrefix}施展【${skill.name}】，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`);
+
+    updateBattleUI();
+    logBattle(logs.join(' '));
+    setTimeout(() => runEnemyTurn(logs), 780);
+    return;
+  }
+
+  const { dmg, isCrit, lifesteal } = calcDamageToEnemy(skill.mult || 1.6, {
+    critBonus: skill.critBonus,
+    guaranteedCrit: skill.guaranteedCrit,
+    armorPen: skill.armorPen,
+    ignoreDef: skill.ignoreDef,
+    isArtillery: skill.isArtillery,
+    isSkill: true
+  });
+  const branch = skill.branch || skill.category || 'martial';
+  const isHeavy = Boolean(
+    (skill.mpCost || 0) >= 22 ||
+    skill.isArtillery ||
+    /cannon|railgun|missile|artillery/i.test(skill.id || '') ||
+    (skill.mult || 1) >= 2.2
+  );
+  const isMysticOrMecha = branch === 'mystic' || branch === 'mecha';
+  const dmgStyle = isCrit ? 'crit' : (isMysticOrMecha ? branch : (branch === 'firearm' ? 'firearm' : 'physical'));
+
+  updateBattleUI();
+  triggerBattleLunge(true);
+  const { impactMs, totalMs } = spawnBattleCombatVfx(branch, { skillId: skill.id, isCrit });
+  if (typeof sfx.playCombatSfx === 'function') {
+    sfx.playCombatSfx(branch, isHeavy);
+  } else {
+    sfx.disassemble(true, true);
+  }
+  logBattle(`${flavorPrefix}施展绝学【${skill.name}】！`);
+  logs.push(`${flavorPrefix}施展【${skill.name}】，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`);
+
+  // 命中瞬间结算伤害与状态
+  setTimeout(() => {
+    if (!battle) return;
+    battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
+    triggerHitAnim(true, isCrit || isHeavy);
+    spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
 
     if (lifesteal > 0) {
       const heal = Math.max(1, Math.round(dmg * lifesteal));
@@ -2087,14 +2700,73 @@ function battleUseSkill(skill) {
       spawnBattleDmgNum('enemy', '眩晕!', 'mystic', { offsetY: -34 });
     }
     if (skill.captureBonus) battle.captureBonus = skill.captureBonus;
-  }
 
-  updateBattleUI();
-  if (battle.enemy.hp <= 0) {
-    handleBattleVictory(false);
-    return;
-  }
-  setTimeout(() => runEnemyTurn(logs), 360);
+    updateBattleUI();
+    logBattle(logs.join(' '));
+  }, impactMs);
+
+  setTimeout(() => {
+    if (!battle) return;
+    if (battle.enemy.hp <= 0) {
+      handleBattleVictory(false);
+      return;
+    }
+    runEnemyTurn(logs);
+  }, totalMs);
+}
+
+function buildBaguaTaijiSvg() {
+  // 八卦三爻符号 (乾坤震巽坎离艮兑) — 全息激光能量阵
+  const trigrams = [
+    [1, 1, 1], [0, 0, 0], [0, 0, 1], [1, 1, 0],
+    [0, 1, 0], [1, 0, 1], [1, 0, 0], [0, 1, 1]
+  ];
+  const trigramSvg = trigrams.map((bars, idx) => {
+    const deg = idx * 45;
+    const lines = bars.map((solid, bi) => {
+      const y = 21 + bi * 6.2;
+      if (solid) {
+        return `<line x1="95" y1="${y}" x2="125" y2="${y}" stroke="#f6d882" stroke-width="1.8" stroke-linecap="round"/>`;
+      }
+      return `<line x1="95" y1="${y}" x2="107" y2="${y}" stroke="#38f8ff" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="113" y1="${y}" x2="125" y2="${y}" stroke="#38f8ff" stroke-width="1.8" stroke-linecap="round"/>`;
+    }).join('');
+    return `<g transform="rotate(${deg} 110 110)">${lines}</g>`;
+  }).join('');
+
+  return `
+    <svg class="bagua-outer-ring" viewBox="0 0 220 220" width="236" height="236" fill="none" aria-hidden="true">
+      <defs>
+        <filter id="holoBaguaGlow" x="-25%" y="-25%" width="150%" height="150%">
+          <feGaussianBlur stdDeviation="2.1" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <radialGradient id="holoBaguaDisc" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#38f8ff" stop-opacity="0.22"/>
+          <stop offset="52%" stop-color="#8b5cf6" stop-opacity="0.10"/>
+          <stop offset="100%" stop-color="#38f8ff" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <circle cx="110" cy="110" r="102" fill="url(#holoBaguaDisc)"/>
+      <g filter="url(#holoBaguaGlow)">
+        <polygon points="110,6 184,36 214,110 184,184 110,214 36,184 6,110 36,36"
+                 fill="none" stroke="#38f8ff" stroke-width="1.8" opacity="0.92"/>
+        <polygon points="110,14 178,42 206,110 178,178 110,206 42,178 14,110 42,42"
+                 fill="none" stroke="#f6d882" stroke-width="1.2" stroke-dasharray="10 6" opacity="0.86"/>
+        <circle cx="110" cy="110" r="64" stroke="#38f8ff" stroke-width="1.4" stroke-dasharray="8 5" opacity="0.82"/>
+        <circle cx="110" cy="110" r="56" stroke="#f6d882" stroke-width="1" stroke-dasharray="3 6" opacity="0.7"/>
+        ${trigramSvg}
+        <g class="bagua-taiji-core">
+          <circle cx="110" cy="110" r="44" fill="rgba(16, 48, 64, 0.24)" stroke="#38f8ff" stroke-width="1.8"/>
+          <path d="M110,66 A44,44 0 0,1 110,154 A22,22 0 0,1 110,110 A22,22 0 0,0 110,66 Z" fill="rgba(246, 216, 130, 0.42)" stroke="#f6d882" stroke-width="1.4"/>
+          <circle cx="110" cy="88" r="5.5" fill="rgba(56, 248, 255, 0.28)" stroke="#38f8ff" stroke-width="1.5"/>
+          <circle cx="110" cy="132" r="5.5" fill="rgba(246, 216, 130, 0.78)" stroke="#fff7d6" stroke-width="1.2"/>
+        </g>
+      </g>
+    </svg>`;
 }
 
 function battleAttemptCapture() {
@@ -2111,22 +2783,159 @@ function battleAttemptCapture() {
   const ratio = battle.enemy.hp / battle.enemy.maxHp;
   let chance = ratio <= 0.4 ? (0.68 + (0.4 - ratio) * 0.75) : ratio <= 0.65 ? 0.30 : 0.12;
   chance = clamp(chance + (battle.captureBonus || 0), 0.1, 0.98);
+  const succeeded = Math.random() < chance;
+  const container = getBattleVfxContainer();
 
-  spawnBattleSlashVfx('enemy', 'capture');
+  // ===== Phase 1 — 祭壶飞出 (0ms → 420ms) =====
+  triggerBattleLunge(true);
+  logBattle(`沈砚挥袖祭出【天工墨壶】！青玉流光破空飞向「${battle.tpl.name}」！`);
+  sfx.pick?.('rare');
 
-  if (Math.random() < chance) {
-    const id = battle.tpl.id;
-    state.capturedSpirits[id] = (state.capturedSpirits[id] || 0) + 1;
-    state.stats.capture = (state.stats.capture || 0) + 1;
-    triggerHitAnim(true, true);
-    spawnBattleDmgNum('enemy', '收妖成功!', 'capture');
-    advanceQuestTrigger('capture_any');
-    handleBattleVictory(true);
-  } else {
-    spawnBattleDmgNum('enemy', '收妖! 挣脱', 'capture');
-    sfx.disassemble(false);
-    const logs = [`天工墨壶青光一闪，${battle.tpl.name}挣脱了束缚！（当前血量 ${Math.round(ratio * 100)}%，压至 ≤40% 成功率极高）`];
-    setTimeout(() => runEnemyTurn(logs), 360);
+  let crucibleEl = null;
+  let baguaEl = null;
+  let vortexEl = null;
+  let sparksEl = null;
+
+  const cleanupCaptureVfx = () => {
+    crucibleEl?.remove();
+    baguaEl?.remove();
+    vortexEl?.remove();
+    sparksEl?.remove();
+  };
+
+  if (container) {
+    crucibleEl = document.createElement('div');
+    crucibleEl.className = 'capture-crucible-throw';
+    crucibleEl.innerHTML = `<div class="crucible-orb-mask"><img src="assets/app_icon.png" alt="天工墨壶" /></div>`;
+    container.appendChild(crucibleEl);
+  }
+
+  // ===== Phase 2 — 阴阳八卦太极大阵展开 (360ms → 1050ms) =====
+  setTimeout(() => {
+    if (!battle) { cleanupCaptureVfx(); return; }
+    if (crucibleEl) crucibleEl.classList.add('is-hovering');
+    logBattle(`太极阴阳八卦大阵展开！天工墨壶灵涡疯狂牵引【${battle.tpl.name}】妖魂！`);
+    sfx.playCombatSfx?.('mystic', false);
+
+    if (container) {
+      baguaEl = document.createElement('div');
+      baguaEl.className = 'capture-bagua-array';
+      baguaEl.innerHTML = buildBaguaTaijiSvg();
+      container.appendChild(baguaEl);
+
+      vortexEl = document.createElement('div');
+      vortexEl.className = 'capture-vortex-beams';
+      vortexEl.innerHTML = `
+        <div class="capture-tractor-cone"></div>
+        <div class="capture-laser-filaments">
+          <span class="capture-laser-beam beam-left"></span>
+          <span class="capture-laser-beam beam-core"></span>
+          <span class="capture-laser-beam beam-right"></span>
+        </div>
+        <div class="capture-scan-rings">
+          <span class="capture-scan-ring" style="--ring-delay:0ms"></span>
+          <span class="capture-scan-ring" style="--ring-delay:280ms"></span>
+          <span class="capture-scan-ring" style="--ring-delay:560ms"></span>
+        </div>`;
+      container.appendChild(vortexEl);
+    }
+  }, 360);
+
+  // ===== Phase 3 — 妖魂吸入壶中 / 挣脱破阵 (920ms → 1550ms) =====
+  setTimeout(() => {
+    if (!battle) { cleanupCaptureVfx(); return; }
+    const enemyVisual = $('bat-enemy-visual');
+
+    if (succeeded) {
+      if (crucibleEl) {
+        crucibleEl.classList.remove('is-hovering');
+        crucibleEl.classList.add('is-absorbing');
+      }
+      if (enemyVisual) {
+        enemyVisual.classList.remove('hit', 'hit-flash', 'lunge-right', 'is-defeated', 'capture-break-free');
+        enemyVisual.classList.add('is-captured');
+      }
+      if (gameSettings.screenShakeEnabled) {
+        triggerClassAnim($('rpg-battle-overlay'), 'screen-shake', 340);
+      }
+      sfx.pick?.('legend');
+
+      if (container) {
+        sparksEl = document.createElement('div');
+        sparksEl.className = 'capture-spirit-sparks';
+        const colors = ['#fde047', '#c084fc', '#5eead4', '#f3ce7a', '#e879f9'];
+        sparksEl.innerHTML = Array.from({ length: 14 }, (_, i) => {
+          const sx = 18 + Math.round((i / 13) * 64);
+          const sw = Math.round((Math.sin(i * 1.9)) * 22);
+          const sz = 7 + (i % 4) * 2;
+          const sd = i * 32;
+          const sc = colors[i % colors.length];
+          return `<span class="capture-spark-orb" style="--sx:${sx}%;--sw:${sw}px;--sz:${sz}px;--sd:${sd}ms;--sc:${sc};"></span>`;
+        }).join('');
+        container.appendChild(sparksEl);
+      }
+      logBattle(`金紫妖魂化作流光，被强行吸入天工墨壶之中！`);
+    } else {
+      // 收妖失败：敌方剧烈震颤 + 朱砂冲击波震碎八卦阵
+      if (enemyVisual) {
+        triggerClassAnim(enemyVisual, 'capture-break-free', 540);
+      }
+      triggerHitAnim(true, true);
+      baguaEl?.classList.add('is-shattering');
+      vortexEl?.remove();
+      vortexEl = null;
+      if (crucibleEl) {
+        crucibleEl.classList.remove('is-hovering');
+        crucibleEl.classList.add('is-returning');
+      }
+      if (container) {
+        const burst = document.createElement('div');
+        burst.className = 'capture-shatter-burst';
+        container.appendChild(burst);
+        setTimeout(() => burst.remove(), 500);
+      }
+      spawnBattleDmgNum('enemy', '挣脱束缚!', 'capture');
+      sfx.disassemble(false);
+      const logs = [`八卦大阵被震碎！${battle.tpl.name}挣脱了天工墨壶束缚！（当前血量 ${Math.round(ratio * 100)}%，压至 ≤40% 成功率极高）`];
+      logBattle(logs[0]);
+
+      setTimeout(() => {
+        cleanupCaptureVfx();
+        if (battle) runEnemyTurn(logs);
+      }, 580);
+    }
+  }, 920);
+
+  // ===== Phase 4 — 宝壶归掌 (1480ms → 1920ms，仅成功时) =====
+  if (succeeded) {
+    setTimeout(() => {
+      if (!battle) { cleanupCaptureVfx(); return; }
+      baguaEl?.classList.add('is-fading');
+      vortexEl?.remove();
+      vortexEl = null;
+      if (crucibleEl) {
+        crucibleEl.classList.remove('is-absorbing');
+        crucibleEl.classList.add('is-returning');
+      }
+      if (container) {
+        const calli = document.createElement('div');
+        calli.className = 'capture-success-calligraphy';
+        calli.textContent = '收入墨壶！';
+        container.appendChild(calli);
+        setTimeout(() => calli.remove(), 680);
+      }
+      sfx.pick?.('rare');
+    }, 1480);
+
+    setTimeout(() => {
+      cleanupCaptureVfx();
+      if (!battle) return;
+      const id = battle.tpl.id;
+      state.capturedSpirits[id] = (state.capturedSpirits[id] || 0) + 1;
+      state.stats.capture = (state.stats.capture || 0) + 1;
+      advanceQuestTrigger('capture_any');
+      handleBattleVictory(true);
+    }, 1920);
   }
 }
 
@@ -2199,207 +3008,51 @@ function battleAttemptRun() {
   }
 }
 
-function renderSkillIcon(skill) {
+const SKILL_ICON_COORDS = {
+  // Row 0: 古武门派 (martial)
+  sk_slash:     [0, 0],
+  sk_palm:      [1, 0],
+  sk_shatter:   [2, 0],
+  sk_storm:     [3, 0],
+  // Row 1: 现代军火 (firearm)
+  sk_burst:     [0, 1],
+  sk_shotgun:   [1, 1],
+  sk_snipe:     [2, 1],
+  sk_airstrike: [3, 1],
+  // Row 2: 科幻墨甲 (mecha)
+  sk_cannon:    [0, 2],
+  sk_bits:      [1, 2],
+  sk_overdrive: [2, 2],
+  sk_railgun:   [3, 2],
+  // Row 3: 仙妖奇术 (mystic)
+  sk_shield:    [0, 3],
+  sk_fire:      [1, 3],
+  sk_heal:      [2, 3],
+  sk_crucible:  [3, 3]
+};
+
+const SKILL_BRANCH_GLOW = {
+  martial: 'rgba(229,184,92,0.62)',
+  firearm: 'rgba(249,115,22,0.62)',
+  mecha:   'rgba(56,189,248,0.65)',
+  mystic:  'rgba(94,234,212,0.62)'
+};
+
+function _spriteCell(sheet, col, row, size = 44, shape = 'squircle', glowColor = '') {
+  const s = Number(size) || 44;
+  const xPct = (col / 3) * 100;
+  const yPct = (row / 3) * 100;
+  const glow = glowColor ? `--ico-glow:${glowColor};` : '';
+  return `<span class="painted-ico ${shape}" style="width:${s}px;height:${s}px;background-image:url('assets/${sheet}');background-size:400% 400%;background-position:${xPct}% ${yPct}%;${glow}" aria-hidden="true"></span>`;
+}
+
+function renderSkillIcon(skill, size = 44) {
+  const s = Number(size) || 44;
   const id = skill?.id || '';
   const cat = skill?.category || 'martial';
-
-  // 分支配色方案（暗墨底圆徽 + 分支辉光外环）
-  const palettes = {
-    martial: { bg1: '#2a1f16', bg2: '#120d0a', rim: '#e5b85c', glow: 'rgba(229,184,92,0.58)' },
-    firearm: { bg1: '#2c1814', bg2: '#140b09', rim: '#f97316', glow: 'rgba(249,115,22,0.58)' },
-    mecha:   { bg1: '#0f2234', bg2: '#09121c', rim: '#38bdf8', glow: 'rgba(56,189,248,0.62)' },
-    mystic:  { bg1: '#112a24', bg2: '#081613', rim: '#5eead4', glow: 'rgba(94,234,212,0.58)' }
-  };
-  const pal = palettes[cat] || palettes.martial;
-
-  let art = '';
-  switch (id) {
-    // ---- 1. 古武门派 (martial) ----
-    case 'sk_slash': // 青城破风剑诀：寒光墨剑 + 青金破风弧
-      art = `
-        <path d="M9 31c6-12 18-19 30-20" fill="none" stroke="#5eead4" stroke-width="2.4" stroke-linecap="round" opacity="0.72"/>
-        <path d="M12 37c9-5 19-12 27-23" fill="none" stroke="#fde68a" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>
-        <polygon points="38,9 33,19 18,34 14,30 29,15" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.2"/>
-        <line x1="17" y1="31" x2="35" y2="13" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
-        <line x1="11" y1="26" x2="21" y2="36" stroke="#e5b85c" stroke-width="3.2" stroke-linecap="round"/>
-        <line x1="8" y1="39" x2="15" y2="32" stroke="#7c2d12" stroke-width="3.4" stroke-linecap="round"/>
-        <circle cx="37" cy="11" r="2.2" fill="#fef08a"/>
-      `;
-      break;
-    case 'sk_palm': // 降龙墨掌劲：金墨龙掌 + 震波环
-      art = `
-        <circle cx="24" cy="24" r="16" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.75"/>
-        <circle cx="24" cy="24" r="11" fill="none" stroke="#fde68a" stroke-width="1.2" opacity="0.6"/>
-        <path d="M17 34v-9l-3-6a1.7 1.7 0 0 1 3-1.4l2 4.4V13a1.7 1.7 0 0 1 3.4 0v7.5V11.5a1.8 1.8 0 0 1 3.6 0v9V13a1.7 1.7 0 0 1 3.4 0v8.5l1.6-4.2a1.7 1.7 0 0 1 3.1 1.3l-2.6 8.9c-.8 3.2-3 6.5-6.5 6.5h-4.5c-2.5 0-3.5-1.5-3.5-3z" fill="#f59e0b" stroke="#fef3c7" stroke-width="1.4" stroke-linejoin="round"/>
-        <circle cx="24" cy="26" r="3.2" fill="#fef08a"/>
-      `;
-      break;
-    case 'sk_shatter': // 断钢裂甲枪：赤缨龙枪 + 破甲金芒
-      art = `
-        <path d="M29 12l9-2-2 9-4-3z" fill="#fde047" stroke="#f59e0b" stroke-width="1"/>
-        <line x1="9" y1="39" x2="33" y2="15" stroke="#b45309" stroke-width="3.2" stroke-linecap="round"/>
-        <polygon points="40,8 34,20 28,14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.3"/>
-        <path d="M26 16c-2 4-1 7 2 8-4 0-7-2-7-6z" fill="#ef4444"/>
-        <path d="M24 19c1 4 4 6 8 5-3 2-7 1-9-2z" fill="#f87171"/>
-        <path d="M14 13l4 4M35 28l4 4M17 20l-5-1" stroke="#fde047" stroke-width="1.8" stroke-linecap="round"/>
-      `;
-      break;
-    case 'sk_storm': // 万墨归宗剑：五剑归宗光阵
-      art = `
-        <circle cx="24" cy="24" r="15" fill="none" stroke="#e5b85c" stroke-width="1.4" opacity="0.7"/>
-        <polygon points="24,6 26.5,24 24,29 21.5,24" fill="#fef08a" stroke="#f59e0b" stroke-width="1"/>
-        <polygon points="39,14 27,26 23,25 25,21" fill="#e2e8f0" stroke="#38bdf8" stroke-width="1"/>
-        <polygon points="9,14 23,21 25,25 21,26" fill="#e2e8f0" stroke="#38bdf8" stroke-width="1"/>
-        <polygon points="36,36 25,27 25,23 29,24" fill="#cbd5e1" stroke="#e5b85c" stroke-width="1"/>
-        <polygon points="12,36 19,24 23,23 23,27" fill="#cbd5e1" stroke="#e5b85c" stroke-width="1"/>
-        <circle cx="24" cy="25" r="4" fill="#fde047" stroke="#ffffff" stroke-width="1.2"/>
-      `;
-      break;
-
-    // ---- 2. 现代军火 (firearm) ----
-    case 'sk_burst': // 火神加特林扫射：六管转轮机枪 + 炽烈曳光弹
-      art = `
-        <rect x="7" y="18" width="13" height="12" rx="2.5" fill="#475569" stroke="#e5b85c" stroke-width="1.5"/>
-        <rect x="19" y="19" width="15" height="2.4" rx="1" fill="#cbd5e1"/>
-        <rect x="19" y="23" width="15" height="2.4" rx="1" fill="#f8fafc"/>
-        <rect x="19" y="27" width="15" height="2.4" rx="1" fill="#94a3b8"/>
-        <rect x="29" y="18" width="3" height="12" rx="1" fill="#d49a3a"/>
-        <polygon points="35,24 43,17 40,23 44,25 39,27 42,32 35,26" fill="#fde047" stroke="#f97316" stroke-width="1"/>
-        <line x1="12" y1="30" x2="10" y2="37" stroke="#b45309" stroke-width="3.2" stroke-linecap="round"/>
-      `;
-      break;
-    case 'sk_shotgun': // 散弹墨霰：双管霰弹 + 灼热铁霰扇面
-      art = `
-        <path d="M7 33l8-6h13v4H18l-4 5z" fill="#92400e" stroke="#f3ce7a" stroke-width="1.3"/>
-        <rect x="13" y="21" width="17" height="4" rx="1" fill="#64748b" stroke="#cbd5e1" stroke-width="1"/>
-        <rect x="15" y="25" width="14" height="3" rx="1" fill="#475569"/>
-        <path d="M31 23l10-9M31 24l11-2M31 25l10 6M31 26l7 10" stroke="#fb923c" stroke-width="1.7" stroke-linecap="round"/>
-        <circle cx="38" cy="16" r="2" fill="#fde047"/>
-        <circle cx="41" cy="22" r="2.2" fill="#fef08a"/>
-        <circle cx="39" cy="29" r="2" fill="#f97316"/>
-        <circle cx="35" cy="34" r="1.7" fill="#ef4444"/>
-      `;
-      break;
-    case 'sk_snipe': // 反器材穿甲狙杀：猩红战术瞄准镜 + 十字准星
-      art = `
-        <circle cx="24" cy="24" r="14" fill="none" stroke="#ef4444" stroke-width="2"/>
-        <circle cx="24" cy="24" r="7.5" fill="none" stroke="#fca5a5" stroke-width="1.2" stroke-dasharray="3 2"/>
-        <line x1="24" y1="6" x2="24" y2="16" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
-        <line x1="24" y1="32" x2="24" y2="42" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
-        <line x1="6" y1="24" x2="16" y2="24" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
-        <line x1="32" y1="24" x2="42" y2="24" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>
-        <circle cx="24" cy="24" r="2.8" fill="#ef4444" stroke="#fef08a" stroke-width="1"/>
-      `;
-      break;
-    case 'sk_airstrike': // 武装战隼空袭：俯冲战隼剪影 + 航弹火球
-      art = `
-        <polygon points="24,8 28,17 40,21 28,23 26,28 22,28 20,23 8,21 20,17" fill="#cbd5e1" stroke="#f97316" stroke-width="1.3" stroke-linejoin="round"/>
-        <polygon points="24,29 27,34 24,39 21,34" fill="#fde047" stroke="#ef4444" stroke-width="1.2"/>
-        <path d="M13 36c3-3 7-4 11-4s8 1 11 4" fill="none" stroke="#f97316" stroke-width="2.2" stroke-linecap="round"/>
-        <circle cx="16" cy="34" r="2" fill="#fb923c"/>
-        <circle cx="32" cy="34" r="2" fill="#fb923c"/>
-      `;
-      break;
-
-    // ---- 3. 科幻墨甲 (mecha) ----
-    case 'sk_cannon': // 重炮覆盖轰炸：双联飞弹齐射 + 爆裂尾焰
-      art = `
-        <path d="M11 35l10-10" stroke="#f97316" stroke-width="3.5" stroke-linecap="round"/>
-        <path d="M17 39l11-11" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
-        <polygon points="34,11 29,21 23,15" fill="#e2e8f0" stroke="#38bdf8" stroke-width="1.3"/>
-        <polygon points="39,18 34,27 29,22" fill="#fde047" stroke="#f97316" stroke-width="1.3"/>
-        <rect x="19" y="18" width="9" height="4.5" rx="1.5" transform="rotate(-45 23.5 20.2)" fill="#64748b" stroke="#bae6fd" stroke-width="1"/>
-        <rect x="25" y="24" width="9" height="4.5" rx="1.5" transform="rotate(-45 29.5 26.2)" fill="#64748b" stroke="#fde68a" stroke-width="1"/>
-        <circle cx="12" cy="34" r="3" fill="#fde047"/>
-      `;
-      break;
-    case 'sk_bits': // 浮游炮齐射：四翼墨家浮游炮 + 汇聚激光束
-      art = `
-        <line x1="12" y1="12" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
-        <line x1="36" y1="12" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
-        <line x1="12" y1="36" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
-        <line x1="36" y1="36" x2="24" y2="24" stroke="#38bdf8" stroke-width="2" opacity="0.85"/>
-        <polygon points="10,9 16,11 12,16" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
-        <polygon points="38,9 32,11 36,16" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
-        <polygon points="10,39 16,37 12,32" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
-        <polygon points="38,39 32,37 36,32" fill="#e5b85c" stroke="#fef08a" stroke-width="1"/>
-        <circle cx="24" cy="24" r="5.5" fill="#0ea5e9" stroke="#e0f2fe" stroke-width="1.8"/>
-        <circle cx="24" cy="24" r="2.2" fill="#ffffff"/>
-      `;
-      break;
-    case 'sk_overdrive': // 量子护盾超载：六边形量子盾 + 超载核心
-      art = `
-        <polygon points="24,7 38,15 38,33 24,41 10,33 10,15" fill="rgba(14,165,233,0.22)" stroke="#38bdf8" stroke-width="2.2"/>
-        <polygon points="24,13 33,18 33,30 24,35 15,30 15,18" fill="none" stroke="#7dd3fc" stroke-width="1.3" stroke-dasharray="4 2"/>
-        <circle cx="24" cy="24" r="5" fill="#f97316" stroke="#fde047" stroke-width="1.6"/>
-        <circle cx="24" cy="24" r="2" fill="#ffffff"/>
-      `;
-      break;
-    case 'sk_railgun': // 轨道电磁炮：双轨电磁线圈 + 贯穿光束
-      art = `
-        <line x1="6" y1="32" x2="40" y2="14" stroke="#38bdf8" stroke-width="7" stroke-linecap="round" opacity="0.38"/>
-        <line x1="6" y1="32" x2="41" y2="13" stroke="#e0f2fe" stroke-width="2.6" stroke-linecap="round"/>
-        <path d="M13 23l5 9M21 19l5 9M29 15l5 9" stroke="#7dd3fc" stroke-width="1.8" stroke-linecap="round"/>
-        <circle cx="40" cy="14" r="3.2" fill="#ffffff" stroke="#38bdf8" stroke-width="1.4"/>
-        <circle cx="11" cy="29" r="3.5" fill="#f97316" stroke="#fde047" stroke-width="1.3"/>
-      `;
-      break;
-
-    // ---- 4. 神仙妖怪 · 墨土奇术 (mystic) ----
-    case 'sk_shield': // 玄墨金钟罩：青铜金钟 + 玉色护体符环
-      art = `
-        <circle cx="24" cy="24" r="15.5" fill="none" stroke="#5eead4" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.75"/>
-        <path d="M14 33c0-11 3-18 10-18s10 7 10 18z" fill="#b45309" stroke="#fde68a" stroke-width="1.8" stroke-linejoin="round"/>
-        <rect x="21" y="10" width="6" height="5" rx="1.5" fill="#e5b85c" stroke="#fef3c7" stroke-width="1.1"/>
-        <line x1="12" y1="33" x2="36" y2="33" stroke="#fde047" stroke-width="2.4" stroke-linecap="round"/>
-        <circle cx="24" cy="25" r="3" fill="#5eead4"/>
-      `;
-      break;
-    case 'sk_fire': // 赤焰焚墨：朱砂业火莲焰
-      art = `
-        <path d="M24 8c4 6 11 10 11 19a11 11 0 0 1-22 0c0-6 4-10 6-13 0 4 2 5 3 5 0-5 2-8 2-11z" fill="#ea580c" stroke="#fde047" stroke-width="1.5" stroke-linejoin="round"/>
-        <path d="M24 17c3 4 6 7 6 12a6 6 0 0 1-12 0c0-4 3-7 6-12z" fill="#facc15"/>
-        <circle cx="24" cy="30" r="2.6" fill="#fffbeb"/>
-      `;
-      break;
-    case 'sk_heal': // 回春青莲诀：翠玉青莲 + 灵露光点
-      art = `
-        <path d="M24 10c4 5 5 11 0 18-5-7-4-13 0-18z" fill="#34d399" stroke="#d1fae5" stroke-width="1.3"/>
-        <path d="M13 18c6 1 10 5 11 12-7-1-11-5-11-12z" fill="#10b981" stroke="#a7f3d0" stroke-width="1.3"/>
-        <path d="M35 18c-6 1-10 5-11 12 7-1 11-5 11-12z" fill="#10b981" stroke="#a7f3d0" stroke-width="1.3"/>
-        <path d="M10 29c5-2 10-1 14 4-6 1-11 0-14-4z" fill="#059669" stroke="#6ee7b7" stroke-width="1.2"/>
-        <path d="M38 29c-5-2-10-1-14 4 6 1 11 0 14-4z" fill="#059669" stroke="#6ee7b7" stroke-width="1.2"/>
-        <circle cx="24" cy="27" r="2.8" fill="#fef08a"/>
-        <circle cx="16" cy="12" r="1.4" fill="#a7f3d0"/><circle cx="32" cy="12" r="1.4" fill="#a7f3d0"/>
-      `;
-      break;
-    case 'sk_crucible': // 墨壶镇魂印：天工墨壶 + 紫金九天雷印
-      art = `
-        <path d="M13 15l5 5-3 3 6 6" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M35 15l-5 5 3 3-6 6" fill="none" stroke="#fde047" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <rect x="20" y="9" width="8" height="4" rx="1.2" fill="#e5b85c"/>
-        <path d="M19 13h10l-1.5 5c4.5 2 6.5 6.5 6.5 11a10 10 0 0 1-20 0c0-4.5 2-9 6.5-11z" fill="#2e1f3a" stroke="#e5b85c" stroke-width="1.8"/>
-        <circle cx="24" cy="28" r="4.5" fill="#a855f7" stroke="#f3e8ff" stroke-width="1.2"/>
-        <circle cx="24" cy="28" r="1.8" fill="#fde047"/>
-      `;
-      break;
-
-    default:
-      art = `
-        <circle cx="24" cy="24" r="11" fill="none" stroke="${pal.rim}" stroke-width="2"/>
-        <polygon points="24,11 28,21 38,24 28,27 24,37 20,27 10,24 20,21" fill="${pal.rim}" opacity="0.9"/>
-      `;
-  }
-
-  return `
-    <span class="bat-skill-icon branch-${cat}" style="--sk-glow:${pal.glow};">
-      <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="24" cy="24" r="22" fill="${pal.bg2}" stroke="${pal.rim}" stroke-width="1.8" opacity="0.94"/>
-        <circle cx="24" cy="24" r="19" fill="${pal.bg1}" opacity="0.72"/>
-        ${art}
-      </svg>
-    </span>
-  `;
+  const glow = SKILL_BRANCH_GLOW[cat] || SKILL_BRANCH_GLOW.martial;
+  const [col, row] = SKILL_ICON_COORDS[id] || [0, 0];
+  return `<span class="bat-skill-icon branch-${cat}" style="--sk-glow:${glow};width:${s}px;height:${s}px;">${_spriteCell('icons_skills.jpg', col, row, s, 'circle', glow)}</span>`;
 }
 
 function renderBattleSubpanel() {
@@ -2493,7 +3146,7 @@ function openModal(title, bodyHtml, footerHtml = '') {
   const backdrop = $('modal-backdrop');
   const wasClosed = !backdrop || backdrop.classList.contains('hidden');
   if (world) world.paused = true;
-  $('modal-box')?.classList.remove('modal-crucible-full');
+  $('modal-box')?.classList.remove('modal-crucible-full', 'modal-worldmap-full', 'modal-armory-full');
   $('modal-title').textContent = title;
   $('modal-body').innerHTML = bodyHtml;
   $('modal-footer').innerHTML = footerHtml || '<button class="btn btn-secondary" id="modal-default-close">合上卷轴</button>';
@@ -2505,7 +3158,7 @@ function openModal(title, bodyHtml, footerHtml = '') {
 function closeModal(silent = false) {
   const backdrop = $('modal-backdrop');
   const wasOpen = Boolean(backdrop && !backdrop.classList.contains('hidden'));
-  $('modal-box')?.classList.remove('modal-crucible-full');
+  $('modal-box')?.classList.remove('modal-crucible-full', 'modal-worldmap-full', 'modal-armory-full');
   backdrop?.classList.add('hidden');
   if (wasOpen && !silent) sfx.uiTick?.();
   if (world && !battle && !currentDialog) {
@@ -2513,33 +3166,62 @@ function closeModal(silent = false) {
   }
 }
 
-// ==================== 1. 天下舆图（5 大域 × 21 张地图） ====================
+// ==================== 1. 天下舆图（5 大域 × 21 张地图 · 沉浸沙盘） ====================
+const WORLDMAP_COORDS = [
+  { x: 13, y: 54 }, // 0: 墨石镇域
+  { x: 36, y: 28 }, // 1: 铁锈废都域
+  { x: 55, y: 66 }, // 2: 赤焰兵工域
+  { x: 69, y: 28 }, // 3: 青瘴毒泽域
+  { x: 89, y: 46 }  // 4: 天枢核心域
+];
+
 function openWorldMap(selectedRegionId = null) {
   const curMap = MAPS_BY_ID[state.mapId] || MAPS[0];
   const activeRegId = selectedRegionId || curMap.regionId;
   const activeReg = getRegionById(activeRegId);
+  const activeWeather = WEATHERS[state.regionWeathers[activeReg.id] ?? 0] || WEATHERS[0];
 
   const linesSvg = [];
   for (let i = 0; i < REGIONS.length - 1; i++) {
-    const a = REGIONS[i].worldPos;
-    const b = REGIONS[i + 1].worldPos;
-    linesSvg.push(`<line x1="${a.x}%" y1="${a.y}%" x2="${b.x}%" y2="${b.y}%" stroke="rgba(200,155,60,0.45)" stroke-width="2" stroke-dasharray="6 5"/>`);
+    const a = WORLDMAP_COORDS[i] || REGIONS[i].worldPos;
+    const b = WORLDMAP_COORDS[i + 1] || REGIONS[i + 1].worldPos;
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2 + (i % 2 === 0 ? -7 : 7);
+    const segUnlocked = isRegionUnlocked(REGIONS[i].id) && isRegionUnlocked(REGIONS[i + 1].id);
+    linesSvg.push(`
+      <path d="M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}"
+        fill="none"
+        stroke="${segUnlocked ? 'rgba(94,234,212,0.42)' : 'rgba(94,234,212,0.22)'}"
+        stroke-width="${segUnlocked ? '0.65' : '0.45'}"
+        stroke-dasharray="2.1 1.6"
+        vector-effect="non-scaling-stroke" />
+      <path d="M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}"
+        fill="none"
+        stroke="${segUnlocked ? 'rgba(243,206,122,0.34)' : 'rgba(212,162,74,0.16)'}"
+        stroke-width="0.28"
+        vector-effect="non-scaling-stroke" />
+    `);
   }
 
-  const nodesHtml = REGIONS.map((reg) => {
+  const nodesHtml = REGIONS.map((reg, idx) => {
+    const pos = WORLDMAP_COORDS[idx] || reg.worldPos;
     const unlocked = isRegionUnlocked(reg.id);
     const isCur = reg.id === curMap.regionId;
+    const isSel = reg.id === activeReg.id;
     const wid = state.regionWeathers[reg.id] ?? 0;
     const w = WEATHERS[wid] || WEATHERS[0];
     return `
-      <button class="map-node ${unlocked ? 'unlocked' : 'locked'}${isCur ? ' active' : ''}"
-        style="left:${reg.worldPos.x}%;top:${reg.worldPos.y}%;" data-region-id="${reg.id}">
-        <span class="node-disc" style="color:${reg.color};">
-          ${reg.name.slice(0, 1)}
-          <span class="node-weather" style="color:${w.color};">${w.short}</span>
+      <button class="map-node ${unlocked ? 'unlocked' : 'locked'}${isCur ? ' current' : ''}${isSel ? ' selected' : ''}${isCur || isSel ? ' active' : ''}"
+        style="left:${pos.x}%;top:${pos.y}%;--node-accent:${reg.color};" data-region-id="${reg.id}">
+        <span class="node-seal-wrap">
+          ${(isCur || isSel) ? '<span class="node-pulse-ring" aria-hidden="true"></span>' : ''}
+          <span class="node-disc" style="color:${reg.color};">
+            ${reg.name.slice(0, 1)}
+            <span class="node-weather" style="color:${w.color};">${w.short}</span>
+          </span>
         </span>
         <span class="node-label">${escapeHtml(reg.name)}</span>
-        ${unlocked ? '' : `<span class="node-cost">${reg.unlockCost} 币解锁</span>`}
+        ${unlocked ? (isCur ? '<span class="node-here-tag">身在此域</span>' : '') : `<span class="node-cost">锁 · ${reg.unlockCost} 币</span>`}
       </button>
     `;
   }).join('');
@@ -2549,27 +3231,41 @@ function openWorldMap(selectedRegionId = null) {
     if (!m) return '';
     const isCur = m.id === state.mapId;
     const typeTag = m.sceneType === 'interior' ? '室' : m.sceneType === 'cave' ? '窟' : m.sceneType === 'town' ? '镇' : '野';
-    return `<button class="submap-pill${isCur ? ' current' : ''}" data-map-id="${m.id}">[${typeTag}] ${escapeHtml(m.short || m.name)}</button>`;
+    return `
+      <button class="submap-pill${isCur ? ' current' : ''}" data-map-id="${m.id}">
+        <span class="submap-tag">[${typeTag}]</span>
+        <span class="submap-name">${escapeHtml(m.short || m.name)}</span>
+      </button>
+    `;
   }).join('');
 
   const body = `
-    <div class="world-map-board">
-      <svg class="world-map-svg">${linesSvg.join('')}</svg>
+    <div class="worldmap-stage">
+      <svg class="world-map-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${linesSvg.join('')}</svg>
       <div class="map-nodes-layer">${nodesHtml}</div>
     </div>
-    <div class="modal-list-item">
-      <div>
-        <div class="modal-item-title">${escapeHtml(activeReg.name)} · ${escapeHtml(activeReg.subtitle)}</div>
-        <div class="modal-item-desc">当前天气：${escapeHtml((WEATHERS[state.regionWeathers[activeReg.id] ?? 0] || WEATHERS[0]).name)} · 下辖 ${activeReg.maps.length} 张无缝 2.5D 地图</div>
+    <div class="worldmap-console">
+      <div class="worldmap-console-head">
+        <div class="worldmap-region-info">
+          <div class="worldmap-region-title-row">
+            <span class="worldmap-region-title" style="color:${activeReg.color};">${escapeHtml(activeReg.name)}</span>
+            <span class="worldmap-weather-tag" style="color:${activeWeather.color};border-color:${activeWeather.color}44;">天象 · ${escapeHtml(activeWeather.name)}</span>
+            <span class="worldmap-map-count">辖 ${activeReg.maps.length} 处舆图</span>
+          </div>
+          <div class="worldmap-region-sub">${escapeHtml(activeReg.subtitle)}</div>
+        </div>
+        <div class="worldmap-console-actions">
+          ${isRegionUnlocked(activeReg.id)
+            ? `<button class="worldmap-act-btn primary" id="btn-travel-region">直达主图</button>`
+            : `<button class="worldmap-act-btn unlock" id="btn-unlock-region">解锁此域 · ${activeReg.unlockCost} 币</button>`}
+        </div>
       </div>
-      ${isRegionUnlocked(activeReg.id)
-        ? `<button class="btn btn-amber btn-sm" id="btn-travel-region">直达主图</button>`
-        : `<button class="btn btn-vermilion btn-sm" id="btn-unlock-region">花费 ${activeReg.unlockCost} 币解锁</button>`}
+      <div class="worldmap-submaps-strip">${subMapsHtml}</div>
     </div>
-    <div class="region-submaps-bar">${subMapsHtml}</div>
   `;
 
-  openModal('墨土五域 · 天下舆图（21 张无缝地图）', body);
+  openModal('墨土五域 · 天下舆图', body);
+  $('modal-box')?.classList.add('modal-worldmap-full');
 
   $('modal-body').querySelectorAll('.map-node').forEach((btn) => {
     btn.addEventListener('click', () => openWorldMap(btn.dataset.regionId));
@@ -2620,6 +3316,76 @@ function _thumbSvg(size, inner, extraStyle = '') {
   return `<svg viewBox="0 0 48 48" width="${size}" height="${size}" style="width:${size}px;height:${size}px;display:block;flex-shrink:0;filter:drop-shadow(0 3px 5px rgba(0,0,0,0.75));${extraStyle}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
 }
 
+const ITEM_ICON_COORDS = {
+  // (0,0) rusted tin can
+  0: [0, 0], 1: [0, 0], 2: [0, 0],
+  // (1,0) sparking copper wire spool
+  3: [1, 0], 13: [1, 0],
+  // (2,0) cracked gold circuit board
+  4: [2, 0], 5: [2, 0], 19: [2, 0],
+  // (3,0) glowing cyan quantum GPU chip
+  6: [3, 0], 9: [3, 0],
+  // (0,1) military hazard battery
+  7: [0, 1], 15: [0, 1],
+  // (1,1) broken red-eye recon drone
+  8: [1, 1], 18: [1, 1],
+  // (2,1) glowing blue isotope core
+  10: [2, 1],
+  // (3,1) scarred aviation black-box
+  11: [3, 1], 27: [3, 1], 35: [3, 1],
+  // (0,2) red tactical flare gun
+  14: [0, 2],
+  // (1,2) glowing emerald mutant mushroom
+  17: [1, 2],
+  // (2,2) vacuum-sealed military ration bar
+  20: [2, 2],
+  // (3,2) cyan tactical water canteen
+  21: [3, 2],
+  // (0,3) porcelain healing powder gourd
+  22: [0, 3],
+  // (1,3) glowing green anti-rad syringe
+  23: [1, 3],
+  // (2,3) battered tactical smoke grenade
+  24: [2, 3],
+  // (3,3) holographic antique pocket watch
+  12: [3, 3], 16: [3, 3], 25: [3, 3], 26: [3, 3], 28: [3, 3], 29: [3, 3],
+  30: [3, 3], 31: [3, 3], 32: [3, 3], 33: [3, 3], 34: [3, 3], 36: [3, 3], 37: [3, 3]
+};
+
+const GEAR_ICON_COORDS = {
+  // Weapons
+  wpn_inkblade:     [0, 0], // cyan-runed dark short dao
+  wpn_qingcheng:    [1, 0], // ancient bronze-jade Chinese jian
+  wpn_flaregun:     [2, 0], // glowing wasteland blunderbuss/shotgun
+  wpn_shotgun:      [2, 0], // glowing wasteland blunderbuss/shotgun
+  wpn_pulsesword:   [3, 0], // cyan plasma energy saber
+  wpn_gatling:      [0, 1], // heavy 6-barrel Gatling minigun
+  wpn_artillery:    [0, 1], // heavy cannon/minigun
+  wpn_sniper:       [1, 1], // futuristic sniper railgun
+  wpn_plasma_rifle: [1, 1], // futuristic sniper/plasma rifle
+  wpn_railgun:      [1, 1], // futuristic sniper railgun
+  wpn_xuanyuan:     [2, 1], // legendary radiant Xuan-Yuan spirit greatsword
+  // Armor
+  armor_ironwire:   [0, 2], // carbon-fiber martial arts trenchcoat / medium armor
+  armor_exo:        [2, 2], // heavy ancient-bronze Mo-Jia battle cuirass
+  // Mech cores
+  mech_steam_core:    [3, 2], // hydraulic exoskeleton arm gauntlet
+  mech_crimson_frame: [0, 3], // molten-orange crimson mech fusion core
+  mech_bit_array:     [1, 3], // purple cybernetic Taotie mech core
+  mech_tianshu_exo:   [1, 3], // purple cybernetic Taotie mech core
+  // Relics
+  relic_fox_orb:      [2, 3], // glowing jade-bronze Mo-Jia Bagua pendant
+  relic_thunder_seal: [2, 3], // glowing jade-bronze Mo-Jia Bagua pendant
+  relic_tianshu:      [3, 3]  // floating cyan celestial astrolabe relic sphere
+};
+
+function _qualityGlow(quality) {
+  if (quality === 'legend') return 'rgba(245,158,11,0.58)';
+  if (quality === 'rare')   return 'rgba(168,123,199,0.52)';
+  if (quality === 'fine')   return 'rgba(94,234,212,0.42)';
+  return 'rgba(212,162,74,0.22)';
+}
+
 function renderVisualThumb(kind, idOrObj, size = 44) {
   const s = Number(size) || 44;
 
@@ -2634,306 +3400,53 @@ function renderVisualThumb(kind, idOrObj, size = 44) {
     const src = _getGuardianSpriteSrc(g?.id || idOrObj);
     return _thumbImg(src, g?.name || '护驾', s);
   }
+  if (kind === 'crucible') {
+    return _thumbImg('assets/app_icon.png', '天工墨壶', s, 'border-radius:50%;border:1.5px solid rgba(229,187,92,0.58);');
+  }
 
-  // 2. 装备（武器 / 护甲 / 机甲核心 / 秘宝）
+  // 2. 装备（武器 / 护甲 / 机甲核心 / 秘宝）：使用 4×4 手绘 icons_gear.jpg
   if (kind === 'equip' || kind === 'equipment') {
     const eq = typeof idOrObj === 'object' && idOrObj ? idOrObj : EQUIPMENT[idOrObj];
     if (!eq) {
-      return _thumbImg('assets/sprites/chest.png', '装备', s);
+      return _spriteCell('icons_gear.jpg', 0, 0, s, 'squircle', 'rgba(212,162,74,0.25)');
     }
-
-    // 机甲核心
-    if (eq.slot === 'mech') {
-      if (eq.id === 'mech_crimson_frame' || eq.id === 'mech_tianshu_exo') {
-        const glow = eq.id === 'mech_tianshu_exo'
-          ? 'filter:drop-shadow(0 0 7px rgba(56,189,248,0.65)) drop-shadow(0 3px 6px rgba(0,0,0,0.8));'
-          : 'filter:drop-shadow(0 0 7px rgba(249,115,22,0.55)) drop-shadow(0 3px 6px rgba(0,0,0,0.8));';
-        return _thumbImg('assets/sprites/enemy_mech.png', eq.name, s, glow);
-      }
-      if (eq.id === 'mech_bit_array') {
-        return _thumbSvg(s, `
-          <circle cx="24" cy="24" r="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2.2"/>
-          <circle cx="24" cy="24" r="4.5" fill="#7dd3fc"/>
-          <polygon points="24,4 28,12 20,12" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
-          <polygon points="44,24 36,28 36,20" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
-          <polygon points="24,44 20,36 28,36" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
-          <polygon points="4,24 12,20 12,28" fill="#d49a3a" stroke="#f3ce7a" stroke-width="1"/>
-          <circle cx="24" cy="8" r="1.8" fill="#38bdf8"/>
-          <circle cx="40" cy="24" r="1.8" fill="#38bdf8"/>
-          <circle cx="24" cy="40" r="1.8" fill="#38bdf8"/>
-          <circle cx="8" cy="24" r="1.8" fill="#38bdf8"/>
-        `);
-      }
-      return _thumbSvg(s, `
-        <polygon points="24,5 39,14 39,34 24,43 9,34 9,14" fill="#2b2623" stroke="#d49a3a" stroke-width="2.4"/>
-        <polygon points="24,11 33,17 33,31 24,37 15,31 15,17" fill="#1a2630" stroke="#5eead4" stroke-width="1.6"/>
-        <circle cx="24" cy="24" r="5.5" fill="#38bdf8"/>
-        <circle cx="24" cy="24" r="2.5" fill="#e0f2fe"/>
-        <path d="M24 5v6M39 14l-6 3M39 34l-6-3M24 43v-6M9 34l6-3M9 14l6 3" stroke="#e5bb5c" stroke-width="1.5"/>
-      `);
+    let coords = GEAR_ICON_COORDS[eq.id];
+    if (!coords) {
+      if (eq.slot === 'mech') coords = eq.quality === 'legend' ? [1, 3] : [0, 3];
+      else if (eq.slot === 'relic') coords = eq.quality === 'legend' ? [3, 3] : [2, 3];
+      else if (eq.slot === 'armor') coords = eq.genre === 'scifi' ? [2, 2] : [3, 1];
+      else if (eq.weaponType === 'gatling' || eq.weaponType === 'cannon') coords = [0, 1];
+      else if (eq.weaponType === 'sniper' || eq.weaponType === 'railgun' || eq.weaponType === 'plasma') coords = [1, 1];
+      else if (eq.weaponType === 'shotgun' || eq.weaponType === 'pistol') coords = [2, 0];
+      else if (eq.genre === 'mythic') coords = [2, 1];
+      else if (eq.genre === 'scifi') coords = [3, 0];
+      else coords = [0, 0];
     }
-
-    // 秘宝
-    if (eq.slot === 'relic') {
-      if (eq.id === 'relic_tianshu') {
-        return _thumbImg('assets/app_icon.png', eq.name, s, 'border-radius:50%;border:1.5px solid rgba(229,187,92,0.75);');
-      }
-      if (eq.id === 'relic_fox_orb') {
-        return _thumbSvg(s, `
-          <circle cx="24" cy="24" r="16" fill="#3b1736" stroke="#e5bb5c" stroke-width="2"/>
-          <circle cx="24" cy="24" r="11" fill="#ec4899" opacity="0.75"/>
-          <circle cx="20" cy="20" r="4.5" fill="#fbcfe8" opacity="0.85"/>
-          <path d="M10 31c4 5 24 5 28 0" fill="none" stroke="#f3ce7a" stroke-width="2" stroke-linecap="round"/>
-          <path d="M13 13c5-5 17-5 22 0" fill="none" stroke="#f472b6" stroke-width="1.6" stroke-linecap="round"/>
-        `);
-      }
-      return _thumbSvg(s, `
-        <rect x="11" y="7" width="26" height="34" rx="4" fill="#2c241b" stroke="#e5bb5c" stroke-width="2.2"/>
-        <rect x="15" y="11" width="18" height="26" rx="2" fill="#1c273d" stroke="#d49a3a" stroke-width="1.2"/>
-        <polygon points="26,12 18,25 24,25 21,36 31,22 25,22" fill="#38bdf8" stroke="#bae6fd" stroke-width="0.8"/>
-      `);
-    }
-
-    // 护甲
-    if (eq.slot === 'armor') {
-      if (eq.genre === 'scifi') {
-        return _thumbSvg(s, `
-          <path d="M12 10l6-3h12l6 3 4 9-6 4v16l-10 4-10-4V23l-6-4z" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
-          <path d="M18 12h12l2 10-8 5-8-5z" fill="#334155" stroke="#7dd3fc" stroke-width="1.2"/>
-          <circle cx="24" cy="20" r="3.5" fill="#5eead4"/>
-          <path d="M16 32h16M18 36h12" stroke="#d49a3a" stroke-width="1.8" stroke-linecap="round"/>
-        `);
-      }
-      return _thumbSvg(s, `
-        <path d="M13 10l5-3h12l5 3 4 8-5 4v16l-10 4-10-4V22l-5-4z" fill="#3a3026" stroke="#d49a3a" stroke-width="2"/>
-        <path d="M15 18h18M15 24h18M16 30h16M18 35h12" stroke="#c89b3c" stroke-width="1.8"/>
-        <path d="M24 11v28" stroke="#78716c" stroke-width="1.6"/>
-        <circle cx="24" cy="21" r="3" fill="#e5bb5c"/>
-      `);
-    }
-
-    // 武器：重炮 / 电磁炮 / 加特林 / 等离子步枪 / 狙击 / 霰弹 / 手铳 / 光剑 / 古剑
-    const wt = eq.weaponType || 'blade';
-    if (wt === 'cannon') {
-      return _thumbSvg(s, `
-        <rect x="6" y="17" width="30" height="12" rx="3" fill="#475569" stroke="#d49a3a" stroke-width="2"/>
-        <rect x="34" y="15" width="8" height="16" rx="2" fill="#b45309" stroke="#f3ce7a" stroke-width="1.6"/>
-        <circle cx="14" cy="23" r="3" fill="#f97316"/>
-        <path d="M12 29l-4 10h8l2-10M24 29l4 10h6l-4-10" fill="#334155" stroke="#94a3b8" stroke-width="1.4"/>
-        <circle cx="40" cy="23" r="2.5" fill="#fde047"/>
-      `);
-    }
-    if (wt === 'railgun') {
-      return _thumbSvg(s, `
-        <rect x="5" y="15" width="35" height="5" rx="1.5" fill="#334155" stroke="#38bdf8" stroke-width="1.5"/>
-        <rect x="5" y="25" width="35" height="5" rx="1.5" fill="#334155" stroke="#38bdf8" stroke-width="1.5"/>
-        <rect x="7" y="20" width="24" height="5" fill="#f97316"/>
-        <path d="M31 22.5h12" stroke="#fde047" stroke-width="2.6" stroke-linecap="round"/>
-        <rect x="8" y="29" width="9" height="9" rx="2" fill="#475569" stroke="#d49a3a" stroke-width="1.4"/>
-        <circle cx="18" cy="22.5" r="2.2" fill="#fef08a"/>
-      `);
-    }
-    if (wt === 'gatling') {
-      return _thumbSvg(s, `
-        <rect x="18" y="15" width="24" height="3.2" rx="1" fill="#94a3b8" stroke="#1e293b" stroke-width="0.8"/>
-        <rect x="18" y="20" width="24" height="3.2" rx="1" fill="#cbd5e1" stroke="#1e293b" stroke-width="0.8"/>
-        <rect x="18" y="25" width="24" height="3.2" rx="1" fill="#94a3b8" stroke="#1e293b" stroke-width="0.8"/>
-        <rect x="33" y="14" width="4" height="15" rx="1" fill="#d49a3a"/>
-        <rect x="7" y="14" width="13" height="15" rx="3" fill="#475569" stroke="#e5bb5c" stroke-width="1.8"/>
-        <rect x="10" y="29" width="8" height="10" rx="2" fill="#b45309" stroke="#f3ce7a" stroke-width="1.3"/>
-      `);
-    }
-    if (wt === 'plasma') {
-      return _thumbSvg(s, `
-        <path d="M6 21h28l6-2v6l-6-1H22l-3 11h-6l2-9H6z" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8"/>
-        <rect x="16" y="16" width="12" height="4" rx="1.5" fill="#0ea5e9"/>
-        <rect x="24" y="20" width="11" height="3" rx="1" fill="#7dd3fc"/>
-        <circle cx="13" cy="22" r="2" fill="#5eead4"/>
-      `);
-    }
-    if (wt === 'sniper') {
-      return _thumbSvg(s, `
-        <path d="M5 25l6-4h28v3H21l-4 9h-5l2-7H5z" fill="#3f3f46" stroke="#d49a3a" stroke-width="1.6"/>
-        <rect x="14" y="14" width="14" height="4" rx="1.5" fill="#18181b" stroke="#f59e0b" stroke-width="1.3"/>
-        <line x1="18" y1="18" x2="18" y2="21" stroke="#d49a3a" stroke-width="1.5"/>
-        <line x1="24" y1="18" x2="24" y2="21" stroke="#d49a3a" stroke-width="1.5"/>
-        <rect x="38" y="20" width="5" height="5" rx="1" fill="#a1a1aa"/>
-      `);
-    }
-    if (wt === 'shotgun') {
-      return _thumbSvg(s, `
-        <path d="M5 29l9-7h26v4H23l-3 4H12l-5 4z" fill="#7c2d12" stroke="#d49a3a" stroke-width="1.6"/>
-        <rect x="16" y="18" width="25" height="4" rx="1" fill="#64748b" stroke="#cbd5e1" stroke-width="1"/>
-        <rect x="20" y="22" width="12" height="3.5" rx="1" fill="#b45309"/>
-      `);
-    }
-    if (wt === 'pistol') {
-      return _thumbSvg(s, `
-        <path d="M10 17h24l3 4-3 3H21l-4 12h-7l4-12h-4z" fill="#475569" stroke="#e5bb5c" stroke-width="1.8"/>
-        <rect x="13" y="19" width="18" height="3" fill="#f97316"/>
-        <circle cx="37" cy="21" r="2.5" fill="#fde047"/>
-      `);
-    }
-    if (eq.genre === 'scifi') {
-      return _thumbSvg(s, `
-        <line x1="12" y1="36" x2="38" y2="10" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" opacity="0.45"/>
-        <line x1="12" y1="36" x2="38" y2="10" stroke="#e0f2fe" stroke-width="2.6" stroke-linecap="round"/>
-        <line x1="11" y1="29" x2="19" y2="37" stroke="#c084fc" stroke-width="3.2" stroke-linecap="round"/>
-        <line x1="7" y1="41" x2="14" y2="34" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
-      `);
-    }
-    if (eq.genre === 'mythic') {
-      return _thumbSvg(s, `
-        <polygon points="40,8 34,18 17,35 13,31 30,14" fill="#fde047" stroke="#f59e0b" stroke-width="1.6"/>
-        <line x1="16" y1="32" x2="36" y2="12" stroke="#fef9c3" stroke-width="1.6"/>
-        <path d="M11 26l11 11" stroke="#d49a3a" stroke-width="3.4" stroke-linecap="round"/>
-        <line x1="7" y1="41" x2="15" y2="33" stroke="#7c2d12" stroke-width="3.6" stroke-linecap="round"/>
-        <circle cx="16.5" cy="31.5" r="2.5" fill="#5eead4"/>
-      `);
-    }
-    // 古武刀剑
-    return _thumbSvg(s, `
-      <polygon points="39,9 34,19 18,35 14,31 30,15" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5"/>
-      <line x1="17" y1="32" x2="36" y2="13" stroke="#f8fafc" stroke-width="1.4"/>
-      <line x1="12" y1="27" x2="21" y2="36" stroke="#d49a3a" stroke-width="3.2" stroke-linecap="round"/>
-      <line x1="7" y1="41" x2="15" y2="33" stroke="#573b26" stroke-width="3.5" stroke-linecap="round"/>
-      <path d="M8 40c-2 3 2 5 4 3" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
-    `);
+    return _spriteCell('icons_gear.jpg', coords[0], coords[1], s, 'squircle', _qualityGlow(eq.quality));
   }
 
-  // 3. 丹药
+  // 3. 丹药：使用 4×4 手绘 icons_items.jpg
   if (kind === 'elixir') {
     const elx = typeof idOrObj === 'object' && idOrObj ? idOrObj : ELIXIRS[idOrObj];
-    if (elx?.id === 'elixir_jiuzhuan') {
-      return _thumbSvg(s, `
-        <circle cx="24" cy="28" r="12" fill="#065f46" stroke="#6ee7b7" stroke-width="2"/>
-        <circle cx="24" cy="15" r="6" fill="#047857" stroke="#6ee7b7" stroke-width="1.8"/>
-        <rect x="21" y="7" width="6" height="4" rx="1" fill="#d49a3a"/>
-        <circle cx="20" cy="26" r="3" fill="#a7f3d0" opacity="0.8"/>
-        <path d="M17 20h14" stroke="#f3ce7a" stroke-width="2"/>
-      `);
+    if (elx?.id === 'elixir_ration') {
+      return _spriteCell('icons_items.jpg', 2, 2, s, 'squircle', 'rgba(245,158,11,0.48)');
     }
-    return _thumbSvg(s, `
-      <circle cx="24" cy="25" r="14" fill="#78350f" stroke="#f3ce7a" stroke-width="2.2"/>
-      <circle cx="24" cy="25" r="9.5" fill="#f59e0b"/>
-      <circle cx="20" cy="21" r="3.5" fill="#fef3c7" opacity="0.85"/>
-      <path d="M14 25h20" stroke="#fde68a" stroke-width="1.2" opacity="0.7"/>
-    `);
+    return _spriteCell('icons_items.jpg', 0, 3, s, 'squircle', 'rgba(94,234,212,0.52)');
   }
 
-  // 4. 背包物品（补给品 / 剧情信物 / 古董 / 科技 / 废品）
+  // 4. 背包物品（补给品 / 剧情信物 / 古董 / 科技 / 废品）：使用 4×4 手绘 icons_items.jpg
   if (kind === 'item') {
     const it = typeof idOrObj === 'object' && idOrObj ? idOrObj : ITEMS[idOrObj];
-    if (!it) return _thumbImg('assets/sprites/chest.png', '物资', s);
-
-    if (it.isStory) {
-      return _thumbImg('assets/app_icon.png', it.name, s, 'border-radius:8px;border:1.5px solid rgba(229,187,92,0.7);');
-    }
-    if (it.isCollection) {
-      return _thumbSvg(s, `
-        <ellipse cx="24" cy="27" rx="13" ry="12" fill="#2b2114" stroke="#e5bb5c" stroke-width="2.2"/>
-        <path d="M18 15l2-6h8l2 6" fill="#92400e" stroke="#f3ce7a" stroke-width="1.8"/>
-        <circle cx="24" cy="27" r="5" fill="#34d399" stroke="#fde68a" stroke-width="1.4"/>
-        <path d="M13 27h6M29 27h6" stroke="#d49a3a" stroke-width="1.8"/>
-      `);
-    }
-
-    // 5 种核心补给品专属多色插画
-    if (it.id === 20) { // 压缩饼干
-      return _thumbSvg(s, `
-        <rect x="8" y="11" width="32" height="26" rx="4" fill="#d99b43" stroke="#f3ce7a" stroke-width="2"/>
-        <rect x="12" y="15" width="24" height="18" rx="2" fill="#b4752a"/>
-        <rect x="8" y="21" width="32" height="6" fill="#991b1b" opacity="0.88"/>
-        <circle cx="16" cy="18" r="1.3" fill="#fde68a"/><circle cx="24" cy="18" r="1.3" fill="#fde68a"/><circle cx="32" cy="18" r="1.3" fill="#fde68a"/>
-        <circle cx="16" cy="30" r="1.3" fill="#fde68a"/><circle cx="24" cy="30" r="1.3" fill="#fde68a"/><circle cx="32" cy="30" r="1.3" fill="#fde68a"/>
-      `);
-    }
-    if (it.id === 21) { // 纯净水
-      return _thumbSvg(s, `
-        <rect x="19" y="6" width="10" height="5" rx="1.5" fill="#cbd5e1" stroke="#38bdf8" stroke-width="1.2"/>
-        <path d="M15 15c0-3 4-4 9-4s9 1 9 4v21a5 5 0 0 1-5 5h-8a5 5 0 0 1-5-5z" fill="#0369a1" stroke="#7dd3fc" stroke-width="2"/>
-        <path d="M16 25q4-3 8 0t8 0v10a4 4 0 0 1-4 4h-8a4 4 0 0 1-4-4z" fill="#38bdf8" opacity="0.85"/>
-        <line x1="19" y1="16" x2="19" y2="33" stroke="#e0f2fe" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
-      `);
-    }
-    if (it.id === 22) { // 金疮药散
-      return _thumbSvg(s, `
-        <rect x="18" y="7" width="12" height="5" rx="1.5" fill="#92400e" stroke="#f3ce7a" stroke-width="1.2"/>
-        <rect x="12" y="13" width="24" height="27" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="2"/>
-        <rect x="21.5" y="19" width="5" height="15" rx="1" fill="#dc2626"/>
-        <rect x="16.5" y="24" width="15" height="5" rx="1" fill="#dc2626"/>
-      `);
-    }
-    if (it.id === 23) { // 抗辐射药剂
-      return _thumbSvg(s, `
-        <path d="M24 7l14 6v11c0 9-6 14-14 17-8-3-14-8-14-17V13z" fill="#14532d" stroke="#a3e635" stroke-width="2"/>
-        <circle cx="24" cy="23" r="6.5" fill="#84cc16" opacity="0.85"/>
-        <circle cx="24" cy="23" r="2.4" fill="#fef08a"/>
-        <path d="M24 14v3M16 27l2.5-1.5M32 27l-2.5-1.5" stroke="#ecfccb" stroke-width="1.8" stroke-linecap="round"/>
-      `);
-    }
-    if (it.id === 24) { // 烟雾弹
-      return _thumbSvg(s, `
-        <rect x="15" y="15" width="18" height="24" rx="4" fill="#3f6212" stroke="#a3e635" stroke-width="1.8"/>
-        <rect x="19" y="10" width="10" height="5" rx="1" fill="#94a3b8"/>
-        <rect x="15" y="23" width="18" height="5" fill="#e5bb5c" opacity="0.85"/>
-        <circle cx="31" cy="11" r="4" fill="#e2e8f0" opacity="0.75"/>
-        <circle cx="36" cy="8" r="3" fill="#f8fafc" opacity="0.65"/>
-      `);
-    }
-
-    // 宝箱/残骸容器类直接用 chest.png
-    if (it.id === 1 || it.id === 11 || it.id === 15) {
-      return _thumbImg('assets/sprites/chest.png', it.name, s);
-    }
-    // 辐射稳定核 / 避难所芯片
-    if (it.id === 10 || it.id === 19) {
-      return _thumbSvg(s, `
-        <rect x="10" y="10" width="28" height="28" rx="6" fill="#1e1b4b" stroke="#38bdf8" stroke-width="2"/>
-        <circle cx="24" cy="24" r="7" fill="#0ea5e9"/>
-        <circle cx="24" cy="24" r="3.2" fill="#e0f2fe"/>
-        <path d="M24 5v5M24 38v5M5 24h5M38 24h5" stroke="#c084fc" stroke-width="2" stroke-linecap="round"/>
-      `);
-    }
-    // 变异荧光菇
-    if (it.id === 17) {
-      return _thumbSvg(s, `
-        <path d="M10 25c0-10 6-15 14-15s14 5 14 15z" fill="#10b981" stroke="#6ee7b7" stroke-width="2"/>
-        <rect x="20" y="25" width="8" height="14" rx="3" fill="#d1fae5" stroke="#34d399" stroke-width="1.5"/>
-        <circle cx="18" cy="18" r="2.2" fill="#fef08a"/><circle cx="28" cy="16" r="2.5" fill="#a7f3d0"/><circle cx="25" cy="22" r="1.6" fill="#fef08a"/>
-      `);
-    }
-    // 应急信号枪
-    if (it.id === 14) {
-      return _thumbSvg(s, `
-        <path d="M10 17h24l3 4-3 3H21l-4 12h-7l4-12h-4z" fill="#991b1b" stroke="#f3ce7a" stroke-width="1.8"/>
-        <circle cx="37" cy="21" r="3" fill="#fb923c"/>
-      `);
-    }
-    // 通行币 / 腕表
-    if (it.id === 12 || it.id === 16) {
-      return _thumbSvg(s, `
-        <circle cx="24" cy="24" r="14" fill="#78350f" stroke="#f3ce7a" stroke-width="2.4"/>
-        <circle cx="24" cy="24" r="9.5" fill="#d97706" stroke="#fde68a" stroke-width="1.3"/>
-        <path d="M24 18v6l4 3" fill="none" stroke="#fef9c3" stroke-width="2.2" stroke-linecap="round"/>
-      `);
-    }
-    // 科技电子件（电路板/显卡/电池/无人机/光学镜片/伺服机）
-    if (it.category === 'tech' || it.id === 18) {
-      return _thumbSvg(s, `
-        <rect x="8" y="10" width="32" height="28" rx="4" fill="#064e3b" stroke="#34d399" stroke-width="2"/>
-        <rect x="16" y="17" width="16" height="14" rx="2" fill="#1e293b" stroke="#e5bb5c" stroke-width="1.6"/>
-        <circle cx="24" cy="24" r="3.2" fill="#38bdf8"/>
-        <path d="M12 15h4M32 15h4M12 33h6M30 33h6" stroke="#f3ce7a" stroke-width="1.8" stroke-linecap="round"/>
-      `);
-    }
-    // 其余通用废品/铜线/铁罐/钢缆
-    return _thumbSvg(s, `
-      <rect x="11" y="12" width="26" height="25" rx="5" fill="#44403c" stroke="#d49a3a" stroke-width="2"/>
-      <ellipse cx="24" cy="14" rx="12" ry="3.5" fill="#78716c" stroke="#e5bb5c" stroke-width="1.4"/>
-      <path d="M12 22h24M12 29h24" stroke="#b45309" stroke-width="2.2"/>
-      <circle cx="24" cy="25.5" r="3" fill="#f59e0b"/>
-    `);
+    if (!it) return _spriteCell('icons_items.jpg', 0, 0, s, 'squircle');
+    const coords = ITEM_ICON_COORDS[it.id] || (it.isCollection || it.isStory ? [3, 3] : [0, 0]);
+    const glow = it.isCollection || it.isStory
+      ? 'rgba(229,184,92,0.45)'
+      : it.category === 'rare'
+        ? 'rgba(56,189,248,0.48)'
+        : it.isConsumable
+          ? 'rgba(94,234,212,0.38)'
+          : 'rgba(212,162,74,0.22)';
+    return _spriteCell('icons_items.jpg', coords[0], coords[1], s, 'squircle', glow);
   }
 
   // 5. 空装备槽 / 炼化炉预览图标
@@ -3478,99 +3991,176 @@ function sellAllTrash(mult = 1) {
 
 function openBagModal() {
   const stats = getHeroStats();
+  const elixirCount = Object.values(state.elixirs || {}).reduce((s, n) => s + (n > 0 ? n : 0), 0);
   const tabsHtml = `
-    <div class="modal-tabs">
-      <button class="modal-tab-btn${bagTab === 'equip' ? ' active' : ''}" data-btab="equip">四槽装备 (${state.equipBag.length})</button>
-      <button class="modal-tab-btn${bagTab === 'items' ? ' active' : ''}" data-btab="items">行囊物资 (${state.bag.length}/${stats.bagMax})</button>
-      <button class="modal-tab-btn${bagTab === 'elixirs' ? ' active' : ''}" data-btab="elixirs">丹药补给</button>
+    <div class="armory-tabs-bar">
+      <button class="armory-tab-btn${bagTab === 'equip' ? ' active' : ''}" data-btab="equip">神兵整备 <small>(${state.equipBag.length})</small></button>
+      <button class="armory-tab-btn${bagTab === 'items' ? ' active' : ''}" data-btab="items">行囊百宝 <small>(${state.bag.length}/${stats.bagMax})</small></button>
+      <button class="armory-tab-btn${bagTab === 'elixirs' ? ' active' : ''}" data-btab="elixirs">丹药匣${elixirCount > 0 ? ` <small>(${elixirCount})</small>` : ''}</button>
     </div>
   `;
 
-  let bodyHtml = '';
-  let footerHtml = '<button class="btn btn-secondary" id="modal-default-close">合上卷轴</button>';
-
-  if (bagTab === 'equip') {
-    const slotsHtml = ['weapon', 'armor', 'mech', 'relic'].map((slot) => {
-      const eq = state.equipped[slot];
-      if (!eq) {
-        return `
-          <div class="equip-slot-card" style="align-items:center;text-align:center;">
-            <div class="equip-slot-label">${SLOT_NAMES[slot]}</div>
-            ${renderVisualThumb('empty_slot', slot, 42)}
-            <div class="modal-item-desc">空槽位</div>
-          </div>`;
-      }
-      const q = QUALITY[eq.quality] || QUALITY.common;
+  const renderPedestal = (slot) => {
+    const eq = state.equipped[slot];
+    if (!eq) {
       return `
-        <div class="equip-slot-card q-${q.key}" style="align-items:center;text-align:center;">
-          <div class="equip-slot-label">${SLOT_NAMES[slot]} · 已装备</div>
-          ${renderVisualThumb('equip', eq, 48)}
-          <div class="equip-name" style="color:${q.color};font-size:12px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(eq.name)}">${escapeHtml(eq.name)}</div>
-          <button class="btn btn-secondary btn-sm" data-unequip="${slot}" style="margin-top:auto;">卸下</button>
+        <div class="armory-pedestal empty">
+          <div class="armory-pedestal-art">${renderVisualThumb('empty_slot', slot, 48)}</div>
+          <div class="armory-pedestal-meta">
+            <span class="armory-slot-tag">${SLOT_NAMES[slot]}</span>
+            <span class="armory-pedestal-name empty">虚位以待</span>
+          </div>
         </div>
       `;
-    }).join('');
+    }
+    const q = QUALITY[eq.quality] || QUALITY.common;
+    return `
+      <div class="armory-pedestal filled q-${q.key}">
+        <div class="armory-pedestal-art">${renderVisualThumb('equip', eq, 54)}</div>
+        <div class="armory-pedestal-meta">
+          <span class="armory-slot-tag">${SLOT_NAMES[slot]}</span>
+          <span class="armory-pedestal-name" style="color:${q.color};" title="${escapeHtml(eq.name)}">${escapeHtml(eq.name)}</span>
+          <button class="armory-unequip-btn" data-unequip="${slot}">卸下</button>
+        </div>
+      </div>
+    `;
+  };
 
+  let bodyHtml = '';
+
+  if (bagTab === 'equip') {
     const bagList = state.equipBag.length
-      ? state.equipBag.map((eq) => renderEquipCard(eq, `
+      ? `<div class="armory-equip-grid">${state.equipBag.map((eq) => renderEquipCard(eq, `
           <button class="btn btn-amber btn-sm" data-equip-uid="${eq.uid}">装备</button>
           <button class="btn btn-secondary btn-sm" data-sell-eq="${eq.uid}">卖 ${getEquipSellPrice(eq)}币</button>
-        `)).join('')
-      : '<div class="modal-item-desc">装备库暂无闲置神兵，探索废墟、拆解重炮或墨壶炼化即可获得灵韵异纹神兵！</div>';
+        `)).join('')}</div>`
+      : '<div class="armory-empty-prompt">神兵匣暂无闲置灵器，探索废墟、拆解重炮或于天工墨壶炼化即可铸得异纹神兵。</div>';
 
     bodyHtml = `
-      <div class="modal-item-desc">当前战力面板：攻击 <strong>${stats.atk}</strong> · 防御 <strong>${stats.def}</strong> · 暴击 <strong>${Math.round(stats.crit * 100)}%</strong> · 穿甲 <strong>${Math.round(stats.armorPen * 100)}%</strong> · 吸血 <strong>${Math.round(stats.lifesteal * 100)}%</strong></div>
-      <div class="equip-slot-grid">${slotsHtml}</div>
-      <div class="modal-item-title">装备库</div>
-      <div class="modal-grid-2">${bagList}</div>
+      <div class="armory-sanctuary">
+        <div class="armory-stage">
+          <div class="armory-col armory-col-left">
+            ${renderPedestal('weapon')}
+            ${renderPedestal('armor')}
+          </div>
+          <div class="armory-center-pedestal">
+            <div class="armory-hero-wrap">
+              <img class="armory-hero-sprite" src="assets/sprites/hero.png" alt="墨土行者" />
+            </div>
+            <div class="armory-stats-plaque">
+              <span>攻 <strong>${stats.atk}</strong></span>
+              <i class="armory-stat-sep">·</i>
+              <span>防 <strong>${stats.def}</strong></span>
+              <i class="armory-stat-sep">·</i>
+              <span>暴 <strong>${Math.round(stats.crit * 100)}%</strong></span>
+              <i class="armory-stat-sep">·</i>
+              <span>穿 <strong>${Math.round(stats.armorPen * 100)}%</strong></span>
+              <i class="armory-stat-sep">·</i>
+              <span>吸 <strong>${Math.round(stats.lifesteal * 100)}%</strong></span>
+            </div>
+          </div>
+          <div class="armory-col armory-col-right">
+            ${renderPedestal('mech')}
+            ${renderPedestal('relic')}
+          </div>
+        </div>
+      </div>
+      <div class="armory-vault">
+        <div class="armory-vault-head">
+          <div class="armory-vault-title-group">
+            <span class="armory-vault-title">神兵装备库</span>
+            <span class="armory-vault-count">${state.equipBag.length} 件待整备</span>
+          </div>
+        </div>
+        <div class="armory-vault-scroll">${bagList}</div>
+      </div>
     `;
   } else if (bagTab === 'items') {
-    const rows = state.bag.length
-      ? state.bag.map((b) => {
-        const it = ITEMS[b.itemId];
-        const q = QUALITY[b.quality] || QUALITY.common;
-        const price = getSellPrice(b);
+    const grouped = [];
+    const groupMap = new Map();
+    for (const b of state.bag) {
+      const gKey = `${b.itemId}_${b.quality}`;
+      let entry = groupMap.get(gKey);
+      if (!entry) {
+        entry = { firstUid: b.uid, itemId: b.itemId, quality: b.quality, count: 0, price: getSellPrice(b) };
+        groupMap.set(gKey, entry);
+        grouped.push(entry);
+      }
+      entry.count += 1;
+    }
+
+    const cards = grouped.length
+      ? `<div class="armory-item-grid">${grouped.map((g) => {
+        const it = ITEMS[g.itemId];
+        if (!it) return '';
+        const q = QUALITY[g.quality] || QUALITY.common;
         return `
-          <div class="modal-list-item">
-            <div style="display:flex;align-items:center;gap:10px;">
-              ${renderVisualThumb('item', it, 44)}
-              <div>
-                <div class="modal-item-title" style="color:${q.color};">[${q.name}] ${escapeHtml(it.name)}</div>
-                <div class="modal-item-desc">${escapeHtml(it.desc)}</div>
-              </div>
+          <div class="armory-grid-tile q-${q.key}" title="${escapeHtml(it.desc)}">
+            <div class="armory-tile-icon-wrap">
+              ${renderVisualThumb('item', it, 54)}
+              <span class="armory-tile-count">×${g.count}</span>
+              <span class="armory-tile-qual" style="color:${q.color};border-color:${q.color}55;">${q.name}</span>
             </div>
-            <div style="display:flex;gap:6px;">
-              ${it.isConsumable ? `<button class="btn btn-green btn-sm" data-use-uid="${b.uid}">使用</button>` : ''}
-              ${price > 0 ? `<button class="btn btn-amber btn-sm" data-sell-uid="${b.uid}">卖 ${price}币</button>` : ''}
+            <div class="armory-tile-name" style="color:${q.color};">${escapeHtml(it.name)}</div>
+            <div class="armory-tile-actions">
+              ${it.isConsumable ? `<button class="btn btn-green btn-sm" data-use-uid="${g.firstUid}">使用</button>` : ''}
+              ${g.price > 0 ? `<button class="btn btn-amber btn-sm" data-sell-uid="${g.firstUid}">售 ${g.price}币</button>` : ''}
             </div>
           </div>
         `;
-      }).join('')
-      : '<div class="modal-item-desc">行囊空空如也，快去城郊废土探索吧！</div>';
-    bodyHtml = `<div style="display:flex;flex-direction:column;gap:7px;">${rows}</div>`;
-    footerHtml = '<button class="btn btn-amber" id="btn-sell-all">一键变卖废品物资</button>' + footerHtml;
+      }).join('')}</div>`
+      : '<div class="armory-empty-prompt">行囊百宝匣空空如也，快去墨土五域拾荒探险吧！</div>';
+
+    bodyHtml = `
+      <div class="armory-vault armory-vault-expanded">
+        <div class="armory-vault-head">
+          <div class="armory-vault-title-group">
+            <span class="armory-vault-title">行囊百宝匣</span>
+            <span class="armory-vault-count">载重 ${state.bag.length} / ${stats.bagMax}</span>
+          </div>
+          <button class="armory-sell-all-btn" id="btn-sell-all">一键变卖废品</button>
+        </div>
+        <div class="armory-vault-scroll">${cards}</div>
+      </div>
+    `;
   } else {
-    const elxRows = Object.entries(state.elixirs)
+    const elxCards = Object.entries(state.elixirs)
       .filter(([, cnt]) => cnt > 0)
       .map(([eid, cnt]) => {
         const e = ELIXIRS[eid];
         return `
-          <div class="modal-list-item">
-            <div style="display:flex;align-items:center;gap:10px;">
+          <div class="armory-item-card q-rare">
+            <div class="armory-item-main">
               ${renderVisualThumb('elixir', e, 44)}
-              <div>
-                <div class="modal-item-title">${escapeHtml(e.name)} ×${cnt}</div>
-                <div class="modal-item-desc">${escapeHtml(e.desc)}</div>
+              <div class="armory-item-text">
+                <div class="armory-item-name" style="color:#f3ce7a;">${escapeHtml(e.name)} <span class="armory-elx-cnt">×${cnt}</span></div>
+                <div class="armory-item-desc">${escapeHtml(e.desc)}</div>
               </div>
             </div>
-            <button class="btn btn-green btn-sm" data-use-elx="${eid}">服用</button>
+            <div class="armory-item-actions">
+              <button class="btn btn-green btn-sm" data-use-elx="${eid}">服用</button>
+            </div>
           </div>
         `;
       }).join('');
-    bodyHtml = elxRows || '<div class="modal-item-desc">暂无天工墨壶炼制的稀世丹药，可用金疮药散+荧光菇或饼干+纯净水炼制！</div>';
+
+    bodyHtml = `
+      <div class="armory-vault armory-vault-expanded">
+        <div class="armory-vault-head">
+          <div class="armory-vault-title-group">
+            <span class="armory-vault-title">墨壶丹药匣</span>
+            <span class="armory-vault-count">共藏 ${elixirCount} 枚灵丹</span>
+          </div>
+        </div>
+        <div class="armory-vault-scroll">
+          ${elxCards ? `<div class="armory-items-grid">${elxCards}</div>` : '<div class="armory-empty-prompt">暂无天工墨壶炼制的稀世丹药，可用金疮药散 + 荧光菇或饼干 + 纯净水炼制！</div>'}
+        </div>
+      </div>
+    `;
   }
 
-  openModal('行囊与异纹神兵', tabsHtml + bodyHtml, footerHtml);
+  openModal('行囊与异纹神兵', tabsHtml + bodyHtml);
+  $('modal-box')?.classList.add('modal-armory-full');
 
   $('modal-body').querySelectorAll('[data-btab]').forEach((btn) => {
     btn.addEventListener('click', () => { bagTab = btn.dataset.btab; openBagModal(); });
@@ -3671,48 +4261,115 @@ function applyItemEffectOutsideBattle(item) {
   scheduleSave();
 }
 
-// ==================== 4. 武学奇术（6 大被动 + 16 项主动预览） ====================
+// ==================== 4. 武学奇术阁（视觉 RPG 绝学徽章殿堂） ====================
+const PASSIVE_ICON_MAP = [
+  { sheet: 'icons_skills.jpg', col: 0, row: 0, glow: 'rgba(229,184,92,0.52)' },  // 0: 墨影步
+  { sheet: 'icons_skills.jpg', col: 2, row: 1, glow: 'rgba(249,115,22,0.52)' },  // 1: 鹰眼术
+  { sheet: 'icons_gear.jpg',   col: 3, row: 1, glow: 'rgba(212,162,74,0.48)' },  // 2: 行囊诀
+  { sheet: 'icons_items.jpg',  col: 2, row: 0, glow: 'rgba(56,189,248,0.50)' },  // 3: 巧手拆解
+  { sheet: 'icons_skills.jpg', col: 3, row: 0, glow: 'rgba(229,184,92,0.60)' },  // 4: 破风斩
+  { sheet: 'icons_gear.jpg',   col: 3, row: 3, glow: 'rgba(94,234,212,0.58)' }   // 5: 天运诀
+];
+
+let skillHallBranch = 'all';
+
 function openSkill() {
   const passiveHtml = SKILLS.map((sk) => {
     const lv = state.skills[sk.id] || 0;
     const isMax = lv >= sk.maxLevel;
     const cost = sk.cost[lv] || 99;
+    const ico = PASSIVE_ICON_MAP[sk.id] || PASSIVE_ICON_MAP[0];
     return `
-      <div class="modal-list-item${isMax ? ' done' : ''}">
-        <div style="display:flex;align-items:center;gap:9px;">
-          <span class="item-seal-badge">${escapeHtml(sk.seal)}</span>
-          <div>
-            <div class="modal-item-title">${escapeHtml(sk.name)} <small>Lv.${lv}/${sk.maxLevel}</small></div>
-            <div class="modal-item-desc">${escapeHtml(sk.desc)}</div>
-          </div>
+      <div class="skill-passive-card${isMax ? ' is-max' : ''}">
+        <div class="skill-passive-ico">
+          ${_spriteCell(ico.sheet, ico.col, ico.row, 50, 'squircle', ico.glow)}
         </div>
-        <button class="btn btn-amber btn-sm" data-up-skill="${sk.id}" ${isMax || state.skillPoints < cost ? 'disabled' : ''}>
-          ${isMax ? '已圆满' : `升级 (${cost}点)`}
+        <div class="skill-passive-info">
+          <div class="skill-passive-top">
+            <span class="skill-passive-name">${escapeHtml(sk.name)}</span>
+            <span class="skill-passive-lv">Lv.${lv}/${sk.maxLevel}</span>
+          </div>
+          <div class="skill-passive-desc">${escapeHtml(sk.desc)}</div>
+        </div>
+        <button class="skill-up-btn${isMax ? ' maxed' : ''}" data-up-skill="${sk.id}" ${isMax || state.skillPoints < cost ? 'disabled' : ''}>
+          ${isMax ? '已圆满' : `升级 · ${cost}点`}
         </button>
       </div>
     `;
   }).join('');
 
-  const combatHtml = COMBAT_SKILLS.map((cs) => {
-    const unlocked = state.level >= cs.unlockLv;
-    return `
-      <div class="modal-list-item${unlocked ? ' done' : ''}" style="${unlocked ? '' : 'opacity:0.55;'}">
-        <div>
-          <div class="modal-item-title">【${cs.seal}】${escapeHtml(cs.name)} <small>(${cs.mpCost}内息 · Lv.${cs.unlockLv})</small></div>
-          ${cs.flavor ? `<div class="modal-item-desc" style="color:#e5bb5c;font-family:var(--font-serif);font-style:italic;margin:2px 0;">${escapeHtml(cs.flavor)}</div>` : ''}
-          <div class="modal-item-desc">${escapeHtml(cs.desc)}</div>
+  const branchTabsHtml = `
+    <div class="skill-hall-tabs">
+      <button class="skill-hall-tab${skillHallBranch === 'all' ? ' active' : ''}" data-sh-branch="all">四系全览</button>
+      ${SKILL_BRANCHES.map((b) =>
+        `<button class="skill-hall-tab branch-${b.id}${skillHallBranch === b.id ? ' active' : ''}" data-sh-branch="${b.id}">${b.name}</button>`
+      ).join('')}
+    </div>
+  `;
+
+  const visibleBranches = skillHallBranch === 'all'
+    ? SKILL_BRANCHES
+    : SKILL_BRANCHES.filter((b) => b.id === skillHallBranch);
+
+  const branchesHtml = visibleBranches.map((branch) => {
+    const list = COMBAT_SKILLS.filter((cs) => cs.category === branch.id);
+    const cards = list.map((cs) => {
+      const unlocked = state.level >= cs.unlockLv;
+      return `
+        <div class="skill-medallion-card branch-${branch.id}${unlocked ? ' unlocked' : ' locked'}" title="${escapeHtml(cs.desc)}">
+          <div class="skill-medallion-art">
+            ${renderSkillIcon(cs, 54)}
+          </div>
+          <div class="skill-medallion-body">
+            <div class="skill-medallion-head">
+              <span class="skill-medallion-name">${escapeHtml(cs.name)}</span>
+              <span class="skill-medallion-badge${unlocked ? ' ok' : ''}">${cs.mpCost}内息 · ${unlocked ? '已领悟' : `Lv.${cs.unlockLv}`}</span>
+            </div>
+            ${cs.flavor ? `<div class="skill-medallion-flavor">${escapeHtml(cs.flavor)}</div>` : ''}
+            <div class="skill-medallion-desc">${escapeHtml(cs.desc)}</div>
+          </div>
         </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="skill-branch-section branch-${branch.id}">
+        <div class="skill-branch-header">
+          <span class="skill-branch-dot"></span>
+          <span class="skill-branch-title">${branch.name}</span>
+          <span class="skill-branch-count">${list.filter((s) => state.level >= s.unlockLv).length} / ${list.length} 已领悟</span>
+        </div>
+        <div class="skill-medallion-grid">${cards}</div>
       </div>
     `;
   }).join('');
 
   openModal(
-    `武学奇术阁 · 可用修为点：${state.skillPoints}`,
-    `<div class="modal-item-title">六大废土修为（消耗修为点永久提升）</div>
-     <div class="modal-grid-2">${passiveHtml}</div>
-     <div class="modal-item-title" style="margin-top:6px;">十六项四系战斗绝学（随等级自动领悟）</div>
-     <div class="modal-grid-2">${combatHtml}</div>`
+    `武学奇术阁 · 修为点 ${state.skillPoints}`,
+    `
+      <div class="skill-hall">
+        <div class="skill-section-head">
+          <span class="skill-section-title">六大废土修为</span>
+          <span class="skill-section-sub">消耗修为点永久精进</span>
+        </div>
+        <div class="skill-passive-grid">${passiveHtml}</div>
+
+        <div class="skill-section-head skill-section-combat">
+          <span class="skill-section-title">十六项四系绝学</span>
+          ${branchTabsHtml}
+        </div>
+        <div class="skill-branches-wrap">${branchesHtml}</div>
+      </div>
+    `
   );
+
+  $('modal-body').querySelectorAll('[data-sh-branch]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      sfx.uiTick?.();
+      skillHallBranch = btn.dataset.shBranch;
+      openSkill();
+    });
+  });
 
   $('modal-body').querySelectorAll('[data-up-skill]').forEach((btn) => {
     btn.addEventListener('click', () => {
