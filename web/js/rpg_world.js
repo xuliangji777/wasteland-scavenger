@@ -190,6 +190,7 @@ export class InkWorldEngine {
     // 视图尺寸与摄像机
     this.viewW = 960;
     this.viewH = 540;
+    this.cameraZoom = clamp(Math.min(this.viewW / 1520, this.viewH / 840), 0.46, 1.05);
     this.cameraX = 0;
     this.cameraY = 0;
 
@@ -502,9 +503,10 @@ export class InkWorldEngine {
     const parent = this.canvas.parentElement;
     if (!parent) return;
     const rect = parent.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
     this.viewW = Math.max(320, Math.floor(rect.width));
     this.viewH = Math.max(240, Math.floor(rect.height));
+    this.cameraZoom = clamp(Math.min(this.viewW / 1520, this.viewH / 840), 0.46, 1.05);
     this.canvas.width = Math.floor(this.viewW * dpr);
     this.canvas.height = Math.floor(this.viewH * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -689,8 +691,9 @@ export class InkWorldEngine {
       return;
     }
 
-    const wx = clamp(sx + this.cameraX, 24, this.map.width - 24);
-    const wy = clamp(sy + this.cameraY, 36, this.map.height - 24);
+    const zoom = this.cameraZoom || 1;
+    const wx = clamp(sx / zoom + this.cameraX, 24, this.map.width - 24);
+    const wy = clamp(sy / zoom + this.cameraY, 36, this.map.height - 24);
 
     // 若点击位置就在当前最近可交互目标附近，且主角已足够近，则直接交互
     if (this.nearestTarget && dist(wx, wy, this.nearestTarget.x, this.nearestTarget.y) <= 48) {
@@ -717,8 +720,9 @@ export class InkWorldEngine {
     const rect = this.canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
-    this.hero.targetX = clamp(sx + this.cameraX, 24, this.map.width - 24);
-    this.hero.targetY = clamp(sy + this.cameraY, 36, this.map.height - 24);
+    const zoom = this.cameraZoom || 1;
+    this.hero.targetX = clamp(sx / zoom + this.cameraX, 24, this.map.width - 24);
+    this.hero.targetY = clamp(sy / zoom + this.cameraY, 36, this.map.height - 24);
     this.hero._stuckFrames = 0;
   }
 
@@ -884,15 +888,18 @@ export class InkWorldEngine {
 
   _snapCamera() {
     if (!this.map) return;
-    if (this.map.width <= this.viewW) {
-      this.cameraX = (this.map.width - this.viewW) * 0.5;
+    const zoom = this.cameraZoom || 1;
+    const effW = this.viewW / zoom;
+    const effH = this.viewH / zoom;
+    if (this.map.width <= effW) {
+      this.cameraX = (this.map.width - effW) * 0.5;
     } else {
-      this.cameraX = clamp(this.hero.x - this.viewW * 0.5, 0, this.map.width - this.viewW);
+      this.cameraX = clamp(this.hero.x - effW * 0.5, 0, this.map.width - effW);
     }
-    if (this.map.height <= this.viewH) {
-      this.cameraY = (this.map.height - this.viewH) * 0.5;
+    if (this.map.height <= effH) {
+      this.cameraY = (this.map.height - effH) * 0.5;
     } else {
-      this.cameraY = clamp((this.hero.y - 24) - this.viewH * 0.5, 0, this.map.height - this.viewH);
+      this.cameraY = clamp((this.hero.y - 24) - effH * 0.5, 0, this.map.height - effH);
     }
   }
 
@@ -937,12 +944,15 @@ export class InkWorldEngine {
     }
 
     // 摄像机平滑跟随
-    const targetCamX = this.map.width <= this.viewW
-      ? (this.map.width - this.viewW) * 0.5
-      : clamp(this.hero.x - this.viewW * 0.5, 0, this.map.width - this.viewW);
-    const targetCamY = this.map.height <= this.viewH
-      ? (this.map.height - this.viewH) * 0.5
-      : clamp((this.hero.y - 24) - this.viewH * 0.5, 0, this.map.height - this.viewH);
+    const zoom = this.cameraZoom || 1;
+    const effW = this.viewW / zoom;
+    const effH = this.viewH / zoom;
+    const targetCamX = this.map.width <= effW
+      ? (this.map.width - effW) * 0.5
+      : clamp(this.hero.x - effW * 0.5, 0, this.map.width - effW);
+    const targetCamY = this.map.height <= effH
+      ? (this.map.height - effH) * 0.5
+      : clamp((this.hero.y - 24) - effH * 0.5, 0, this.map.height - effH);
 
     const lerpFactor = 1 - Math.pow(1 - 0.12, dt * 60);
     this.cameraX += (targetCamX - this.cameraX) * lerpFactor;
@@ -1491,6 +1501,7 @@ export class InkWorldEngine {
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
+    ctx.scale(this.cameraZoom, this.cameraZoom);
     ctx.translate(-Math.round(this.cameraX), -Math.round(this.cameraY));
 
     // ---------- 第一层：手绘地图底图 + 色罩 + 地面光纹与点击涟漪 ----------
@@ -2055,7 +2066,7 @@ export class InkWorldEngine {
     const breath = breathWave * 1.0;
     const spriteKey = this._getNpcSpriteKey(npcRef, npc);
     const sprite = this._getSprite(spriteKey);
-    const drawH = 92;
+    const drawH = 68;
 
     ctx.save();
     ctx.translate(npcRef.x, npcRef.y);
@@ -2323,7 +2334,7 @@ export class InkWorldEngine {
     const accent = tpl.accent || '#d9483b';
     const spriteKey = this._getEnemySpriteKey(tpl.spriteType);
     const sprite = this._getSprite(spriteKey);
-    const drawH = isBoss ? 118 : 88;
+    const drawH = isBoss ? 92 : 68;
 
     // 精确朝向修正：enemy_beast 与 enemy_mech 原图朝左，enemy_demon 原图朝右
     const spriteFlip = (spriteKey === 'enemy_demon')
@@ -2592,7 +2603,7 @@ export class InkWorldEngine {
     const moving = Boolean(this.guardianPos.moving);
     const moveAmt = moving ? 1 : 0;
     const p = this.guardianPos.phase * 1.45;
-    const drawH = 54;
+    const drawH = 42;
     const spriteKey = this._getGuardianSpriteKey(g);
     const sprite = this._getSprite(spriteKey);
     const facing = this.guardianPos.facing || 1;
@@ -2658,7 +2669,7 @@ export class InkWorldEngine {
     const flipX = h.facing === 'left' ? -1 : (h.facing === 'right' ? 1 : h.lastSide);
     const walkSprite = this._getSprite('hero_walk');
     const idleSprite = this._getSprite('hero');
-    const drawH = 96;
+    const drawH = 72;
 
     ctx.save();
     ctx.translate(h.x, h.y);
@@ -2829,10 +2840,27 @@ export class InkWorldEngine {
   // ==================== 右上角半透明水墨小地图 ====================
 
   _getMinimapRect() {
-    const compact = this.viewW < 640;
-    const w = compact ? 112 : 156;
-    const h = compact ? 74 : 102;
-    return { x: this.viewW - w - 12, y: 12, w, h };
+    const uiScale = clamp(Math.min(this.viewW / 1600, this.viewH / 900), 0.52, 1.08);
+    const mw = Math.round(168 * uiScale);
+    const mh = Math.round(104 * uiScale);
+    const padX = Math.max(8, Math.round(16 * uiScale));
+    const mx = this.viewW - mw - padX;
+    const fallbackTop = Math.round(86 * uiScale);
+    let safeTop = fallbackTop;
+    const topRightEl = typeof document !== 'undefined'
+      ? document.querySelector('.hud-top-right, .hud-right-cluster')
+      : null;
+    if (topRightEl && this.canvas) {
+      const hudRect = topRightEl.getBoundingClientRect();
+      const canvasRect = this.canvas.getBoundingClientRect();
+      if (hudRect.height > 0) {
+        safeTop = Math.max(12, Math.ceil(hudRect.bottom - canvasRect.top) + 8);
+      }
+    }
+    const bottomReserve = Math.round(112 * uiScale);
+    const maxBottom = this.viewH - bottomReserve;
+    const my = clamp(safeTop, 8, Math.max(8, maxBottom - mh));
+    return { x: mx, y: my, w: mw, h: mh };
   }
 
   _drawMinimap(ctx) {
@@ -2844,10 +2872,10 @@ export class InkWorldEngine {
 
     ctx.save();
 
-    // 宣纸暗墨底框
-    ctx.fillStyle = 'rgba(22, 18, 15, 0.74)';
-    ctx.strokeStyle = 'rgba(200, 155, 60, 0.68)';
-    ctx.lineWidth = 1.4;
+    // 玄曜暗墨透底框 + 古铜极细边线
+    ctx.fillStyle = 'rgba(6, 9, 13, 0.78)';
+    ctx.strokeStyle = 'rgba(212, 162, 74, 0.45)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(mm.x, mm.y, mm.w, mm.h, 5);
     ctx.fill();

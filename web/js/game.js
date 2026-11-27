@@ -26,7 +26,7 @@ import {
   TEAM_TASK_TPL,
   SIDE_QUESTS
 } from './data.js?v=13';
-import { InkWorldEngine } from './rpg_world.js?v=13';
+import { InkWorldEngine } from './rpg_world.js?v=15';
 import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';
@@ -428,8 +428,9 @@ function showToast(text, type = 'info') {
 function floatNearHero(text, color = '#fbbf24') {
   if (!world?.canvas) return;
   const rect = world.canvas.getBoundingClientRect();
-  const sx = rect.left + (world.hero.x - world.cameraX);
-  const sy = rect.top + (world.hero.y - world.cameraY) - 36;
+  const zoom = world.cameraZoom || 1;
+  const sx = rect.left + (world.hero.x - world.cameraX) * zoom;
+  const sy = rect.top + (world.hero.y - world.cameraY) * zoom - 36;
   spawnFloatText(clamp(sx, 60, window.innerWidth - 80), clamp(sy, 90, window.innerHeight - 100), text, color);
 }
 
@@ -658,6 +659,11 @@ function isStudioSplashActive() {
   return !sp.classList.contains('hidden') && !sp.classList.contains('splash-done') && sp.style.display !== 'none';
 }
 
+function isOpeningPrologueActive() {
+  const op = $('opening-prologue');
+  return Boolean(op && !op.classList.contains('hidden'));
+}
+
 function ensureSceneTransitionEls() {
   const host = document.querySelector('.rpg-stage-wrap') || document.body;
   let curtain = $('scene-ink-curtain');
@@ -681,7 +687,7 @@ function ensureSceneTransitionEls() {
 }
 
 function showSceneTitleBanner(mapName, regionName) {
-  if (isStudioSplashActive() || ($('opening-prologue') && !$('opening-prologue').classList.contains('hidden'))) {
+  if (isStudioSplashActive() || isOpeningPrologueActive()) {
     return;
   }
   const { banner } = ensureSceneTransitionEls();
@@ -699,7 +705,7 @@ function showSceneTitleBanner(mapName, regionName) {
   }, 1150);
 }
 
-function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true) {
+function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true, suppressArrivalFx = false) {
   closeDialog();
   state.mapId = target.id;
   const sx = spawnX ?? target.spawn?.x ?? target.width * 0.5;
@@ -734,18 +740,21 @@ function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true) 
         : 'WASD / 方向键行走 · E / 空格 交互 · 点击地面寻路';
   }
 
-  if (showBanner) {
-    showSceneTitleBanner(target.name, region.name);
-  }
-  showToast(`抵达「${target.name}」`, 'info');
-  if (!isStudioSplashActive() && !battle && $('opening-prologue')?.classList.contains('hidden')) {
-    sfx.playBgm?.(getBgmTrackForMap(target.id));
+  const introLocked = suppressArrivalFx || isStudioSplashActive() || isOpeningPrologueActive();
+  if (!introLocked) {
+    if (showBanner) {
+      showSceneTitleBanner(target.name, region.name);
+    }
+    showToast(`抵达「${target.name}」`, 'info');
+    if (!battle) {
+      sfx.playBgm?.(getBgmTrackForMap(target.id));
+    }
   }
   updateHUD();
   scheduleSave();
 }
 
-function enterMap(mapId, spawnX = null, spawnY = null) {
+function enterMap(mapId, spawnX = null, spawnY = null, opts = {}) {
   const target = MAPS_BY_ID[mapId];
   if (!target) return;
 
@@ -756,7 +765,7 @@ function enterMap(mapId, spawnX = null, spawnY = null) {
 
   // 首次初始化加载地图直接进入；后续切图启用两段式水墨幕布过渡 + 书法地标横幅
   if (!world?.map) {
-    applyEnterMap(target, spawnX, spawnY, false);
+    applyEnterMap(target, spawnX, spawnY, false, Boolean(opts.suppressArrivalFx));
     return;
   }
 
@@ -1452,17 +1461,22 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
     });
 
     if (isSnipe) {
-      // 红光狙击激光锁定
+      // 猩红流光弧线狙击弹道（无僵硬直线，以灵动弧光与电弧锁定敌方）
+      const midX = Math.round((hPos.x + ePos.x) * 0.5);
+      const midY = Math.round((hPos.y + ePos.y) * 0.5 - 34);
+      const midY2 = Math.round((hPos.y + ePos.y) * 0.5 + 22);
       const laser = document.createElement('div');
-      laser.className = 'vfx-firearm-sniper-beam';
-      laser.style.width = `${Math.round(dist)}px`;
-      laser.style.left = `${Math.round(hPos.x - dist)}px`;
-      laser.style.top = `${Math.round(hPos.y)}px`;
-      laser.style.transform = `rotate(${angleDeg.toFixed(1)}deg)`;
+      laser.className = 'vfx-curved-beam-svg vfx-sniper-arc';
+      laser.innerHTML = `
+        <svg viewBox="0 0 ${Math.round(cw)} ${Math.round(ch)}" width="${Math.round(cw)}" height="${Math.round(ch)}" fill="none">
+          <path class="beam-ribbon" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y)} Q ${midX} ${midY} ${Math.round(ePos.x)} ${Math.round(ePos.y)}" stroke="rgba(239,68,68,0.88)" stroke-width="6.5" stroke-linecap="round"/>
+          <path class="beam-ribbon" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y)} Q ${midX} ${midY} ${Math.round(ePos.x)} ${Math.round(ePos.y)}" stroke="#fef2f2" stroke-width="2.4" stroke-linecap="round"/>
+          <path class="beam-ribbon" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y + 4)} Q ${midX} ${midY2} ${Math.round(ePos.x)} ${Math.round(ePos.y)}" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" opacity="0.82"/>
+        </svg>`;
       container.appendChild(laser);
       setTimeout(() => laser.remove(), 540);
     } else if (isShotgun) {
-      // 炽焰霰弹扇面喷射
+      // 炽焰霰弹流火弧扇喷射（柔韧火浪弧线，零直线）
       setTimeout(() => {
         if (!battle) return;
         const cone = document.createElement('div');
@@ -1471,7 +1485,6 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
         cone.style.top = `${Math.round(ePos.y)}px`;
         cone.innerHTML = `
           <svg viewBox="0 0 340 220" width="340" height="220" fill="none">
-            <polygon points="330,110 24,22 46,110 24,198" fill="url(#sgFire)" opacity="0.88"/>
             <defs>
               <linearGradient id="sgFire" x1="100%" y1="50%" x2="0%" y2="50%">
                 <stop offset="0%" stop-color="#fff7ed"/>
@@ -1480,27 +1493,32 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
                 <stop offset="100%" stop-color="#dc2626" stop-opacity="0"/>
               </linearGradient>
             </defs>
-            <line x1="316" y1="110" x2="36" y2="42" stroke="#fef08a" stroke-width="3.2" stroke-linecap="round"/>
-            <line x1="316" y1="110" x2="22" y2="86" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
-            <line x1="316" y1="110" x2="20" y2="132" stroke="#fbbf24" stroke-width="3" stroke-linecap="round"/>
-            <line x1="316" y1="110" x2="40" y2="178" stroke="#f97316" stroke-width="2.8" stroke-linecap="round"/>
+            <path d="M326 110 Q210 42 26 26 Q72 110 26 194 Q210 178 326 110 Z" fill="url(#sgFire)" opacity="0.84"/>
+            <path d="M316 110 Q208 58 34 40" stroke="#fef08a" stroke-width="3.4" stroke-linecap="round"/>
+            <path d="M316 110 Q188 86 22 84" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+            <path d="M316 110 Q188 134 22 136" stroke="#fbbf24" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M316 110 Q208 162 38 180" stroke="#f97316" stroke-width="2.8" stroke-linecap="round"/>
           </svg>`;
         container.appendChild(cone);
         setTimeout(() => cone.remove(), 580);
       }, 100);
     } else {
-      // 急速三连曳光穿甲弹道
+      // 急速三连弧形流火穿甲弹道
       [70, 210, 350].forEach((delay, idx) => {
         setTimeout(() => {
           if (!battle) return;
+          const arcBend = (idx - 1) * 38 - 14;
+          const mx = Math.round((hPos.x + ePos.x) * 0.5);
+          const my = Math.round((hPos.y + ePos.y) * 0.5 + arcBend);
           const tracer = document.createElement('div');
-          tracer.className = 'vfx-firearm-tracer';
-          tracer.style.width = `${Math.round(Math.min(180, dist * 0.48))}px`;
-          tracer.style.left = `${Math.round(hPos.x - 120)}px`;
-          tracer.style.top = `${Math.round(hPos.y + (idx - 1) * 18)}px`;
-          tracer.style.setProperty('--tx', `${Math.round(ePos.x - hPos.x + 80)}px`);
+          tracer.className = 'vfx-curved-beam-svg vfx-tracer-arc';
+          tracer.innerHTML = `
+            <svg viewBox="0 0 ${Math.round(cw)} ${Math.round(ch)}" width="${Math.round(cw)}" height="${Math.round(ch)}" fill="none">
+              <path class="beam-ribbon" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y + (idx - 1) * 10)} Q ${mx} ${my} ${Math.round(ePos.x)} ${Math.round(ePos.y + (idx - 1) * 8)}" stroke="#f97316" stroke-width="6" stroke-linecap="round" opacity="0.82"/>
+              <path class="beam-ribbon" d="M ${Math.round(hPos.x)} ${Math.round(hPos.y + (idx - 1) * 10)} Q ${mx} ${my} ${Math.round(ePos.x)} ${Math.round(ePos.y + (idx - 1) * 8)}" stroke="#fef08a" stroke-width="2.6" stroke-linecap="round"/>
+            </svg>`;
           container.appendChild(tracer);
-          setTimeout(() => tracer.remove(), 340);
+          setTimeout(() => tracer.remove(), 380);
         }, delay);
       });
     }
@@ -1518,7 +1536,7 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
           <circle cx="100" cy="100" r="46" fill="rgba(249,115,22,0.34)" stroke="#fef08a" stroke-width="2.8" stroke-dasharray="14 8"/>
           <polygon points="100,26 114,76 168,60 124,100 172,134 116,120 100,174 84,120 28,134 76,100 32,60 86,76" fill="rgba(251,146,60,0.72)" stroke="#fff7ed" stroke-width="2"/>
           <circle cx="100" cy="100" r="18" fill="#fffbeb"/>
-          <path d="M52 44 L30 22 M150 48 L174 26 M50 156 L26 178 M152 154 L176 176" stroke="#fed7aa" stroke-width="3" stroke-linecap="round"/>
+          <path d="M54 46 Q38 38 28 20 M148 48 Q166 38 176 22 M52 154 Q36 162 24 178 M150 152 Q166 162 178 176" stroke="#fed7aa" stroke-width="3" stroke-linecap="round"/>
         </svg>`;
       container.appendChild(imp);
       setTimeout(() => imp.remove(), 600);
@@ -1529,7 +1547,7 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
   if (norm === 'mecha') {
     const totalMs = 1100;
     const isMissile = skillId === 'sk_bits' || skillId === 'sk_cannon';
-    // Stage 1: 全息青蓝蓄能锁敌环 (0ms)
+    // Stage 1: 全息青蓝蓄能锁敌灵环 (0ms，弧月纹饰无直线)
     const charge = document.createElement('div');
     charge.className = 'vfx-mecha-charge';
     charge.style.left = `${Math.round(ePos.x)}px`;
@@ -1538,16 +1556,13 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
       <svg viewBox="0 0 200 200" width="210" height="210" fill="none">
         <circle cx="100" cy="100" r="74" stroke="#22d3ee" stroke-width="2.8" stroke-dasharray="22 10"/>
         <circle cx="100" cy="100" r="48" stroke="#5eead4" stroke-width="2" stroke-dasharray="12 6"/>
-        <path d="M36 52 L58 52 L58 34 M164 52 L142 52 L142 34 M36 148 L58 148 L58 166 M164 148 L142 148 L142 166" stroke="#67e8f9" stroke-width="3.2"/>
-        <line x1="100" y1="18" x2="100" y2="42" stroke="#ecfeff" stroke-width="2"/>
-        <line x1="100" y1="158" x2="100" y2="182" stroke="#ecfeff" stroke-width="2"/>
-        <line x1="18" y1="100" x2="42" y2="100" stroke="#ecfeff" stroke-width="2"/>
-        <line x1="158" y1="100" x2="182" y2="100" stroke="#ecfeff" stroke-width="2"/>
+        <path d="M38 64 Q44 42 66 38 M162 64 Q156 42 134 38 M38 136 Q44 158 66 162 M162 136 Q156 158 134 162" stroke="#67e8f9" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M84 22 Q100 14 116 22 M84 178 Q100 186 116 178 M22 84 Q14 100 22 116 M178 84 Q186 100 178 116" stroke="#ecfeff" stroke-width="2.2" stroke-linecap="round"/>
       </svg>`;
     container.appendChild(charge);
     setTimeout(() => charge.remove(), 500);
 
-    // Stage 2: 持续穿透等离子激光束 或 弧形追踪浮游导弹 (260ms)
+    // Stage 2: 螺旋等离子能量流光带 或 弧形追踪浮游导弹 (260ms)
     setTimeout(() => {
       if (!battle) return;
       if (isMissile) {
@@ -1562,14 +1577,22 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
         container.appendChild(ms);
         setTimeout(() => ms.remove(), 740);
       } else {
-        const dist = Math.max(200, Math.hypot(hPos.x - ePos.x, hPos.y - ePos.y));
-        const angleDeg = Math.atan2(ePos.y - hPos.y, ePos.x - hPos.x) * (180 / Math.PI) + 180;
+        const x1 = Math.round(hPos.x);
+        const y1 = Math.round(hPos.y);
+        const x2 = Math.round(ePos.x);
+        const y2 = Math.round(ePos.y);
+        const cx1 = Math.round(x1 + (x2 - x1) * 0.33);
+        const cy1 = Math.round(y1 + (y2 - y1) * 0.33);
+        const cx2 = Math.round(x1 + (x2 - x1) * 0.67);
+        const cy2 = Math.round(y1 + (y2 - y1) * 0.67);
         const beam = document.createElement('div');
-        beam.className = 'vfx-mecha-beam';
-        beam.style.width = `${Math.round(dist + 40)}px`;
-        beam.style.left = `${Math.round(hPos.x - dist - 20)}px`;
-        beam.style.top = `${Math.round(hPos.y - 13)}px`;
-        beam.style.transform = `rotate(${angleDeg.toFixed(1)}deg)`;
+        beam.className = 'vfx-curved-beam-svg vfx-mecha-helix';
+        beam.innerHTML = `
+          <svg viewBox="0 0 ${Math.round(cw)} ${Math.round(ch)}" width="${Math.round(cw)}" height="${Math.round(ch)}" fill="none">
+            <path class="beam-ribbon" d="M ${x1} ${y1} C ${cx1} ${cy1 - 46}, ${cx2} ${cy2 + 46}, ${x2} ${y2}" stroke="rgba(34,211,238,0.68)" stroke-width="14" stroke-linecap="round"/>
+            <path class="beam-ribbon" d="M ${x1} ${y1} C ${cx1} ${cy1 - 46}, ${cx2} ${cy2 + 46}, ${x2} ${y2}" stroke="#ecfeff" stroke-width="4" stroke-linecap="round"/>
+            <path class="beam-ribbon" d="M ${x1} ${y1} C ${cx1} ${cy1 + 42}, ${cx2} ${cy2 - 42}, ${x2} ${y2}" stroke="#5eead4" stroke-width="6.5" stroke-linecap="round" opacity="0.9"/>
+          </svg>`;
         container.appendChild(beam);
         setTimeout(() => beam.remove(), 700);
       }
@@ -1633,14 +1656,14 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
         thunder.style.left = `${Math.round(ePos.x)}px`;
         thunder.innerHTML = `
           <svg viewBox="0 0 180 420" width="200" height="100%" preserveAspectRatio="none" fill="none">
-            <rect x="74" y="0" width="32" height="420" fill="url(#thCol)" opacity="0.72"/>
             <defs>
               <linearGradient id="thCol" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stop-color="#5eead4" stop-opacity="0"/>
-                <stop offset="50%" stop-color="#fef08a" stop-opacity="0.95"/>
+                <stop offset="50%" stop-color="#fef08a" stop-opacity="0.88"/>
                 <stop offset="100%" stop-color="#5eead4" stop-opacity="0"/>
               </linearGradient>
             </defs>
+            <path d="M90 0 C56 108, 126 226, 84 420" stroke="url(#thCol)" stroke-width="34" stroke-linecap="round" opacity="0.62"/>
             <path d="M96 0 L66 105 L108 135 L58 265 L104 285 L76 420" stroke="#5eead4" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M96 0 L66 105 L108 135 L58 265 L104 285 L76 420" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M84 40 L132 140 L98 188 L142 310" stroke="#fde047" stroke-width="3.2" stroke-linecap="round" opacity="0.9"/>
@@ -1694,7 +1717,7 @@ function spawnBattleCombatVfx(branch = 'martial', opts = {}) {
         <circle cx="32" cy="126" r="3.2" fill="#d94c3d"/>
         <circle cx="136" cy="158" r="4.8" fill="#181412"/>
         <circle cx="64" cy="42" r="3.8" fill="#f3ce7a"/>
-        <path d="M46 46 L22 24 M154 46 L178 24 M154 154 L178 178 M46 154 L22 178" stroke="#f3ce7a" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/>
+        <path d="M48 48 Q32 40 20 22 M152 48 Q168 40 180 22 M152 152 Q168 160 180 178 M48 152 Q32 160 20 178" stroke="#f3ce7a" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/>
       </svg>`;
     container.appendChild(splat);
     setTimeout(() => splat.remove(), 680);
@@ -1744,27 +1767,27 @@ function spawnBattleSlashVfx(target = 'enemy', variant = 'martial', isCrit = fal
         <path d="M24 52 L56 68 L44 82 L134 106" stroke="#c084fc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
       </svg>`;
   } else if (branch === 'firearm') {
-    // 现代军火：炽焰琥珀枪口爆闪 + 高速穿甲弹道拖尾 + 金属破片火花
+    // 现代军火：炽焰琥珀枪口爆闪 + 弧形流火弹道 + 飞溅火花弧
     fxEl.innerHTML = `
       <svg viewBox="0 0 170 150" width="176" height="156" fill="none" aria-hidden="true">
         <polygon points="78,74 96,24 104,62 154,48 112,78 156,102 106,90 94,132 80,88 38,108 66,76 34,46" fill="rgba(249,115,22,0.72)" stroke="#fef08a" stroke-width="2.2"/>
         <circle cx="92" cy="76" r="16" fill="#fff7ed" opacity="0.95"/>
-        <line x1="164" y1="36" x2="12" y2="96" stroke="#fbbf24" stroke-width="4.5" stroke-linecap="round"/>
-        <line x1="160" y1="38" x2="26" y2="90" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
-        <line x1="158" y1="68" x2="18" y2="118" stroke="#f97316" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
-        <line x1="146" y1="22" x2="48" y2="60" stroke="#fde047" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
-        <path d="M62 40 L48 24 M118 116 L136 132 M42 74 L20 68 M126 32 L144 18" stroke="#fed7aa" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M164 36 Q92 48 12 96" stroke="#fbbf24" stroke-width="4.5" stroke-linecap="round"/>
+        <path d="M160 38 Q94 50 26 90" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M158 68 Q88 78 18 118" stroke="#f97316" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+        <path d="M146 22 Q98 30 48 60" stroke="#fde047" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M62 40 Q52 34 46 22 M118 116 Q128 122 138 132 M42 74 Q30 74 20 66 M126 32 Q136 28 146 18" stroke="#fed7aa" stroke-width="2.4" stroke-linecap="round"/>
       </svg>`;
   } else if (branch === 'mecha') {
-    // 科幻机甲：全息青色瞄准锁敌十字 + 穿透等离子激光束 + 重炮过载爆闪
+    // 科幻机甲：全息青色弧月锁敌环 + 螺旋等离子波带 + 重炮过载爆闪
     fxEl.innerHTML = `
       <svg viewBox="0 0 170 150" width="176" height="156" fill="none" aria-hidden="true">
         <circle cx="85" cy="75" r="46" stroke="#22d3ee" stroke-width="2.4" stroke-dasharray="16 8" opacity="0.92"/>
         <circle cx="85" cy="75" r="28" stroke="#5eead4" stroke-width="1.8" opacity="0.9"/>
-        <path d="M32 42 L48 42 L48 28 M138 42 L122 42 L122 28 M32 108 L48 108 L48 122 M138 108 L122 108 L122 122" stroke="#5eead4" stroke-width="2.8"/>
-        <line x1="8" y1="92" x2="164" y2="58" stroke="rgba(34,211,238,0.55)" stroke-width="18" stroke-linecap="round"/>
-        <line x1="12" y1="91" x2="160" y2="59" stroke="#67e8f9" stroke-width="8" stroke-linecap="round"/>
-        <line x1="16" y1="90" x2="156" y2="60" stroke="#ecfeff" stroke-width="3" stroke-linecap="round"/>
+        <path d="M34 48 Q38 32 52 30 M136 48 Q132 32 118 30 M34 102 Q38 118 52 120 M136 102 Q132 118 118 120" stroke="#5eead4" stroke-width="2.8" stroke-linecap="round"/>
+        <path d="M8 94 C54 62, 114 96, 164 56" stroke="rgba(34,211,238,0.58)" stroke-width="14" stroke-linecap="round"/>
+        <path d="M12 92 C56 64, 112 94, 160 58" stroke="#67e8f9" stroke-width="6.5" stroke-linecap="round"/>
+        <path d="M16 90 C60 104, 110 54, 156 60" stroke="#ecfeff" stroke-width="2.8" stroke-linecap="round"/>
         <polygon points="85,48 93,67 112,75 93,83 85,102 77,83 58,75 77,67" fill="rgba(94,234,212,0.72)" stroke="#ffffff" stroke-width="1.6"/>
       </svg>`;
   } else if (branch === 'crit') {
@@ -2715,60 +2738,6 @@ function battleUseSkill(skill) {
   }, totalMs);
 }
 
-function buildBaguaTaijiSvg() {
-  // 八卦三爻符号 (乾坤震巽坎离艮兑) — 全息激光能量阵
-  const trigrams = [
-    [1, 1, 1], [0, 0, 0], [0, 0, 1], [1, 1, 0],
-    [0, 1, 0], [1, 0, 1], [1, 0, 0], [0, 1, 1]
-  ];
-  const trigramSvg = trigrams.map((bars, idx) => {
-    const deg = idx * 45;
-    const lines = bars.map((solid, bi) => {
-      const y = 21 + bi * 6.2;
-      if (solid) {
-        return `<line x1="95" y1="${y}" x2="125" y2="${y}" stroke="#f6d882" stroke-width="1.8" stroke-linecap="round"/>`;
-      }
-      return `<line x1="95" y1="${y}" x2="107" y2="${y}" stroke="#38f8ff" stroke-width="1.8" stroke-linecap="round"/>
-              <line x1="113" y1="${y}" x2="125" y2="${y}" stroke="#38f8ff" stroke-width="1.8" stroke-linecap="round"/>`;
-    }).join('');
-    return `<g transform="rotate(${deg} 110 110)">${lines}</g>`;
-  }).join('');
-
-  return `
-    <svg class="bagua-outer-ring" viewBox="0 0 220 220" width="236" height="236" fill="none" aria-hidden="true">
-      <defs>
-        <filter id="holoBaguaGlow" x="-25%" y="-25%" width="150%" height="150%">
-          <feGaussianBlur stdDeviation="2.1" result="blur"/>
-          <feMerge>
-            <feMergeNode in="blur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-        <radialGradient id="holoBaguaDisc" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#38f8ff" stop-opacity="0.22"/>
-          <stop offset="52%" stop-color="#8b5cf6" stop-opacity="0.10"/>
-          <stop offset="100%" stop-color="#38f8ff" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <circle cx="110" cy="110" r="102" fill="url(#holoBaguaDisc)"/>
-      <g filter="url(#holoBaguaGlow)">
-        <polygon points="110,6 184,36 214,110 184,184 110,214 36,184 6,110 36,36"
-                 fill="none" stroke="#38f8ff" stroke-width="1.8" opacity="0.92"/>
-        <polygon points="110,14 178,42 206,110 178,178 110,206 42,178 14,110 42,42"
-                 fill="none" stroke="#f6d882" stroke-width="1.2" stroke-dasharray="10 6" opacity="0.86"/>
-        <circle cx="110" cy="110" r="64" stroke="#38f8ff" stroke-width="1.4" stroke-dasharray="8 5" opacity="0.82"/>
-        <circle cx="110" cy="110" r="56" stroke="#f6d882" stroke-width="1" stroke-dasharray="3 6" opacity="0.7"/>
-        ${trigramSvg}
-        <g class="bagua-taiji-core">
-          <circle cx="110" cy="110" r="44" fill="rgba(16, 48, 64, 0.24)" stroke="#38f8ff" stroke-width="1.8"/>
-          <path d="M110,66 A44,44 0 0,1 110,154 A22,22 0 0,1 110,110 A22,22 0 0,0 110,66 Z" fill="rgba(246, 216, 130, 0.42)" stroke="#f6d882" stroke-width="1.4"/>
-          <circle cx="110" cy="88" r="5.5" fill="rgba(56, 248, 255, 0.28)" stroke="#38f8ff" stroke-width="1.5"/>
-          <circle cx="110" cy="132" r="5.5" fill="rgba(246, 216, 130, 0.78)" stroke="#fff7d6" stroke-width="1.2"/>
-        </g>
-      </g>
-    </svg>`;
-}
-
 function battleAttemptCapture() {
   if (!battle || battle.busy) return;
   if (!battle.tpl.capturable) {
@@ -2806,37 +2775,38 @@ function battleAttemptCapture() {
   if (container) {
     crucibleEl = document.createElement('div');
     crucibleEl.className = 'capture-crucible-throw';
-    crucibleEl.innerHTML = `<div class="crucible-orb-mask"><img src="assets/app_icon.png" alt="天工墨壶" /></div>`;
+    crucibleEl.innerHTML = `
+      <img class="crucible-vessel-sprite" src="assets/sprites/crucible_vessel.png" alt="天工墨壶" />
+      <span class="crucible-mouth-flare" aria-hidden="true"></span>`;
     container.appendChild(crucibleEl);
   }
 
-  // ===== Phase 2 — 阴阳八卦太极大阵展开 (360ms → 1050ms) =====
+  // ===== Phase 2 — 3D 泼墨太极地阵 + 手绘泼墨灵涡 + 金青灵火上升 (360ms → 1050ms) =====
   setTimeout(() => {
     if (!battle) { cleanupCaptureVfx(); return; }
     if (crucibleEl) crucibleEl.classList.add('is-hovering');
-    logBattle(`太极阴阳八卦大阵展开！天工墨壶灵涡疯狂牵引【${battle.tpl.name}】妖魂！`);
+    logBattle(`泼墨太极大阵展开！倒悬天工墨壶倾泻灵涡，疯狂牵引【${battle.tpl.name}】妖魂！`);
     sfx.playCombatSfx?.('mystic', false);
 
     if (container) {
       baguaEl = document.createElement('div');
-      baguaEl.className = 'capture-bagua-array';
-      baguaEl.innerHTML = buildBaguaTaijiSvg();
+      baguaEl.className = 'capture-ground-ink-wrap';
+      baguaEl.innerHTML = `<img src="assets/sprites/wuxing_ink_wheel.png" alt="" class="capture-ground-ink-seal" aria-hidden="true" />`;
       container.appendChild(baguaEl);
 
       vortexEl = document.createElement('div');
       vortexEl.className = 'capture-vortex-beams';
+      const ambientSparks = Array.from({ length: 11 }, (_, i) => {
+        const sx = 24 + Math.round((i / 10) * 52);
+        const sw = Math.round(Math.sin(i * 2.1) * 20);
+        const sz = 5 + (i % 3) * 2;
+        const sd = i * 85;
+        const sc = i % 3 === 0 ? '#5eead4' : i % 3 === 1 ? '#f6d882' : '#c084fc';
+        return `<span class="capture-spirit-spark" style="--sx:${sx}%;--sw:${sw}px;--sz:${sz}px;--sd:${sd}ms;--sc:${sc};"></span>`;
+      }).join('');
       vortexEl.innerHTML = `
-        <div class="capture-tractor-cone"></div>
-        <div class="capture-laser-filaments">
-          <span class="capture-laser-beam beam-left"></span>
-          <span class="capture-laser-beam beam-core"></span>
-          <span class="capture-laser-beam beam-right"></span>
-        </div>
-        <div class="capture-scan-rings">
-          <span class="capture-scan-ring" style="--ring-delay:0ms"></span>
-          <span class="capture-scan-ring" style="--ring-delay:280ms"></span>
-          <span class="capture-scan-ring" style="--ring-delay:560ms"></span>
-        </div>`;
+        <img src="assets/sprites/capture_ink_vortex.png" alt="" class="capture-ink-vortex-img" aria-hidden="true" />
+        <div class="capture-vortex-sparks">${ambientSparks}</div>`;
       container.appendChild(vortexEl);
     }
   }, 360);
@@ -3052,7 +3022,7 @@ function renderSkillIcon(skill, size = 44) {
   const cat = skill?.category || 'martial';
   const glow = SKILL_BRANCH_GLOW[cat] || SKILL_BRANCH_GLOW.martial;
   const [col, row] = SKILL_ICON_COORDS[id] || [0, 0];
-  return `<span class="bat-skill-icon branch-${cat}" style="--sk-glow:${glow};width:${s}px;height:${s}px;">${_spriteCell('icons_skills.jpg', col, row, s, 'circle', glow)}</span>`;
+  return `<span class="bat-skill-icon branch-${cat}" style="--sk-glow:${glow};width:${s}px;height:${s}px;">${_spriteCell('icons_skills.png', col, row, s, 'circle', glow)}</span>`;
 }
 
 function renderBattleSubpanel() {
@@ -3401,14 +3371,14 @@ function renderVisualThumb(kind, idOrObj, size = 44) {
     return _thumbImg(src, g?.name || '护驾', s);
   }
   if (kind === 'crucible') {
-    return _thumbImg('assets/app_icon.png', '天工墨壶', s, 'border-radius:50%;border:1.5px solid rgba(229,187,92,0.58);');
+    return _thumbImg('assets/app_icon.png', '天工墨壶', s, 'border-radius:50%;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.85)) drop-shadow(0 0 10px rgba(229,187,92,0.42));');
   }
 
-  // 2. 装备（武器 / 护甲 / 机甲核心 / 秘宝）：使用 4×4 手绘 icons_gear.jpg
+  // 2. 装备（武器 / 护甲 / 机甲核心 / 秘宝）：使用 4×4 手绘透明 PNG icons_gear.png
   if (kind === 'equip' || kind === 'equipment') {
     const eq = typeof idOrObj === 'object' && idOrObj ? idOrObj : EQUIPMENT[idOrObj];
     if (!eq) {
-      return _spriteCell('icons_gear.jpg', 0, 0, s, 'squircle', 'rgba(212,162,74,0.25)');
+      return _spriteCell('icons_gear.png', 0, 0, s, 'squircle', 'rgba(212,162,74,0.25)');
     }
     let coords = GEAR_ICON_COORDS[eq.id];
     if (!coords) {
@@ -3422,22 +3392,22 @@ function renderVisualThumb(kind, idOrObj, size = 44) {
       else if (eq.genre === 'scifi') coords = [3, 0];
       else coords = [0, 0];
     }
-    return _spriteCell('icons_gear.jpg', coords[0], coords[1], s, 'squircle', _qualityGlow(eq.quality));
+    return _spriteCell('icons_gear.png', coords[0], coords[1], s, 'squircle', _qualityGlow(eq.quality));
   }
 
-  // 3. 丹药：使用 4×4 手绘 icons_items.jpg
+  // 3. 丹药：使用 4×4 手绘透明 PNG icons_items.png
   if (kind === 'elixir') {
     const elx = typeof idOrObj === 'object' && idOrObj ? idOrObj : ELIXIRS[idOrObj];
     if (elx?.id === 'elixir_ration') {
-      return _spriteCell('icons_items.jpg', 2, 2, s, 'squircle', 'rgba(245,158,11,0.48)');
+      return _spriteCell('icons_items.png', 2, 2, s, 'squircle', 'rgba(245,158,11,0.48)');
     }
-    return _spriteCell('icons_items.jpg', 0, 3, s, 'squircle', 'rgba(94,234,212,0.52)');
+    return _spriteCell('icons_items.png', 0, 3, s, 'squircle', 'rgba(94,234,212,0.52)');
   }
 
-  // 4. 背包物品（补给品 / 剧情信物 / 古董 / 科技 / 废品）：使用 4×4 手绘 icons_items.jpg
+  // 4. 背包物品（补给品 / 剧情信物 / 古董 / 科技 / 废品）：使用 4×4 手绘透明 PNG icons_items.png
   if (kind === 'item') {
     const it = typeof idOrObj === 'object' && idOrObj ? idOrObj : ITEMS[idOrObj];
-    if (!it) return _spriteCell('icons_items.jpg', 0, 0, s, 'squircle');
+    if (!it) return _spriteCell('icons_items.png', 0, 0, s, 'squircle');
     const coords = ITEM_ICON_COORDS[it.id] || (it.isCollection || it.isStory ? [3, 3] : [0, 0]);
     const glow = it.isCollection || it.isStory
       ? 'rgba(229,184,92,0.45)'
@@ -3446,7 +3416,7 @@ function renderVisualThumb(kind, idOrObj, size = 44) {
         : it.isConsumable
           ? 'rgba(94,234,212,0.38)'
           : 'rgba(212,162,74,0.22)';
-    return _spriteCell('icons_items.jpg', coords[0], coords[1], s, 'squircle', glow);
+    return _spriteCell('icons_items.png', coords[0], coords[1], s, 'squircle', glow);
   }
 
   // 5. 空装备槽 / 炼化炉预览图标
@@ -4263,12 +4233,12 @@ function applyItemEffectOutsideBattle(item) {
 
 // ==================== 4. 武学奇术阁（视觉 RPG 绝学徽章殿堂） ====================
 const PASSIVE_ICON_MAP = [
-  { sheet: 'icons_skills.jpg', col: 0, row: 0, glow: 'rgba(229,184,92,0.52)' },  // 0: 墨影步
-  { sheet: 'icons_skills.jpg', col: 2, row: 1, glow: 'rgba(249,115,22,0.52)' },  // 1: 鹰眼术
-  { sheet: 'icons_gear.jpg',   col: 3, row: 1, glow: 'rgba(212,162,74,0.48)' },  // 2: 行囊诀
-  { sheet: 'icons_items.jpg',  col: 2, row: 0, glow: 'rgba(56,189,248,0.50)' },  // 3: 巧手拆解
-  { sheet: 'icons_skills.jpg', col: 3, row: 0, glow: 'rgba(229,184,92,0.60)' },  // 4: 破风斩
-  { sheet: 'icons_gear.jpg',   col: 3, row: 3, glow: 'rgba(94,234,212,0.58)' }   // 5: 天运诀
+  { sheet: 'icons_skills.png', col: 0, row: 0, glow: 'rgba(229,184,92,0.52)' },  // 0: 墨影步
+  { sheet: 'icons_skills.png', col: 2, row: 1, glow: 'rgba(249,115,22,0.52)' },  // 1: 鹰眼术
+  { sheet: 'icons_gear.png',   col: 3, row: 1, glow: 'rgba(212,162,74,0.48)' },  // 2: 行囊诀
+  { sheet: 'icons_items.png',  col: 2, row: 0, glow: 'rgba(56,189,248,0.50)' },  // 3: 巧手拆解
+  { sheet: 'icons_skills.png', col: 3, row: 0, glow: 'rgba(229,184,92,0.60)' },  // 4: 破风斩
+  { sheet: 'icons_gear.png',   col: 3, row: 3, glow: 'rgba(94,234,212,0.58)' }   // 5: 天运诀
 ];
 
 let skillHallBranch = 'all';
@@ -5279,7 +5249,11 @@ function finishOpeningPrologue() {
     world.paused = false;
   }
   if (!battle) {
-    sfx.playBgm?.(getBgmTrackForMap(state.mapId));
+    const curMap = MAPS_BY_ID[state.mapId] || MAPS[0];
+    const region = getMapRegion(curMap);
+    sfx.playBgm?.(getBgmTrackForMap(curMap.id));
+    showSceneTitleBanner(curMap.name, region.name);
+    showToast(`抵达「${curMap.name}」`, 'info');
   }
 }
 
@@ -5312,8 +5286,30 @@ function startHazardLoop() {
   }, 1000);
 }
 
+// ==================== 1920×1080 (1080P) 响应式 UI 缩放系统 ====================
+function apply1080pUiScale() {
+  const vw = Math.max(320, window.innerWidth || 1280);
+  const vh = Math.max(240, window.innerHeight || 720);
+  const uiScale = Math.max(0.52, Math.min(1.08, Math.min(vw / 1600, vh / 900)));
+  const root = document.documentElement;
+  root.style.setProperty('--ui-scale', uiScale.toFixed(3));
+  if (vh <= 520) {
+    root.setAttribute('data-density', 'compact');
+  } else {
+    root.removeAttribute('data-density');
+  }
+}
+
 // ==================== 全局初始化与事件绑定 ====================
 function init() {
+  // 应用 1080P 参考标准 UI 缩放并监听视口变化
+  apply1080pUiScale();
+  window.addEventListener('resize', apply1080pUiScale);
+  window.addEventListener('orientationchange', () => {
+    apply1080pUiScale();
+    setTimeout(apply1080pUiScale, 120);
+  });
+
   // 加载存档
   const saved = storage.loadSave(currentUser);
   state = migrateState(saved);
@@ -5464,40 +5460,61 @@ function init() {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
+  // 严格顺序启动门禁：开屏期间保持暂停、序章隐藏、禁止地图抵达横幅/Toast 透字
+  const splashActive = isStudioSplashActive();
+  const suppressInitialArrival = splashActive || !state.prologueSeen;
+  if (suppressInitialArrival) {
+    world.paused = true;
+    $('opening-prologue')?.classList.add('hidden');
+  }
+
   // 加载初始地图并启动世界循环
-  enterMap(state.mapId, state.heroX, state.heroY);
+  enterMap(state.mapId, state.heroX, state.heroY, { suppressArrivalFx: suppressInitialArrival });
   world.start();
   startHazardLoop();
   updateHUD();
 
-  // 开屏动画音效与 BGM 平滑衔接
-  const splashActive = isStudioSplashActive();
-  if (!state.prologueSeen) {
-    openOpeningPrologue(splashActive);
-  }
+  const enterLiveWorld = () => {
+    if (world && !battle && !currentDialog && $('modal-backdrop')?.classList.contains('hidden')) {
+      world.paused = false;
+    }
+    const curMap = MAPS_BY_ID[state.mapId] || MAPS[0];
+    const region = getMapRegion(curMap);
+    if (!battle) {
+      sfx.playBgm?.(getBgmTrackForMap(curMap.id));
+    }
+    showSceneTitleBanner(curMap.name, region.name);
+    showToast(`抵达「${curMap.name}」`, 'info');
+  };
+
+  // 开屏动画 -> 序章 -> 正式入镇严格串行衔接
   if (splashActive) {
     sfx.playStudioJingle?.();
     let handedOff = false;
-    const handoffPostSplashBgm = () => {
+    const runPostSplashHandoff = () => {
       if (handedOff) return;
       handedOff = true;
-      const prologueOpen = $('opening-prologue') && !$('opening-prologue').classList.contains('hidden');
-      sfx.playBgm?.(prologueOpen ? 'prologue' : getBgmTrackForMap(state.mapId));
+      if (!state.prologueSeen) {
+        openOpeningPrologue(false);
+      } else {
+        enterLiveWorld();
+      }
     };
-    $('btn-skip-splash')?.addEventListener('click', handoffPostSplashBgm, { once: true });
     const splashEl = $('studio-splash');
     if (splashEl) {
       const obs = new MutationObserver(() => {
         if (!isStudioSplashActive()) {
           obs.disconnect();
-          handoffPostSplashBgm();
+          runPostSplashHandoff();
         }
       });
       obs.observe(splashEl, { attributes: true, attributeFilter: ['class', 'style'] });
     }
-    setTimeout(handoffPostSplashBgm, 5400);
-  } else if (state.prologueSeen) {
-    sfx.playBgm?.(getBgmTrackForMap(state.mapId));
+    setTimeout(runPostSplashHandoff, 6500);
+  } else if (!state.prologueSeen) {
+    openOpeningPrologue(false);
+  } else {
+    enterLiveWorld();
   }
 }
 

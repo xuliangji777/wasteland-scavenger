@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="assets/app_icon.png" />
   <link rel="apple-touch-icon" href="assets/app_icon.png" />
-  <link rel="stylesheet" href="css/style.css?v=13" />
+  <link rel="stylesheet" href="css/style.css?v=20" />
 </head>
 <body>
   <!-- ==================== 老年饼工作室 · 水墨开屏动画 ==================== -->
@@ -536,72 +536,84 @@
           </div>
         </div>
 
-        <!-- 战斗底部「青铜墨卷战令台」 -->
+        <!-- 战斗底部无遮挡浮空层：左下墨卷战报 + 左中绝学/丹药扇面 + 右下「五行八卦罗盘战阵」 -->
         <div class="battle-bottom-panel">
-          <div class="battle-deck-inner">
-            <div id="bat-log" class="battle-log">遭遇强敌！凝神戒备，准备迎战！</div>
+          <div id="bat-log" class="battle-log">遭遇强敌！凝神戒备，准备迎战！</div>
 
-            <!-- 可展开子面板：16 项四系绝学/奇术 或 丹药补给 -->
-            <div id="bat-subpanel" class="battle-subpanel hidden"></div>
+          <!-- 可展开子面板：16 项四系绝学/奇术 或 丹药补给（浮空于罗盘左侧，绝不遮挡） -->
+          <div id="bat-subpanel" class="battle-subpanel hidden"></div>
 
-            <div class="battle-deck-divider" aria-hidden="true"></div>
+          <!-- 右下角「五行水墨太极战阵」：泼墨书法太极图 + 金·火·水·木·土 五行印记 -->
+          <div class="battle-commands wuxing-wheel" role="group" aria-label="五行八卦罗盘战阵">
+            <img src="assets/sprites/wuxing_ink_wheel.png" alt="" class="wuxing-ink-aura" aria-hidden="true" />
 
-            <!-- 主指令栏：青铜墨玉圆形战令徽章 -->
-            <div class="battle-commands">
-              <button class="bat-cmd primary" id="bat-btn-atk">
-                <span class="bat-cmd-orb">
-                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                    <path d="M19.5 4.5L10.5 13.5M19.5 4.5L18.2 9.4L12.6 15L9 11.4L14.6 5.8L19.5 4.5Z" stroke="#f2d28b" stroke-width="1.6" stroke-linejoin="round" fill="rgba(212,162,74,0.22)"/>
-                    <path d="M7.4 13L11 16.6M6.5 17.5L4.5 19.5" stroke="#e5bb5c" stroke-width="1.8" stroke-linecap="round"/>
-                    <path d="M4.8 6.8L9.2 11.2M14.8 16.8L18.8 19.5" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2.5 1.8"/>
-                    <circle cx="15.2" cy="8.8" r="1" fill="#fde68a"/>
-                  </svg>
-                </span>
-                <span class="bat-cmd-label">普攻</span>
-              </button>
-              <button class="bat-cmd skill" id="bat-btn-skills">
-                <span class="bat-cmd-orb">
-                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                    <polygon points="12,2.5 18.8,6.2 18.8,17.8 12,21.5 5.2,17.8 5.2,6.2" stroke="#d4a24a" stroke-width="1.4" stroke-dasharray="3.5 2" fill="rgba(79,209,197,0.1)"/>
-                    <path d="M13.6 4.8L8.2 12.6H12.2L10.4 19.2L16.2 11.2H12.2L13.6 4.8Z" stroke="#5eead4" stroke-width="1.65" stroke-linejoin="round" fill="rgba(94,234,212,0.28)"/>
-                  </svg>
-                </span>
-                <span class="bat-cmd-label">绝学/奇术</span>
-              </button>
-              <button class="bat-cmd capture" id="bat-btn-capture">
-                <span class="bat-cmd-orb">
-                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                    <path d="M8.5 6.5H15.5L14.2 9.2C16.8 10.4 18 12.6 17.5 15.4C17 18 14.8 19.8 12 19.8C9.2 19.8 7 18 6.5 15.4C6 12.6 7.2 10.4 9.8 9.2L8.5 6.5Z" stroke="#d4a24a" stroke-width="1.6" stroke-linejoin="round" fill="rgba(196,166,245,0.18)"/>
-                    <path d="M9.8 4.2C10.8 2.8 13.2 2.8 14.2 4.2" stroke="#c4a6f5" stroke-width="1.5" stroke-linecap="round"/>
-                    <circle cx="12" cy="14.2" r="2.2" stroke="#c4a6f5" stroke-width="1.4" fill="rgba(196,166,245,0.3)"/>
-                    <path d="M12 10.2V12M12 16.4V18" stroke="#e9d5ff" stroke-width="1.2" stroke-linecap="round"/>
-                  </svg>
-                </span>
-                <span class="bat-cmd-label">收妖</span>
-              </button>
-              <button class="bat-cmd item" id="bat-btn-item">
-                <span class="bat-cmd-orb">
-                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                    <path d="M9.5 3.8H14.5M10.4 3.8V7.2L6.8 13.8C5.8 15.6 7.1 18.8 9.4 19.5H14.6C16.9 18.8 18.2 15.6 17.2 13.8L13.6 7.2V3.8" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" fill="rgba(110,231,183,0.14)"/>
-                    <path d="M7.6 14.5C9.4 13.6 14.6 15.4 16.4 14.5L15.2 18.2H8.8L7.6 14.5Z" fill="rgba(110,231,183,0.36)" stroke="#6ee7b7" stroke-width="1.25" stroke-linejoin="round"/>
-                    <circle cx="11.2" cy="11.4" r="1" fill="#6ee7b7"/>
-                    <circle cx="13.8" cy="13.1" r="0.8" fill="#fde68a"/>
-                  </svg>
-                </span>
-                <span class="bat-cmd-label">丹药</span>
-              </button>
-              <button class="bat-cmd escape" id="bat-btn-run">
-                <span class="bat-cmd-orb">
-                  <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
-                    <path d="M4.5 9.2H13.5C15.4 9.2 16.8 7.9 16.8 6.4C16.8 5 15.6 4 14.2 4C13 4 12.1 4.8 11.9 5.8" stroke="#cbd5e1" stroke-width="1.65" stroke-linecap="round"/>
-                    <path d="M3.5 13H17.5C19.4 13 20.6 14.2 20.6 15.8C20.6 17.3 19.3 18.5 17.7 18.5C16.3 18.5 15.3 17.6 15.1 16.5" stroke="#94a3b8" stroke-width="1.65" stroke-linecap="round"/>
-                    <path d="M6.5 16.8H11.8" stroke="#d4a24a" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2.4 2"/>
-                    <path d="M16.5 10.6L19.2 13L16.5 15.4" stroke="#cbd5e1" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-                <span class="bat-cmd-label">撤退</span>
-              </button>
-            </div>
+            <!-- 1. 顶点（火 · 绝学） -->
+            <button class="bat-cmd skill wx-node-fire" id="bat-btn-skills" data-wx="fire">
+              <span class="bat-cmd-orb">
+                <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                  <polygon points="12,2.5 18.8,6.2 18.8,17.8 12,21.5 5.2,17.8 5.2,6.2" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="3.5 2" fill="rgba(245,158,11,0.12)"/>
+                  <path d="M13.6 4.8L8.2 12.6H12.2L10.4 19.2L16.2 11.2H12.2L13.6 4.8Z" stroke="#5eead4" stroke-width="1.65" stroke-linejoin="round" fill="rgba(94,234,212,0.3)"/>
+                </svg>
+                <span class="wx-seal wx-fire" aria-hidden="true">火</span>
+              </span>
+              <span class="bat-cmd-label">绝学</span>
+            </button>
+
+            <!-- 2. 左上（金 · 普攻） -->
+            <button class="bat-cmd primary wx-node-metal" id="bat-btn-atk" data-wx="metal">
+              <span class="bat-cmd-orb">
+                <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                  <path d="M19.5 4.5L10.5 13.5M19.5 4.5L18.2 9.4L12.6 15L9 11.4L14.6 5.8L19.5 4.5Z" stroke="#f6d882" stroke-width="1.65" stroke-linejoin="round" fill="rgba(246,216,130,0.24)"/>
+                  <path d="M7.4 13L11 16.6M6.5 17.5L4.5 19.5" stroke="#e5bb5c" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M4.8 6.8L9.2 11.2M14.8 16.8L18.8 19.5" stroke="#5eead4" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="2.5 1.8"/>
+                  <circle cx="15.2" cy="8.8" r="1" fill="#fde68a"/>
+                </svg>
+                <span class="wx-seal wx-metal" aria-hidden="true">金</span>
+              </span>
+              <span class="bat-cmd-label">普攻</span>
+            </button>
+
+            <!-- 3. 右上（水 · 收妖） -->
+            <button class="bat-cmd capture wx-node-water" id="bat-btn-capture" data-wx="water">
+              <span class="bat-cmd-orb">
+                <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                  <path d="M8.5 6.5H15.5L14.2 9.2C16.8 10.4 18 12.6 17.5 15.4C17 18 14.8 19.8 12 19.8C9.2 19.8 7 18 6.5 15.4C6 12.6 7.2 10.4 9.8 9.2L8.5 6.5Z" stroke="#5eead4" stroke-width="1.6" stroke-linejoin="round" fill="rgba(196,166,245,0.2)"/>
+                  <path d="M9.8 4.2C10.8 2.8 13.2 2.8 14.2 4.2" stroke="#c4a6f5" stroke-width="1.5" stroke-linecap="round"/>
+                  <circle cx="12" cy="14.2" r="2.2" stroke="#c4a6f5" stroke-width="1.4" fill="rgba(94,234,212,0.32)"/>
+                  <path d="M12 10.2V12M12 16.4V18" stroke="#e9d5ff" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+                <span class="wx-seal wx-water" aria-hidden="true">水</span>
+              </span>
+              <span class="bat-cmd-label">收妖</span>
+            </button>
+
+            <!-- 4. 左下（木 · 丹药） -->
+            <button class="bat-cmd item wx-node-wood" id="bat-btn-item" data-wx="wood">
+              <span class="bat-cmd-orb">
+                <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                  <path d="M9.5 3.8H14.5M10.4 3.8V7.2L6.8 13.8C5.8 15.6 7.1 18.8 9.4 19.5H14.6C16.9 18.8 18.2 15.6 17.2 13.8L13.6 7.2V3.8" stroke="#d4a24a" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" fill="rgba(110,231,183,0.16)"/>
+                  <path d="M7.6 14.5C9.4 13.6 14.6 15.4 16.4 14.5L15.2 18.2H8.8L7.6 14.5Z" fill="rgba(110,231,183,0.38)" stroke="#6ee7b7" stroke-width="1.25" stroke-linejoin="round"/>
+                  <circle cx="11.2" cy="11.4" r="1" fill="#6ee7b7"/>
+                  <circle cx="13.8" cy="13.1" r="0.8" fill="#fde68a"/>
+                </svg>
+                <span class="wx-seal wx-wood" aria-hidden="true">木</span>
+              </span>
+              <span class="bat-cmd-label">丹药</span>
+            </button>
+
+            <!-- 5. 右下（土 · 撤退） -->
+            <button class="bat-cmd escape wx-node-earth" id="bat-btn-run" data-wx="earth">
+              <span class="bat-cmd-orb">
+                <svg class="cyber-ink-ico bat-ico" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+                  <path d="M4.5 9.2H13.5C15.4 9.2 16.8 7.9 16.8 6.4C16.8 5 15.6 4 14.2 4C13 4 12.1 4.8 11.9 5.8" stroke="#e2c799" stroke-width="1.65" stroke-linecap="round"/>
+                  <path d="M3.5 13H17.5C19.4 13 20.6 14.2 20.6 15.8C20.6 17.3 19.3 18.5 17.7 18.5C16.3 18.5 15.3 17.6 15.1 16.5" stroke="#c89b54" stroke-width="1.65" stroke-linecap="round"/>
+                  <path d="M6.5 16.8H11.8" stroke="#d4a24a" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="2.4 2"/>
+                  <path d="M16.5 10.6L19.2 13L16.5 15.4" stroke="#e2c799" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="wx-seal wx-earth" aria-hidden="true">土</span>
+              </span>
+              <span class="bat-cmd-label">撤退</span>
+            </button>
           </div>
         </div>
       </section>
@@ -629,19 +641,22 @@
       const skipBtn = document.getElementById('btn-skip-splash');
       if (!splash) return;
       let dismissed = false;
-      const dismiss = (e) => {
+      const dismiss = (e, instant = false) => {
         if (e && e.stopPropagation) e.stopPropagation();
         if (dismissed) return;
         dismissed = true;
         clearTimeout(autoTimer);
+        if (instant) {
+          splash.style.transition = 'opacity 0.22s ease, visibility 0.22s ease';
+        }
         splash.classList.add('splash-fading');
         setTimeout(() => {
           splash.classList.add('splash-done');
-        }, 1050);
+        }, instant ? 240 : 900);
       };
-      const autoTimer = setTimeout(dismiss, 5200);
-      if (skipBtn) skipBtn.addEventListener('click', dismiss, { once: true });
-      splash.addEventListener('click', dismiss, { once: true });
+      const autoTimer = setTimeout(() => dismiss(null, false), 5200);
+      if (skipBtn) skipBtn.addEventListener('click', (e) => dismiss(e, true), { once: true });
+      splash.addEventListener('click', (e) => dismiss(e, true), { once: true });
 
       // Keep bespoke cyber-ink SVG icons on #btn-sound even when game.js toggles textContent
       const soundBtn = document.getElementById('btn-sound');
@@ -662,6 +677,6 @@
       }
     })();
   </script>
-  <script type="module" src="js/game.js?v=13"></script>
+  <script type="module" src="js/game.js?v=20"></script>
 </body>
 </html>
