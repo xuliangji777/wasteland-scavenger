@@ -1,12 +1,12 @@
-// ==================== Web Audio 合成音效 & 国风废土程序化 BGM 引擎 ====================
+// ==================== Web Audio Studio Synthesizer & Foley Engine (v28) ====================
+// Zero external MP3 dependencies · Warm Master Bus + Spatial Delay/Reverb + 12 BGM + Bespoke Combat Foley
 
-// 常用音高频率表 (Hz)
 const NOTE = {
-  D2: 73.42,  E2: 82.41,  F2: 87.31,  G2: 98.00,  A2: 110.00, B2: 123.47,
-  C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, Fs3: 185.00, G3: 196.00, A3: 220.00, B3: 246.94,
-  C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, Fs4: 369.99, G4: 392.00, A4: 440.00, B4: 493.88,
-  C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, Fs5: 739.99, G5: 783.99, A5: 880.00, B5: 987.77,
-  C6: 1046.50, D6: 1174.66, E6: 1318.51
+  C2: 65.41,  D2: 73.42,  Eb2: 77.78, E2: 82.41,  F2: 87.31,  Fs2: 92.50, G2: 98.00,  Ab2: 103.83, A2: 110.00, Bb2: 116.54, B2: 123.47,
+  C3: 130.81, Cs3: 138.59, D3: 146.83, Eb3: 155.56, E3: 164.81, F3: 174.61, Fs3: 185.00, G3: 196.00, Ab3: 207.65, A3: 220.00, Bb3: 233.08, B3: 246.94,
+  C4: 261.63, Cs4: 277.18, D4: 293.66, Eb4: 311.13, E4: 329.63, F4: 349.23, Fs4: 369.99, G4: 392.00, Ab4: 415.30, A4: 440.00, Bb4: 466.16, B4: 493.88,
+  C5: 523.25, Cs5: 554.37, D5: 587.33, Eb5: 622.25, E5: 659.25, F5: 698.46, Fs5: 739.99, G5: 783.99, Ab5: 830.61, A5: 880.00, Bb5: 932.33, B5: 987.77,
+  C6: 1046.50, D6: 1174.66, E6: 1318.51, G6: 1567.98
 };
 
 const AUDIO_SETTINGS_KEY = 'motu_audio_settings_v1';
@@ -15,28 +15,30 @@ class SoundEngine {
   constructor() {
     this.ctx = null;
     this.muted = false;
-
-    // 独立音频设置（持久化至 localStorage）
     this.settings = this._loadSettings();
 
-    // 总线节点
+    // Master & Bus Nodes
+    this.masterCompressor = null;
     this.masterGain = null;
     this.sfxMaster = null;
     this.bgmMaster = null;
     this.reverbSend = null;
+    this.sfxReverbSend = null;
     this.noiseBuffer = null;
 
-    // BGM 状态
+    // BGM State
     this.currentTrack = 'none';
     this.pendingTrack = null;
     this.pendingJingle = false;
     this.activeSession = null;
 
-    // 自动播放解锁监听
+    // Autoplay unlock
     this._unlockBound = false;
     this._onUserGesture = this._handleUserGesture.bind(this);
     this._bindUnlockListeners();
   }
+
+  // ==================== Settings & Persistence ====================
 
   _loadSettings() {
     const defaults = {
@@ -92,14 +94,13 @@ class SoundEngine {
     this._saveSettings();
     this._applyBusGains(0.08);
 
-    // 若取消 BGM 静音且存在目标曲目，平滑恢复
     if (!this.muted && !this.settings.bgmMuted) {
       const target = (this.pendingTrack && this.pendingTrack !== 'none')
         ? this.pendingTrack
         : this.currentTrack;
       if (target && target !== 'none' && !this.activeSession && this.ctx && this.ctx.state === 'running') {
         this.pendingTrack = null;
-        this._startBgmSession(target, 0.7);
+        this._startBgmSession(target, 0.6);
       }
     }
     return this.getSettings();
@@ -109,7 +110,7 @@ class SoundEngine {
     const ctx = this.ctx;
     if (!ctx) return;
     const now = ctx.currentTime;
-    const bgmTarget = this.settings.bgmMuted ? 0 : this.settings.bgmVolume * 0.56;
+    const bgmTarget = this.settings.bgmMuted ? 0 : this.settings.bgmVolume * 0.58;
     const sfxTarget = this.settings.sfxMuted ? 0 : this.settings.sfxVolume;
 
     if (this.bgmMaster) {
@@ -126,7 +127,7 @@ class SoundEngine {
     }
   }
 
-  // -------------------- 上下文与总线初始化 --------------------
+  // ==================== Context & Master Bus ====================
 
   _bindUnlockListeners() {
     if (this._unlockBound || typeof window === 'undefined') return;
@@ -158,7 +159,7 @@ class SoundEngine {
       if (this.pendingTrack && this.pendingTrack !== 'none') {
         const track = this.pendingTrack;
         this.pendingTrack = null;
-        this._startBgmSession(track, 0.8);
+        this._startBgmSession(track, 0.6);
       }
     };
 
@@ -181,45 +182,91 @@ class SoundEngine {
   }
 
   _initBuses(ctx) {
-    // Master -> Destination
+    // Master Bus: DynamicsCompressorNode -> MasterGain -> Destination (never clips, warm punch)
+    this.masterCompressor = ctx.createDynamicsCompressor();
+    this.masterCompressor.threshold.setValueAtTime(-14, ctx.currentTime);
+    this.masterCompressor.knee.setValueAtTime(18, ctx.currentTime);
+    this.masterCompressor.ratio.setValueAtTime(4.0, ctx.currentTime);
+    this.masterCompressor.attack.setValueAtTime(0.004, ctx.currentTime);
+    this.masterCompressor.release.setValueAtTime(0.16, ctx.currentTime);
+
     this.masterGain = ctx.createGain();
     this.masterGain.gain.value = this.muted ? 0 : 1.0;
+
+    this.masterCompressor.connect(this.masterGain);
     this.masterGain.connect(ctx.destination);
 
     // SFX Bus
     this.sfxMaster = ctx.createGain();
     this.sfxMaster.gain.value = this.settings.sfxMuted ? 0 : this.settings.sfxVolume;
-    this.sfxMaster.connect(this.masterGain);
+    this.sfxMaster.connect(this.masterCompressor);
 
-    // BGM Bus (适中电平，让音效清晰穿透)
+    // BGM Bus
     this.bgmMaster = ctx.createGain();
-    this.bgmMaster.gain.value = this.settings.bgmMuted ? 0 : this.settings.bgmVolume * 0.56;
-    this.bgmMaster.connect(this.masterGain);
+    this.bgmMaster.gain.value = this.settings.bgmMuted ? 0 : this.settings.bgmVolume * 0.58;
+    this.bgmMaster.connect(this.masterCompressor);
 
-    // 轻量国风山谷回声总线 (Stereo/Filtered Feedback Delay)
-    const delay = ctx.createDelay(1.0);
-    delay.delayTime.value = 0.34;
-    const feedback = ctx.createGain();
-    feedback.gain.value = 0.28;
-    const damp = ctx.createBiquadFilter();
-    damp.type = 'lowpass';
-    damp.frequency.value = 2100;
-    const wet = ctx.createGain();
-    wet.gain.value = 0.36;
-
+    // Warm Spatial Echo/Reverb Send Bus (dual-tap damped feedback delay at 0.22)
     this.reverbSend = ctx.createGain();
     this.reverbSend.gain.value = 1.0;
 
-    this.reverbSend.connect(delay);
-    delay.connect(damp);
-    damp.connect(feedback);
-    feedback.connect(delay);
-    damp.connect(wet);
-    wet.connect(this.bgmMaster);
+    const delayA = ctx.createDelay(1.0);
+    delayA.delayTime.value = 0.29;
+    const dampA = ctx.createBiquadFilter();
+    dampA.type = 'lowpass';
+    dampA.frequency.value = 2300;
+    const fbA = ctx.createGain();
+    fbA.gain.value = 0.22;
 
-    // 预生成 2 秒白噪声缓冲（供风声、打击乐、笛声气音复用）
+    const delayB = ctx.createDelay(1.0);
+    delayB.delayTime.value = 0.43;
+    const dampB = ctx.createBiquadFilter();
+    dampB.type = 'lowpass';
+    dampB.frequency.value = 1850;
+    const fbB = ctx.createGain();
+    fbB.gain.value = 0.22;
+
+    const wetBgm = ctx.createGain();
+    wetBgm.gain.value = 0.30;
+
+    this.reverbSend.connect(delayA);
+    delayA.connect(dampA);
+    dampA.connect(fbA);
+    fbA.connect(delayA);
+    dampA.connect(wetBgm);
+
+    this.reverbSend.connect(delayB);
+    delayB.connect(dampB);
+    dampB.connect(fbB);
+    fbB.connect(delayB);
+    dampB.connect(wetBgm);
+
+    wetBgm.connect(this.bgmMaster);
+
+    // Dedicated SFX Reverb Send (subtle room tail so blades, bells, & explosions breathe)
+    this.sfxReverbSend = ctx.createGain();
+    this.sfxReverbSend.gain.value = 1.0;
+
+    const sfxDelay = ctx.createDelay(1.0);
+    sfxDelay.delayTime.value = 0.17;
+    const sfxDamp = ctx.createBiquadFilter();
+    sfxDamp.type = 'lowpass';
+    sfxDamp.frequency.value = 2600;
+    const sfxFb = ctx.createGain();
+    sfxFb.gain.value = 0.22;
+    const sfxWet = ctx.createGain();
+    sfxWet.gain.value = 0.24;
+
+    this.sfxReverbSend.connect(sfxDelay);
+    sfxDelay.connect(sfxDamp);
+    sfxDamp.connect(sfxFb);
+    sfxFb.connect(sfxDelay);
+    sfxDamp.connect(sfxWet);
+    sfxWet.connect(this.sfxMaster);
+
+    // Pre-generate 2.5s white noise buffer (shared by foley, wind, flute breath, percussion)
     const sampleRate = ctx.sampleRate;
-    const length = sampleRate * 2;
+    const length = Math.floor(sampleRate * 2.5);
     const buffer = ctx.createBuffer(1, length, sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < length; i++) {
@@ -236,6 +283,10 @@ class SoundEngine {
       ctx.resume().catch(() => {});
     }
     return ctx;
+  }
+
+  ensureAudio() {
+    return this.ensureCtx();
   }
 
   toggleMute() {
@@ -255,552 +306,563 @@ class SoundEngine {
         }
         g.linearRampToValueAtTime(1.0, now + 0.35);
 
-        // 若取消静音时有待播或当前曲目未在运行，平滑恢复
         const target = (this.pendingTrack && this.pendingTrack !== 'none')
           ? this.pendingTrack
           : this.currentTrack;
         if (target && target !== 'none' && !this.activeSession) {
           this.pendingTrack = null;
-          this._startBgmSession(target, 0.8);
+          this._startBgmSession(target, 0.6);
         }
       }
     } else if (!this.muted) {
-      // 尚未创建 ctx，但用户点击了取消静音按钮本身即是手势
       this._handleUserGesture();
     }
     return this.muted;
   }
 
-  // ==================== 原有 SFX 音效（100% 保留兼容） ====================
+  // ==================== Studio Instrument Voices ====================
 
-  playTone(freq, duration = 0.1, type = 'sine', gainVal = 0.08, delay = 0) {
-    if (this.settings.sfxMuted) return;
-    const ctx = this.ensureCtx();
+  /**
+   * Plucked Chinese Guqin / Guzheng string with resonant lowpass decay & subtle 滑音 (slide)
+   */
+  pluckGuqin(freq, dur = 1.6, vol = 0.16, time = null, dest = null, reverbAmt = 0.42, slide = 0.014) {
+    const ctx = this.ctx;
     if (!ctx) return;
-    const now = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, now);
-    gain.gain.setValueAtTime(gainVal, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    osc.connect(gain);
-    gain.connect(this.sfxMaster || ctx.destination);
-    osc.start(now);
-    osc.stop(now + duration);
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.bgmMaster || ctx.destination;
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const osc2Gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+
+    // Triangle body + detuned sawtooth overtone for warm plucked silk string
+    osc1.type = 'triangle';
+    osc2.type = 'sawtooth';
+    const startFreq = slide ? freq * (1 - slide) : freq;
+    osc1.frequency.setValueAtTime(startFreq, t);
+    osc1.frequency.exponentialRampToValueAtTime(freq, t + 0.045);
+
+    osc2.frequency.setValueAtTime(startFreq * 2, t);
+    osc2.frequency.exponentialRampToValueAtTime(freq * 2, t + 0.045);
+    osc2.detune.setValueAtTime(5.5, t);
+    osc2Gain.gain.setValueAtTime(0.26, t);
+
+    // Resonant lowpass filter pluck decay
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(Math.min(freq * 7.5, 5800), t);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(freq * 1.25, 280), t + Math.max(0.18, dur * 0.8));
+    filter.Q.value = 2.2;
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.009);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc1.connect(filter);
+    osc2.connect(osc2Gain);
+    osc2Gain.connect(filter);
+    filter.connect(g);
+    g.connect(out);
+
+    const rev = out === this.sfxMaster ? this.sfxReverbSend : this.reverbSend;
+    if (rev && reverbAmt > 0) {
+      const send = ctx.createGain();
+      send.gain.setValueAtTime(reverbAmt, t);
+      g.connect(send);
+      send.connect(rev);
+    }
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + dur + 0.06);
+    osc2.stop(t + dur + 0.06);
   }
 
-  pick(quality = 'common') {
-    const map = {
-      common: [420, 520],
-      fine:   [520, 660],
-      rare:   [620, 820, 980],
-      legend: [587, 740, 880, 1175]
-    };
-    const notes = map[quality] || map.common;
-    notes.forEach((f, idx) => {
-      this.playTone(f, 0.11, quality === 'legend' ? 'triangle' : 'sine', 0.07, idx * 0.055);
+  /**
+   * Haunting Chinese Bamboo Xiao Flute: sine+triangle + breathy bandpass noise + 5.2Hz LFO vibrato
+   */
+  playXiaoFlute(freq, dur = 2.4, vol = 0.13, time = null, dest = null, reverbAmt = 0.55) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.bgmMaster || ctx.destination;
+
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const osc2Gain = ctx.createGain();
+    const vib = ctx.createOscillator();
+    const vibGain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+
+    osc1.type = 'sine';
+    osc2.type = 'triangle';
+    // Gentle upward breath pitch approach
+    osc1.frequency.setValueAtTime(freq * 0.982, t);
+    osc1.frequency.linearRampToValueAtTime(freq, t + 0.24);
+    osc2.frequency.setValueAtTime(freq * 0.982, t);
+    osc2.frequency.linearRampToValueAtTime(freq, t + 0.24);
+    osc2Gain.gain.setValueAtTime(0.28, t);
+
+    // Expressive 5.2Hz vibrato swelling in
+    vib.type = 'sine';
+    vib.frequency.setValueAtTime(5.2, t);
+    vibGain.gain.setValueAtTime(0, t);
+    vibGain.gain.linearRampToValueAtTime(freq * 0.013, t + Math.min(0.65, dur * 0.45));
+    vib.connect(vibGain);
+    vibGain.connect(osc1.frequency);
+    vibGain.connect(osc2.frequency);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1750, t);
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + Math.min(0.38, dur * 0.25));
+    g.gain.setValueAtTime(vol * 0.88, t + dur * 0.68);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc1.connect(filter);
+    osc2.connect(osc2Gain);
+    osc2Gain.connect(filter);
+    filter.connect(g);
+    g.connect(out);
+
+    const rev = out === this.sfxMaster ? this.sfxReverbSend : this.reverbSend;
+    if (rev && reverbAmt > 0) {
+      const send = ctx.createGain();
+      send.gain.setValueAtTime(reverbAmt, t);
+      g.connect(send);
+      send.connect(rev);
+    }
+
+    // Breathy bamboo air-jet noise
+    if (this.noiseBuffer) {
+      const nSrc = ctx.createBufferSource();
+      nSrc.buffer = this.noiseBuffer;
+      nSrc.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(freq * 2.02, t);
+      bp.Q.value = 5.5;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.0001, t);
+      ng.gain.linearRampToValueAtTime(vol * 0.19, t + Math.min(0.28, dur * 0.2));
+      ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      nSrc.connect(bp);
+      bp.connect(ng);
+      ng.connect(out);
+      nSrc.start(t, Math.random() * 0.8);
+      nSrc.stop(t + dur + 0.05);
+    }
+
+    osc1.start(t);
+    osc2.start(t);
+    vib.start(t);
+    osc1.stop(t + dur + 0.05);
+    osc2.stop(t + dur + 0.05);
+    vib.stop(t + dur + 0.05);
+  }
+
+  /**
+   * Cinematic Blade-Runner / Mo-Jia Sci-Fi Pad: detuned analog saw+triangle chord through sweeping lowpass
+   */
+  playSciFiPad(freqs, dur = 3.2, vol = 0.09, time = null, dest = null, reverbAmt = 0.45) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.bgmMaster || ctx.destination;
+    const list = Array.isArray(freqs) ? freqs : [freqs];
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(280, t);
+    filter.frequency.exponentialRampToValueAtTime(1450, t + dur * 0.45);
+    filter.frequency.exponentialRampToValueAtTime(420, t + dur);
+    filter.Q.value = 1.8;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + Math.min(0.65, dur * 0.28));
+    g.gain.setValueAtTime(vol * 0.85, t + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    filter.connect(g);
+    g.connect(out);
+
+    const rev = out === this.sfxMaster ? this.sfxReverbSend : this.reverbSend;
+    if (rev && reverbAmt > 0) {
+      const send = ctx.createGain();
+      send.gain.setValueAtTime(reverbAmt, t);
+      g.connect(send);
+      send.connect(rev);
+    }
+
+    const perVoice = 1 / Math.max(1, Math.sqrt(list.length));
+    list.forEach((f, i) => {
+      const oscA = ctx.createOscillator();
+      const oscB = ctx.createOscillator();
+      const vg = ctx.createGain();
+      oscA.type = 'sawtooth';
+      oscB.type = 'triangle';
+      oscA.frequency.setValueAtTime(f, t);
+      oscB.frequency.setValueAtTime(f, t);
+      oscA.detune.setValueAtTime(-7 - (i % 2) * 3, t);
+      oscB.detune.setValueAtTime(7 + (i % 2) * 3, t);
+      vg.gain.setValueAtTime(perVoice * 0.55, t);
+
+      oscA.connect(vg);
+      oscB.connect(vg);
+      vg.connect(filter);
+      oscA.start(t);
+      oscB.start(t);
+      oscA.stop(t + dur + 0.08);
+      oscB.stop(t + dur + 0.08);
     });
   }
 
-  coin() {
-    this.playTone(987, 0.08, 'sine', 0.08, 0);
-    this.playTone(1318, 0.18, 'sine', 0.08, 0.06);
-  }
-
-  disassemble(success, crit = false) {
-    if (!success) {
-      this.playTone(190, 0.16, 'sawtooth', 0.06, 0);
-      this.playTone(140, 0.2, 'sawtooth', 0.05, 0.1);
-      return;
-    }
-    this.playTone(440, 0.09, 'triangle', 0.08, 0);
-    this.playTone(660, 0.12, 'triangle', 0.08, 0.06);
-    if (crit) {
-      this.playTone(880, 0.14, 'square', 0.06, 0.12);
-      this.playTone(1175, 0.22, 'triangle', 0.09, 0.18);
-    }
-  }
-
-  alarm() {
-    this.playTone(540, 0.12, 'sawtooth', 0.06, 0);
-    this.playTone(380, 0.14, 'sawtooth', 0.06, 0.13);
-  }
-
-  geiger() {
-    this.playTone(1800 + Math.random() * 600, 0.025, 'square', 0.03, 0);
-  }
-
-  ending() {
-    const notes = [523, 659, 784, 1046];
-    notes.forEach((f, i) => this.playTone(f, 0.28, 'triangle', 0.09, i * 0.11));
-  }
-
   /**
-   * 地形感知脚步声（轻柔自然、左右脚微差音高，贴合轩辕剑三质感）
-   * @param {'stone'|'wood'|'dirt'|'swamp'} surface
-   * @param {number} stepIndex
+   * Taiko War Drum: pitch-dropping sine punch (130Hz->42Hz) + filtered noise skin slap
    */
-  footstep(surface = 'stone', stepIndex = 0) {
-    if (this.muted || this.settings.sfxMuted || !this.settings.footstepsEnabled) return;
-    const ctx = this.ensureCtx();
-    if (!ctx || ctx.state !== 'running') return;
-
-    const now = ctx.currentTime;
-    const dest = this.sfxMaster || ctx.destination;
-    const alt = (stepIndex % 2 === 0) ? 1.0 : 0.91;
-    const pitch = alt * (0.96 + Math.random() * 0.08);
-
-    if (surface === 'wood') {
-      // 室内木板：温润中空木地板轻踏声
-      const osc = ctx.createOscillator();
-      const bodyGain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(158 * pitch, now);
-      osc.frequency.exponentialRampToValueAtTime(78 * pitch, now + 0.065);
-      bodyGain.gain.setValueAtTime(0.0001, now);
-      bodyGain.gain.linearRampToValueAtTime(0.062, now + 0.006);
-      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
-      osc.connect(bodyGain);
-      bodyGain.connect(dest);
-      osc.start(now);
-      osc.stop(now + 0.085);
-
-      // 木腔共鸣轻击
-      const res = ctx.createOscillator();
-      const resGain = ctx.createGain();
-      res.type = 'sine';
-      res.frequency.setValueAtTime(340 * pitch, now);
-      res.frequency.exponentialRampToValueAtTime(220 * pitch, now + 0.045);
-      resGain.gain.setValueAtTime(0.022, now);
-      resGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
-      res.connect(resGain);
-      resGain.connect(dest);
-      res.start(now);
-      res.stop(now + 0.06);
-
-      if (this.noiseBuffer) {
-        const src = ctx.createBufferSource();
-        src.buffer = this.noiseBuffer;
-        const lp = ctx.createBiquadFilter();
-        lp.type = 'lowpass';
-        lp.frequency.setValueAtTime(720 * pitch, now);
-        const ng = ctx.createGain();
-        ng.gain.setValueAtTime(0.024, now);
-        ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.038);
-        src.connect(lp);
-        lp.connect(ng);
-        ng.connect(dest);
-        src.start(now, Math.random() * 1.2, 0.05);
-      }
-      return;
-    }
-
-    if (surface === 'dirt') {
-      // 废土/沙砾/废墟：干爽细沙碎石摩擦声
-      if (this.noiseBuffer) {
-        const src1 = ctx.createBufferSource();
-        src1.buffer = this.noiseBuffer;
-        const bp1 = ctx.createBiquadFilter();
-        bp1.type = 'bandpass';
-        bp1.frequency.setValueAtTime(1450 * pitch, now);
-        bp1.Q.value = 1.4;
-        const g1 = ctx.createGain();
-        g1.gain.setValueAtTime(0.0001, now);
-        g1.gain.linearRampToValueAtTime(0.052, now + 0.008);
-        g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.072);
-        src1.connect(bp1);
-        bp1.connect(g1);
-        g1.connect(dest);
-        src1.start(now, Math.random() * 1.2, 0.085);
-
-        // 细碎砾石尾粒
-        const src2 = ctx.createBufferSource();
-        src2.buffer = this.noiseBuffer;
-        const bp2 = ctx.createBiquadFilter();
-        bp2.type = 'bandpass';
-        bp2.frequency.setValueAtTime(2550 * pitch, now + 0.016);
-        bp2.Q.value = 2.1;
-        const g2 = ctx.createGain();
-        g2.gain.setValueAtTime(0.0001, now + 0.016);
-        g2.gain.linearRampToValueAtTime(0.028, now + 0.024);
-        g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.068);
-        src2.connect(bp2);
-        bp2.connect(g2);
-        g2.connect(dest);
-        src2.start(now + 0.016, Math.random() * 1.2, 0.06);
-      }
-      // 轻落脚底沉音
-      const osc = ctx.createOscillator();
-      const og = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(112 * pitch, now);
-      osc.frequency.exponentialRampToValueAtTime(62 * pitch, now + 0.045);
-      og.gain.setValueAtTime(0.026, now);
-      og.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
-      osc.connect(og);
-      og.connect(dest);
-      osc.start(now);
-      osc.stop(now + 0.058);
-      return;
-    }
-
-    if (surface === 'swamp') {
-      // 沼泽泥泞：潮湿闷踏 + 水泥轻溅
-      const osc = ctx.createOscillator();
-      const og = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(106 * pitch, now);
-      osc.frequency.exponentialRampToValueAtTime(52 * pitch, now + 0.085);
-      og.gain.setValueAtTime(0.0001, now);
-      og.gain.linearRampToValueAtTime(0.046, now + 0.01);
-      og.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
-      osc.connect(og);
-      og.connect(dest);
-      osc.start(now);
-      osc.stop(now + 0.105);
-
-      if (this.noiseBuffer) {
-        const src = ctx.createBufferSource();
-        src.buffer = this.noiseBuffer;
-        const bp = ctx.createBiquadFilter();
-        bp.type = 'bandpass';
-        bp.frequency.setValueAtTime(920 * pitch, now);
-        bp.frequency.exponentialRampToValueAtTime(320 * pitch, now + 0.095);
-        bp.Q.value = 3.6;
-        const ng = ctx.createGain();
-        ng.gain.setValueAtTime(0.0001, now);
-        ng.gain.linearRampToValueAtTime(0.048, now + 0.014);
-        ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.105);
-        src.connect(bp);
-        bp.connect(ng);
-        ng.connect(dest);
-        src.start(now, Math.random() * 1.2, 0.12);
-      }
-      return;
-    }
-
-    // 默认 'stone'（青石板/金库/洞窟）：清脆中低频石面轻叩 + 微石韵
-    if (this.noiseBuffer) {
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuffer;
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(1080 * pitch, now);
-      bp.Q.value = 1.9;
-      const ng = ctx.createGain();
-      ng.gain.setValueAtTime(0.0001, now);
-      ng.gain.linearRampToValueAtTime(0.048, now + 0.004);
-      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.046);
-      src.connect(bp);
-      bp.connect(ng);
-      ng.connect(dest);
-      src.start(now, Math.random() * 1.2, 0.055);
-    }
-
-    const tap = ctx.createOscillator();
-    const tapGain = ctx.createGain();
-    tap.type = 'triangle';
-    tap.frequency.setValueAtTime(205 * pitch, now);
-    tap.frequency.exponentialRampToValueAtTime(108 * pitch, now + 0.042);
-    tapGain.gain.setValueAtTime(0.04, now);
-    tapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.048);
-    tap.connect(tapGain);
-    tapGain.connect(dest);
-    tap.start(now);
-    tap.stop(now + 0.055);
-  }
-
-  /**
-   * 细腻竹木/墨韵 UI 轻点音（悬停与确认触感）
-   */
-  uiTick() {
-    if (this.muted || this.settings.sfxMuted) return;
-    const ctx = this.ensureCtx();
-    if (!ctx || ctx.state !== 'running') return;
-
-    const now = ctx.currentTime;
-    const dest = this.sfxMaster || ctx.destination;
-
-    // 轻巧竹木扣音
-    const wood = ctx.createOscillator();
-    const wg = ctx.createGain();
-    wood.type = 'triangle';
-    wood.frequency.setValueAtTime(760, now);
-    wood.frequency.exponentialRampToValueAtTime(520, now + 0.032);
-    wg.gain.setValueAtTime(0.034, now);
-    wg.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
-    wood.connect(wg);
-    wg.connect(dest);
-    wood.start(now);
-    wood.stop(now + 0.048);
-
-    // 一抹清润玉磬高泛音
-    const chime = ctx.createOscillator();
-    const cg = ctx.createGain();
-    chime.type = 'sine';
-    chime.frequency.setValueAtTime(NOTE.D6, now + 0.006);
-    cg.gain.setValueAtTime(0.0001, now + 0.006);
-    cg.gain.linearRampToValueAtTime(0.022, now + 0.012);
-    cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
-    chime.connect(cg);
-    cg.connect(dest);
-    chime.start(now + 0.006);
-    chime.stop(now + 0.105);
-  }
-
-  /**
-   * 四大流派专属战斗音效（古武 / 军火 / 机甲 / 奇术）
-   * @param {'martial'|'firearm'|'mecha'|'mystic'} branch
-   * @param {boolean} isHeavy
-   */
-  playCombatSfx(branch = 'martial', isHeavy = false) {
-    if (this.muted || this.settings.sfxMuted) return;
-    const ctx = this.ensureCtx();
+  playTaikoDrum(freq = 130, vol = 0.36, time = null, dest = null, dur = 0.42) {
+    const ctx = this.ctx;
     if (!ctx) return;
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.bgmMaster || ctx.destination;
 
-    const now = ctx.currentTime;
-    const dest = this.sfxMaster || ctx.destination;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(36, freq * 0.32), t + Math.min(0.16, dur * 0.45));
 
-    if (branch === 'firearm') {
-      // 1) 现代军火：清脆枪击爆裂 + 重炮/霰弹轰鸣
-      if (this.noiseBuffer) {
-        const crack = ctx.createBufferSource();
-        crack.buffer = this.noiseBuffer;
-        const bp = ctx.createBiquadFilter();
-        bp.type = 'bandpass';
-        bp.frequency.setValueAtTime(isHeavy ? 1400 : 2100, now);
-        bp.frequency.exponentialRampToValueAtTime(isHeavy ? 280 : 620, now + (isHeavy ? 0.24 : 0.11));
-        bp.Q.value = 1.1;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(isHeavy ? 0.24 : 0.17, now);
-        g.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.26 : 0.12));
-        crack.connect(bp);
-        bp.connect(g);
-        g.connect(dest);
-        crack.start(now, Math.random() * 0.8, isHeavy ? 0.28 : 0.14);
-      }
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.007);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
-      // 枪膛冲击低频脉冲
-      const punch = ctx.createOscillator();
-      const pg = ctx.createGain();
-      punch.type = 'triangle';
-      punch.frequency.setValueAtTime(isHeavy ? 165 : 360, now);
-      punch.frequency.exponentialRampToValueAtTime(isHeavy ? 34 : 68, now + (isHeavy ? 0.28 : 0.085));
-      pg.gain.setValueAtTime(isHeavy ? 0.26 : 0.14, now);
-      pg.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.32 : 0.095));
-      punch.connect(pg);
-      pg.connect(dest);
-      punch.start(now);
-      punch.stop(now + (isHeavy ? 0.34 : 0.11));
+    osc.connect(g);
+    g.connect(out);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
 
-      if (isHeavy && this.noiseBuffer) {
-        // 重炮/坦克轰击低频爆炸余震
-        const boom = ctx.createBufferSource();
-        boom.buffer = this.noiseBuffer;
-        const lp = ctx.createBiquadFilter();
-        lp.type = 'lowpass';
-        lp.frequency.setValueAtTime(520, now + 0.02);
-        lp.frequency.exponentialRampToValueAtTime(95, now + 0.52);
-        const bg = ctx.createGain();
-        bg.gain.setValueAtTime(0.0001, now + 0.02);
-        bg.gain.linearRampToValueAtTime(0.24, now + 0.045);
-        bg.gain.exponentialRampToValueAtTime(0.0001, now + 0.54);
-        boom.connect(lp);
-        lp.connect(bg);
-        bg.connect(dest);
-        boom.start(now + 0.02, Math.random() * 0.6, 0.58);
-      }
-      return;
+    // Drumhead skin slap transient
+    this.playNoiseBurst(0.075, 'lowpass', 920, 260, 1.0, vol * 0.36, t, out);
+  }
+
+  /**
+   * Ancient Bronze Temple Bell / Astrolabe Chime: inharmonic metallic partials (1.0, 2.76, 4.07)
+   */
+  playBronzeBell(freq = 293.66, dur = 2.6, vol = 0.14, time = null, dest = null, reverbAmt = 0.55) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.bgmMaster || ctx.destination;
+
+    const partials = [
+      { ratio: 1.00, amp: 1.00, decay: 1.00 },
+      { ratio: 2.76, amp: 0.38, decay: 0.68 },
+      { ratio: 4.07, amp: 0.22, decay: 0.48 }
+    ];
+
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime(1.0, t);
+    bus.connect(out);
+
+    const rev = out === this.sfxMaster ? this.sfxReverbSend : this.reverbSend;
+    if (rev && reverbAmt > 0) {
+      const send = ctx.createGain();
+      send.gain.setValueAtTime(reverbAmt, t);
+      bus.connect(send);
+      send.connect(rev);
     }
 
-    if (branch === 'mecha') {
-      // 2) 科幻机甲：下扫等离子/激光束 + 机械伺服微鸣 + 重型轨炮/导弹爆破
-      const beam = ctx.createOscillator();
-      const beamSub = ctx.createOscillator();
-      const bp = ctx.createBiquadFilter();
-      const bg = ctx.createGain();
-
-      beam.type = 'sawtooth';
-      beam.frequency.setValueAtTime(isHeavy ? 1950 : 2300, now);
-      beam.frequency.exponentialRampToValueAtTime(isHeavy ? 140 : 280, now + (isHeavy ? 0.34 : 0.2));
-
-      beamSub.type = 'sine';
-      beamSub.frequency.setValueAtTime(isHeavy ? 980 : 1150, now);
-      beamSub.frequency.exponentialRampToValueAtTime(isHeavy ? 72 : 150, now + (isHeavy ? 0.34 : 0.2));
-
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(1600, now);
-      bp.frequency.exponentialRampToValueAtTime(340, now + (isHeavy ? 0.34 : 0.2));
-      bp.Q.value = 2.4;
-
-      bg.gain.setValueAtTime(0.0001, now);
-      bg.gain.linearRampToValueAtTime(isHeavy ? 0.17 : 0.13, now + 0.012);
-      bg.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.36 : 0.22));
-
-      beam.connect(bp);
-      beamSub.connect(bp);
-      bp.connect(bg);
-      bg.connect(dest);
-      beam.start(now);
-      beamSub.start(now);
-      beam.stop(now + (isHeavy ? 0.38 : 0.24));
-      beamSub.stop(now + (isHeavy ? 0.38 : 0.24));
-
-      // 机械伺服短鸣
-      const servo = ctx.createOscillator();
-      const sg = ctx.createGain();
-      servo.type = 'triangle';
-      servo.frequency.setValueAtTime(190, now);
-      servo.frequency.linearRampToValueAtTime(360, now + 0.08);
-      sg.gain.setValueAtTime(0.055, now);
-      sg.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
-      servo.connect(sg);
-      sg.connect(dest);
-      servo.start(now);
-      servo.stop(now + 0.11);
-
-      if (isHeavy) {
-        // 导弹/轨炮高能爆裂共振
-        const det = ctx.createOscillator();
-        const dg = ctx.createGain();
-        det.type = 'sine';
-        det.frequency.setValueAtTime(150, now + 0.08);
-        det.frequency.exponentialRampToValueAtTime(38, now + 0.44);
-        dg.gain.setValueAtTime(0.0001, now + 0.08);
-        dg.gain.linearRampToValueAtTime(0.22, now + 0.1);
-        dg.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
-        det.connect(dg);
-        dg.connect(dest);
-        det.start(now + 0.08);
-        det.stop(now + 0.5);
-
-        if (this.noiseBuffer) {
-          const n = ctx.createBufferSource();
-          n.buffer = this.noiseBuffer;
-          const lp = ctx.createBiquadFilter();
-          lp.type = 'lowpass';
-          lp.frequency.setValueAtTime(980, now + 0.08);
-          lp.frequency.exponentialRampToValueAtTime(180, now + 0.46);
-          const ng = ctx.createGain();
-          ng.gain.setValueAtTime(0.16, now + 0.08);
-          ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
-          n.connect(lp);
-          lp.connect(ng);
-          ng.connect(dest);
-          n.start(now + 0.08, Math.random() * 0.7, 0.44);
-        }
-      }
-      return;
-    }
-
-    if (branch === 'mystic') {
-      // 3) 奇术道法：空灵五声道钟/玉磬 + 霹雳电弧爆裂
-      const bellNotes = isHeavy ? [NOTE.D5, NOTE.A5, NOTE.D6] : [NOTE.D5, NOTE.A5];
-      bellNotes.forEach((f, idx) => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(f, now + idx * 0.035);
-        g.gain.setValueAtTime(0.0001, now + idx * 0.035);
-        g.gain.linearRampToValueAtTime(isHeavy ? 0.095 : 0.075, now + idx * 0.035 + 0.01);
-        g.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.035 + (isHeavy ? 0.52 : 0.34));
-        osc.connect(g);
-        g.connect(dest);
-        osc.start(now + idx * 0.035);
-        osc.stop(now + idx * 0.035 + (isHeavy ? 0.55 : 0.38));
-      });
-
-      // 雷电/符箓爆裂脆响
-      if (this.noiseBuffer) {
-        const bursts = isHeavy ? [0.02, 0.08, 0.14] : [0.02, 0.075];
-        bursts.forEach((offset, i) => {
-          const src = ctx.createBufferSource();
-          src.buffer = this.noiseBuffer;
-          const bp = ctx.createBiquadFilter();
-          bp.type = 'bandpass';
-          bp.frequency.setValueAtTime(2800 - i * 450, now + offset);
-          bp.Q.value = 3.2;
-          const ng = ctx.createGain();
-          ng.gain.setValueAtTime(isHeavy ? 0.13 : 0.09, now + offset);
-          ng.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.085);
-          src.connect(bp);
-          bp.connect(ng);
-          ng.connect(dest);
-          src.start(now + offset, Math.random() * 0.9, 0.1);
-        });
-      }
-
-      if (isHeavy) {
-        // 重奇术低沉天雷余韵
-        const thunder = ctx.createOscillator();
-        const tg = ctx.createGain();
-        thunder.type = 'triangle';
-        thunder.frequency.setValueAtTime(118, now + 0.04);
-        thunder.frequency.exponentialRampToValueAtTime(42, now + 0.45);
-        tg.gain.setValueAtTime(0.16, now + 0.04);
-        tg.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
-        thunder.connect(tg);
-        tg.connect(dest);
-        thunder.start(now + 0.04);
-        thunder.stop(now + 0.5);
-      }
-      return;
-    }
-
-    // 4) 默认 'martial'（古武刀剑）：凌厉破空斩风 + 清冽金铁剑鸣
-    if (this.noiseBuffer) {
-      const whoosh = ctx.createBufferSource();
-      whoosh.buffer = this.noiseBuffer;
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(3600, now);
-      bp.frequency.exponentialRampToValueAtTime(780, now + (isHeavy ? 0.2 : 0.13));
-      bp.Q.value = 1.6;
-      const wg = ctx.createGain();
-      wg.gain.setValueAtTime(0.0001, now);
-      wg.gain.linearRampToValueAtTime(isHeavy ? 0.16 : 0.12, now + 0.015);
-      wg.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.22 : 0.15));
-      whoosh.connect(bp);
-      bp.connect(wg);
-      wg.connect(dest);
-      whoosh.start(now, Math.random() * 0.9, isHeavy ? 0.24 : 0.17);
-    }
-
-    // 金属剑锋清鸣
-    const ringFreqs = isHeavy ? [1960, 2940, 4120] : [2240, 3420];
-    ringFreqs.forEach((f, idx) => {
+    partials.forEach((p) => {
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
-      osc.type = idx === 0 ? 'triangle' : 'sine';
-      osc.frequency.setValueAtTime(f, now + 0.025);
-      osc.frequency.exponentialRampToValueAtTime(f * 0.96, now + (isHeavy ? 0.28 : 0.18));
-      g.gain.setValueAtTime(0.0001, now + 0.025);
-      g.gain.linearRampToValueAtTime(idx === 0 ? 0.065 : 0.038, now + 0.035);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + (isHeavy ? 0.3 : 0.2));
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * p.ratio, t);
+      const pDur = Math.max(0.12, dur * p.decay);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol * p.amp, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + pDur);
       osc.connect(g);
-      g.connect(dest);
-      osc.start(now + 0.025);
-      osc.stop(now + (isHeavy ? 0.32 : 0.22));
+      g.connect(bus);
+      osc.start(t);
+      osc.stop(t + pDur + 0.05);
     });
-
-    if (isHeavy) {
-      // 重斩震地劲气
-      const impact = ctx.createOscillator();
-      const ig = ctx.createGain();
-      impact.type = 'sine';
-      impact.frequency.setValueAtTime(160, now + 0.03);
-      impact.frequency.exponentialRampToValueAtTime(52, now + 0.22);
-      ig.gain.setValueAtTime(0.16, now + 0.03);
-      ig.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
-      impact.connect(ig);
-      ig.connect(dest);
-      impact.start(now + 0.03);
-      impact.stop(now + 0.26);
-    }
   }
 
-  // ==================== 老年饼工作室开场音 (~4.8s) ====================
+  /**
+   * Reusable Foley Noise Shaper (blades, gunshots, explosions, wind, bites)
+   */
+  playNoiseBurst(dur = 0.15, filterType = 'bandpass', freqStart = 1800, freqEnd = 420, q = 1.4, vol = 0.15, time = null, dest = null) {
+    const ctx = this.ctx;
+    if (!ctx || !this.noiseBuffer) return;
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.sfxMaster || ctx.destination;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = dur > 2.0;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(Math.max(20, freqStart), t);
+    if (freqEnd && freqEnd !== freqStart) {
+      filter.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t + Math.max(0.015, dur));
+    }
+    filter.Q.value = q;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + Math.min(0.012, dur * 0.25));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.02, dur));
+
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(out);
+
+    const offset = Math.random() * 1.2;
+    src.start(t, offset);
+    src.stop(t + dur + 0.04);
+  }
+
+  // ==================== Additional Musical Voices ====================
+
+  _voicePipa(ctx, dest, freq, t, dur = 0.42, vol = 0.14) {
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq * 1.01, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.024);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(Math.min(freq * 3.4, 4600), t);
+    filter.Q.value = 1.8;
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(dest);
+    if (this.reverbSend) {
+      const s = ctx.createGain();
+      s.gain.setValueAtTime(0.24, t);
+      g.connect(s);
+      s.connect(this.reverbSend);
+    }
+    osc.start(t);
+    osc.stop(t + dur + 0.04);
+  }
+
+  _voiceWoodClapper(ctx, dest, t, freq = 860, vol = 0.075) {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.62, t + 0.04);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+    osc.connect(g);
+    g.connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.065);
+  }
+
+  _voiceHiHat(ctx, dest, t, vol = 0.045) {
+    this.playNoiseBurst(0.045, 'highpass', 6400, 7200, 1.0, vol, t, dest);
+  }
+
+  _voiceSciFiBass(ctx, dest, freq, t, dur = 0.2, vol = 0.18) {
+    const osc = ctx.createOscillator();
+    const sub = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    osc.type = 'sawtooth';
+    sub.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    sub.frequency.setValueAtTime(freq, t);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(680, t);
+    filter.frequency.exponentialRampToValueAtTime(170, t + dur);
+    filter.Q.value = 2.6;
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.009);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc.connect(filter);
+    sub.connect(filter);
+    filter.connect(g);
+    g.connect(dest);
+    osc.start(t);
+    sub.start(t);
+    osc.stop(t + dur + 0.03);
+    sub.stop(t + dur + 0.03);
+  }
+
+  _voiceSynthArp(ctx, dest, freq, t, dur = 0.34, vol = 0.11, cutoff = 2200) {
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, t);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(cutoff, t);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(240, cutoff * 0.2), t + dur);
+    filter.Q.value = 2.8;
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(dest);
+    if (this.reverbSend) {
+      const s = ctx.createGain();
+      s.gain.setValueAtTime(0.38, t);
+      g.connect(s);
+      s.connect(this.reverbSend);
+    }
+    osc.start(t);
+    osc.stop(t + dur + 0.04);
+  }
+
+  _voiceBossBrass(ctx, dest, freqs, t, dur = 0.72, vol = 0.14) {
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(360, t);
+    filter.frequency.exponentialRampToValueAtTime(1950, t + 0.09);
+    filter.frequency.exponentialRampToValueAtTime(520, t + dur);
+    filter.Q.value = 1.6;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    filter.connect(g);
+    g.connect(dest);
+    if (this.reverbSend) {
+      const s = ctx.createGain();
+      s.gain.setValueAtTime(0.32, t);
+      g.connect(s);
+      s.connect(this.reverbSend);
+    }
+
+    freqs.forEach((f, idx) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f, t);
+      osc.detune.setValueAtTime(idx % 2 === 0 ? -6 : 6, t);
+      osc.connect(filter);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+    });
+  }
+
+  _voiceAnvilClang(ctx, dest, t, vol = 0.14) {
+    this.playBronzeBell(580, 0.55, vol * 0.7, t, dest, 0.35);
+    this.playNoiseBurst(0.09, 'bandpass', 3200, 1100, 2.8, vol * 0.85, t, dest);
+  }
+
+  _voiceSonarDrop(ctx, dest, freq, t, vol = 0.09) {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq * 0.76, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.045);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+    osc.connect(g);
+    g.connect(dest);
+    if (this.reverbSend) {
+      const s = ctx.createGain();
+      s.gain.setValueAtTime(0.65, t);
+      g.connect(s);
+      s.connect(this.reverbSend);
+    }
+    osc.start(t);
+    osc.stop(t + 0.46);
+  }
+
+  _createPadDrone(ctx, session, freqs, opts = {}) {
+    const now = ctx.currentTime;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(opts.filterFreq || 480, now);
+    filter.Q.value = opts.q || 1.3;
+
+    const padGain = ctx.createGain();
+    padGain.gain.setValueAtTime(opts.gain || 0.11, now);
+
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(opts.lfoRate || 0.09, now);
+    lfoGain.gain.setValueAtTime(opts.lfoDepth || 130, now);
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+
+    filter.connect(padGain);
+    padGain.connect(session.gain);
+
+    lfo.start(now);
+    session.nodes.push(lfo, lfoGain, filter, padGain);
+
+    freqs.forEach((f, idx) => {
+      const osc = ctx.createOscillator();
+      osc.type = opts.type || 'triangle';
+      osc.frequency.setValueAtTime(f, now);
+      osc.detune.setValueAtTime(idx % 2 === 0 ? -5 : 5, now);
+      osc.connect(filter);
+      osc.start(now);
+      session.nodes.push(osc);
+    });
+  }
+
+  _createAmbientNoise(ctx, session, { gain = 0.07, filterType = 'bandpass', freq = 420, q = 2.4, lfoRate = 0.08, lfoDepth = 200 } = {}) {
+    if (!this.noiseBuffer) return;
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(freq, now);
+    filter.Q.value = q;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, now);
+
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(session.gain);
+
+    if (lfoRate > 0 && lfoDepth > 0) {
+      const lfo = ctx.createOscillator();
+      const lg = ctx.createGain();
+      lfo.type = 'sine';
+      lfo.frequency.setValueAtTime(lfoRate, now);
+      lg.gain.setValueAtTime(lfoDepth, now);
+      lfo.connect(lg);
+      lg.connect(filter.frequency);
+      lfo.start(now);
+      session.nodes.push(lfo, lg);
+    }
+
+    src.start(now);
+    session.nodes.push(src, filter, g);
+  }
+
+  // ==================== Track 1: Studio Signature Theme (3.8s) ====================
 
   playStudioJingle() {
     if (this.muted) return;
@@ -823,81 +885,64 @@ class SoundEngine {
   }
 
   _renderStudioJingle(ctx) {
-    const now = ctx.currentTime + 0.04;
+    const now = ctx.currentTime + 0.03;
     const bus = ctx.createGain();
-    bus.gain.setValueAtTime(0.85, now);
-    bus.gain.setValueAtTime(0.85, now + 3.9);
-    bus.gain.linearRampToValueAtTime(0, now + 4.85);
+    bus.gain.setValueAtTime(0.92, now);
+    bus.gain.setValueAtTime(0.92, now + 3.2);
+    bus.gain.linearRampToValueAtTime(0, now + 3.85);
     bus.connect(this.bgmMaster);
 
-    // 1) 温暖古筝 × 编钟五声琶音 (0.0s ~ 1.35s)
-    const arp = [
-      { f: NOTE.D4, t: 0.00, g: 0.18 },
-      { f: NOTE.F4, t: 0.16, g: 0.17 },
-      { f: NOTE.A4, t: 0.34, g: 0.19 },
-      { f: NOTE.C5, t: 0.54, g: 0.17 },
-      { f: NOTE.D5, t: 0.74, g: 0.21 },
-      { f: NOTE.F5, t: 0.96, g: 0.18 },
-      { f: NOTE.A5, t: 1.18, g: 0.20 }
+    // 1) Rising warm sci-fi pad (0.0s -> 3.6s)
+    this.playSciFiPad([NOTE.D3, NOTE.A3, NOTE.D4, NOTE.A4], 3.6, 0.18, now, bus, 0.5);
+
+    // 2) Deep resonant bronze temple bell + ink-stamp Taiko at 0.85s
+    this.playBronzeBell(NOTE.D3, 2.7, 0.22, now + 0.85, bus, 0.6);
+    this.playTaikoDrum(130, 0.36, now + 0.85, bus, 0.72);
+    this._voiceWoodClapper(ctx, bus, now + 0.85, 760, 0.11);
+
+    // 3) Ascending Guqin pentatonic flourish (1.1s -> 2.15s)
+    const flourish = [
+      { f: NOTE.D4, t: 1.12, v: 0.18 },
+      { f: NOTE.F4, t: 1.28, v: 0.17 },
+      { f: NOTE.A4, t: 1.44, v: 0.19 },
+      { f: NOTE.C5, t: 1.60, v: 0.18 },
+      { f: NOTE.D5, t: 1.78, v: 0.21 },
+      { f: NOTE.A5, t: 2.00, v: 0.22 }
     ];
-    arp.forEach((n) => {
-      this._voiceGuzheng(ctx, bus, n.f, now + n.t, 1.55, n.g, 0.55);
-      this._voiceChime(ctx, bus, n.f * 2, now + n.t, 1.35, n.g * 0.22, 0.45);
+    flourish.forEach((n) => {
+      this.pluckGuqin(n.f, 1.5, n.v, now + n.t, bus, 0.55, 0.016);
     });
 
-    // 2) ~1.5s 沉浑朱印太鼓落印重击 (Taiko / Ink-Stamp Thump)
-    const stampTime = now + 1.50;
-    this._voiceTaiko(ctx, bus, stampTime, 138, 42, 0.95, 0.52);
-    // 印章木质脆响
-    this._voiceWoodClick(ctx, bus, stampTime, 760, 0.11);
-
-    // 3) 1.5s ~ 4.8s 悠长泛音余韵 (Warm Pentatonic Shimmer)
-    const chord = [NOTE.D3, NOTE.A3, NOTE.D4, NOTE.F4, NOTE.A4, NOTE.E5];
-    chord.forEach((freq, idx) => {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      const filter = ctx.createBiquadFilter();
-      osc.type = idx < 2 ? 'triangle' : 'sine';
-      osc.frequency.setValueAtTime(freq, stampTime);
-      osc.detune.setValueAtTime((idx % 2 === 0 ? 1 : -1) * (3 + idx * 1.1), stampTime);
-
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(1600, stampTime);
-      filter.frequency.exponentialRampToValueAtTime(520, now + 4.75);
-
-      const peak = idx < 2 ? 0.11 : 0.065;
-      g.gain.setValueAtTime(0.0001, stampTime);
-      g.gain.linearRampToValueAtTime(peak, stampTime + 0.35);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 4.78);
-
-      osc.connect(filter);
-      filter.connect(g);
-      g.connect(bus);
-      if (this.reverbSend) g.connect(this.reverbSend);
-
-      osc.start(stampTime);
-      osc.stop(now + 4.85);
-    });
-
-    // 尾音一粒空灵高音古筝泛音
-    this._voiceChime(ctx, bus, NOTE.D6, now + 2.35, 2.2, 0.075, 0.6);
+    // 4) Shimmering cyber-harmonic resolve (2.2s -> 3.8s)
+    this.playBronzeBell(NOTE.D5, 1.6, 0.11, now + 2.22, bus, 0.65);
+    this.playBronzeBell(NOTE.A5, 1.5, 0.08, now + 2.38, bus, 0.65);
+    this.playSciFiPad([NOTE.D4, NOTE.Fs4, NOTE.A4, NOTE.D5], 1.55, 0.12, now + 2.2, bus, 0.55);
   }
 
-  // ==================== BGM 播放与平滑交叉淡入淡出 ====================
+  // ==================== 12 Distinct BGM Tracks with 0.6s Crossfade ====================
 
   playBgm(trackName) {
-    const valid = ['prologue', 'town', 'wild', 'battle', 'none'];
-    const target = valid.includes(trackName) ? trackName : 'none';
+    const aliasMap = { wild: 'wasteland' };
+    const normalized = aliasMap[trackName] || trackName;
+    const valid = [
+      'studio', 'prologue', 'town', 'interior', 'wasteland', 'ruins',
+      'arsenal', 'swamp', 'cave', 'vault', 'battle', 'boss', 'none'
+    ];
+    const target = valid.includes(normalized) ? normalized : 'none';
+
+    if (target === 'studio') {
+      this.playStudioJingle();
+      return;
+    }
 
     if (target === 'none') {
       this.pendingTrack = null;
       this.currentTrack = 'none';
-      this._fadeOutSession(this.activeSession, 0.8);
+      this._fadeOutSession(this.activeSession, 0.6);
       this.activeSession = null;
       return;
     }
 
-    // 已经在播放同一首曲目且处于运行中，避免重复重启
     if (this.currentTrack === target && this.activeSession && !this.activeSession.stopped) {
       return;
     }
@@ -908,7 +953,6 @@ class SoundEngine {
     if (!ctx) return;
 
     if (this.muted) {
-      // 静音状态下只记住目标曲目，取消静音后平滑恢复
       this.pendingTrack = target;
       this._fadeOutSession(this.activeSession, 0.4);
       this.activeSession = null;
@@ -921,23 +965,22 @@ class SoundEngine {
       ctx.resume().then(() => {
         if (this.pendingTrack === target && !this.muted) {
           this.pendingTrack = null;
-          this._startBgmSession(target, 0.8);
+          this._startBgmSession(target, 0.6);
         }
       }).catch(() => {});
       return;
     }
 
     this.pendingTrack = null;
-    this._startBgmSession(target, 0.9);
+    this._startBgmSession(target, 0.6);
   }
 
-  _startBgmSession(trackName, fadeInSec = 0.8) {
+  _startBgmSession(trackName, fadeInSec = 0.6) {
     const ctx = this.ctx;
     if (!ctx || !this.bgmMaster) return;
 
-    // 淡出旧音轨
     if (this.activeSession) {
-      this._fadeOutSession(this.activeSession, 0.9);
+      this._fadeOutSession(this.activeSession, 0.6);
       this.activeSession = null;
     }
 
@@ -954,32 +997,27 @@ class SoundEngine {
       nodes: [],
       stopped: false
     };
-
     this.activeSession = session;
 
     switch (trackName) {
-      case 'prologue':
-        this._buildPrologueTrack(ctx, session);
-        break;
-      case 'town':
-        this._buildTownTrack(ctx, session);
-        break;
-      case 'wild':
-        this._buildWildTrack(ctx, session);
-        break;
-      case 'battle':
-        this._buildBattleTrack(ctx, session);
-        break;
-      default:
-        break;
+      case 'prologue':  this._buildPrologueTrack(ctx, session);  break;
+      case 'town':      this._buildTownTrack(ctx, session);      break;
+      case 'interior':  this._buildInteriorTrack(ctx, session);  break;
+      case 'wasteland': this._buildWastelandTrack(ctx, session); break;
+      case 'ruins':     this._buildRuinsTrack(ctx, session);     break;
+      case 'arsenal':   this._buildArsenalTrack(ctx, session);   break;
+      case 'swamp':     this._buildSwampTrack(ctx, session);     break;
+      case 'cave':      this._buildCaveTrack(ctx, session);      break;
+      case 'vault':     this._buildVaultTrack(ctx, session);     break;
+      case 'battle':    this._buildBattleTrack(ctx, session);    break;
+      case 'boss':      this._buildBossTrack(ctx, session);      break;
+      default: break;
     }
   }
 
-  _fadeOutSession(session, fadeOutSec = 0.8) {
+  _fadeOutSession(session, fadeOutSec = 0.6) {
     if (!session || session.stopped) return;
     session.stopped = true;
-
-    // 立即停止调度器，不再产生新音符
     session.timers.forEach((id) => clearInterval(id));
     session.timers.length = 0;
 
@@ -992,211 +1030,361 @@ class SoundEngine {
     g.setValueAtTime(Math.max(g.value, 0.0001), now);
     g.linearRampToValueAtTime(0, now + fadeOutSec);
 
-    // 淡出结束后安全停止并断开所有持续节点
     setTimeout(() => {
       session.nodes.forEach((node) => {
-        try {
-          if (typeof node.stop === 'function') node.stop();
-        } catch (_) {}
-        try {
-          if (typeof node.disconnect === 'function') node.disconnect();
-        } catch (_) {}
+        try { if (typeof node.stop === 'function') node.stop(); } catch (_) {}
+        try { if (typeof node.disconnect === 'function') node.disconnect(); } catch (_) {}
       });
       session.nodes.length = 0;
       try { session.gain.disconnect(); } catch (_) {}
     }, Math.ceil((fadeOutSec + 0.15) * 1000));
   }
 
-  // ==================== 音轨 1：prologue（苍凉诗意·D小调五声洞箫与稀疏古筝） ====================
-
+  // 2. prologue — Lonely midnight Gu Long Xiao flute solo over cold wind whisper & deep minor drone
   _buildPrologueTrack(ctx, session) {
-    const now = ctx.currentTime;
-    // 1) 苍凉低沉 D2 + A2 弦乐铺底 + 慢速滤波呼吸
     this._createPadDrone(ctx, session, [NOTE.D2, NOTE.A2, NOTE.D3], {
-      type: 'triangle',
-      gain: 0.13,
-      filterFreq: 420,
-      lfoRate: 0.09,
-      lfoDepth: 150
+      type: 'triangle', gain: 0.12, filterFreq: 360, lfoRate: 0.08, lfoDepth: 110
+    });
+    this._createAmbientNoise(ctx, session, {
+      gain: 0.045, filterType: 'bandpass', freq: 520, q: 3.2, lfoRate: 0.09, lfoDepth: 190
     });
 
-    // 2) 诗意慢板 D 小调五声 (D, F, G, A, C) 步进序列 (每步 0.85s)
-    const guzhengSeq = [
-      NOTE.D4, 0, NOTE.A4, 0, NOTE.F4, 0, 0, NOTE.C5,
-      NOTE.A4, 0, 0, NOTE.G4, NOTE.F4, 0, NOTE.D4, 0,
-      NOTE.A3, 0, NOTE.F4, 0, NOTE.G4, 0, NOTE.A4, 0,
-      NOTE.C5, 0, NOTE.A4, 0, NOTE.G4, 0, NOTE.D4, 0
-    ];
     const fluteSeq = [
-      0, 0, 0, NOTE.A4, 0, 0, 0, 0,
-      0, NOTE.F4, 0, 0, 0, 0, NOTE.D4, 0,
-      0, 0, 0, NOTE.C5, 0, 0, NOTE.A4, 0,
-      0, 0, NOTE.G4, 0, 0, 0, 0, 0
+      NOTE.A4, 0, 0, NOTE.F4, 0, NOTE.G4, NOTE.A4, 0,
+      NOTE.C5, 0, 0, NOTE.A4, 0, NOTE.G4, NOTE.F4, 0,
+      NOTE.D4, 0, 0, NOTE.F4, 0, NOTE.A4, NOTE.G4, 0,
+      NOTE.F4, 0, NOTE.D4, 0, 0, 0, 0, 0
     ];
-
-    let step = 0;
-    const tick = () => {
-      if (session.stopped || !this.ctx) return;
-      const t = this.ctx.currentTime + 0.05;
-      const idx = step % guzhengSeq.length;
-
-      const gz = guzhengSeq[idx];
-      if (gz) {
-        this._voiceGuzheng(this.ctx, session.gain, gz, t, 2.2, 0.16, 0.65);
-        // 偶尔加一粒低八度共鸣
-        if (idx % 8 === 0) {
-          this._voiceGuzheng(this.ctx, session.gain, gz * 0.5, t + 0.04, 2.6, 0.11, 0.45);
-        }
-      }
-
-      const fl = fluteSeq[idx];
-      if (fl) {
-        this._voiceXiaoFlute(this.ctx, session.gain, fl, t, 2.7, 0.13);
-      }
-
-      step++;
-    };
-
-    tick();
-    session.timers.push(setInterval(tick, 850));
-  }
-
-  // ==================== 音轨 2：town（轩辕剑叁风·温暖五声古筝/琵琶营地旋律） ====================
-
-  _buildTownTrack(ctx, session) {
-    // 1) 温暖明亮的 D 宫五声 (D, E, F#, A, B) 柔和底垫
-    this._createPadDrone(ctx, session, [NOTE.D2, NOTE.A2, NOTE.Fs3], {
-      type: 'sine',
-      gain: 0.14,
-      filterFreq: 680,
-      lfoRate: 0.14,
-      lfoDepth: 160
-    });
-
-    // 2) 温暖难忘的 32 步国风主旋律（每步 0.38s，约 79 BPM 八分音符）
-    const melody = [
-      NOTE.A4, 0, NOTE.B4, NOTE.D5, NOTE.E5, 0, NOTE.D5, NOTE.B4,
-      NOTE.A4, 0, NOTE.Fs4, NOTE.E4, NOTE.D4, 0, 0, 0,
-      NOTE.E4, 0, NOTE.Fs4, NOTE.A4, NOTE.B4, 0, NOTE.A4, NOTE.Fs4,
-      NOTE.E4, 0, NOTE.D4, NOTE.E4, NOTE.Fs4, 0, 0, 0,
-      NOTE.D5, 0, NOTE.E5, NOTE.Fs5, NOTE.E5, 0, NOTE.D5, NOTE.B4,
-      NOTE.A4, 0, NOTE.B4, NOTE.D5, NOTE.A4, 0, 0, 0,
-      NOTE.B4, 0, NOTE.A4, NOTE.Fs4, NOTE.E4, 0, NOTE.Fs4, NOTE.A4,
-      NOTE.D4, 0, 0, NOTE.E4, NOTE.D4, 0, 0, 0
-    ];
-
-    // 柔和分解伴奏低音
-    const bassArp = [
-      NOTE.D3, NOTE.A3, NOTE.D4, NOTE.A3, NOTE.B2, NOTE.Fs3, NOTE.B3, NOTE.Fs3,
-      NOTE.G2, NOTE.D3, NOTE.G3, NOTE.D3, NOTE.A2, NOTE.E3, NOTE.A3, NOTE.E3
+    const guqinSeq = [
+      NOTE.D3, 0, 0, 0, NOTE.A3, 0, 0, 0,
+      NOTE.F3, 0, 0, 0, NOTE.C4, 0, 0, 0,
+      NOTE.G3, 0, 0, 0, NOTE.D4, 0, 0, 0,
+      NOTE.A3, 0, 0, 0, NOTE.D3, 0, 0, 0
     ];
 
     let step = 0;
     const tick = () => {
       if (session.stopped || !this.ctx) return;
       const t = this.ctx.currentTime + 0.04;
-      const mIdx = step % melody.length;
-      const bIdx = Math.floor(step / 2) % bassArp.length;
-
-      // 主旋律：温暖古筝 + 清脆琵琶泛音
-      const note = melody[mIdx];
-      if (note) {
-        this._voiceGuzheng(this.ctx, session.gain, note, t, 1.35, 0.18, 0.48);
-        if (mIdx % 4 === 0) {
-          this._voicePipa(this.ctx, session.gain, note, t, 0.55, 0.09);
-        }
-      }
-
-      // 每两步一粒柔和分解伴奏
-      if (step % 2 === 0) {
-        this._voiceGuzheng(this.ctx, session.gain, bassArp[bIdx], t, 1.1, 0.09, 0.3);
-      }
-
-      // 每 8 步一粒轻柔木鱼/编钟点缀，营造营地烟火气
-      if (step % 8 === 0) {
-        this._voiceWoodClick(this.ctx, session.gain, t, 640, 0.04);
-      } else if (step % 16 === 12) {
-        this._voiceChime(this.ctx, session.gain, NOTE.A5, t, 1.4, 0.045, 0.5);
-      }
-
+      const idx = step % fluteSeq.length;
+      if (fluteSeq[idx]) this.playXiaoFlute(fluteSeq[idx], 2.2, 0.15, t, session.gain, 0.6);
+      if (guqinSeq[idx]) this.pluckGuqin(guqinSeq[idx], 2.4, 0.11, t, session.gain, 0.5, 0.018);
       step++;
     };
-
     tick();
-    session.timers.push(setInterval(tick, 380));
+    session.timers.push(setInterval(tick, 760));
   }
 
-  // ==================== 音轨 3：wild（废土荒野·呼啸风声 + 孤寂五声风铃 + 科幻脉冲） ====================
-
-  _buildWildTrack(ctx, session) {
-    // 1) 废土风声（带通扫频噪声）
-    this._createWindNoise(ctx, session, 0.085);
-
-    // 2) 荒凉科幻低频铺底 (E2 + B2 微失谐)
-    this._createPadDrone(ctx, session, [NOTE.E2, NOTE.B2], {
-      type: 'sawtooth',
-      gain: 0.075,
-      filterFreq: 300,
-      lfoRate: 0.07,
-      lfoDepth: 140
+  // 3. town (墨石镇) — Safe, warm, brisk lively pentatonic Guzheng/Pipa + wooden clapper (梆子) + warm lantern bass
+  _buildTownTrack(ctx, session) {
+    this._createPadDrone(ctx, session, [NOTE.D2, NOTE.A2, NOTE.Fs3], {
+      type: 'sine', gain: 0.11, filterFreq: 660, lfoRate: 0.14, lfoDepth: 140
     });
 
-    // 3) 孤寂 E 小调五声 (E, G, A, B, D) 金属风铃 + 微妙科幻探测脉冲 (每步 0.55s)
-    const chimePool = [NOTE.E5, NOTE.G5, NOTE.A5, NOTE.B5, NOTE.D6, NOTE.B4, NOTE.G4];
-    const pulsePattern = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const melody = [
+      NOTE.A4, NOTE.B4, NOTE.D5, 0, NOTE.E5, NOTE.D5, NOTE.B4, NOTE.A4,
+      NOTE.Fs4, 0, NOTE.A4, NOTE.B4, NOTE.A4, 0, NOTE.Fs4, 0,
+      NOTE.E4, NOTE.Fs4, NOTE.A4, 0, NOTE.B4, NOTE.A4, NOTE.Fs4, NOTE.E4,
+      NOTE.D4, 0, NOTE.E4, NOTE.Fs4, NOTE.A4, 0, 0, 0,
+      NOTE.D5, NOTE.E5, NOTE.Fs5, 0, NOTE.E5, NOTE.D5, NOTE.B4, NOTE.A4,
+      NOTE.B4, 0, NOTE.D5, NOTE.E5, NOTE.D5, 0, NOTE.A4, 0,
+      NOTE.B4, NOTE.A4, NOTE.Fs4, 0, NOTE.E4, NOTE.Fs4, NOTE.A4, NOTE.B4,
+      NOTE.D5, 0, NOTE.A4, 0, NOTE.D4, 0, 0, 0
+    ];
+    const bass = [
+      NOTE.D3, NOTE.A3, NOTE.B2, NOTE.Fs3, NOTE.G2, NOTE.D3, NOTE.A2, NOTE.E3,
+      NOTE.D3, NOTE.A3, NOTE.G2, NOTE.D3, NOTE.A2, NOTE.E3, NOTE.D3, NOTE.A2
+    ];
 
     let step = 0;
     const tick = () => {
       if (session.stopped || !this.ctx) return;
-      const t = this.ctx.currentTime + 0.05;
-      const pIdx = step % pulsePattern.length;
+      const t = this.ctx.currentTime + 0.03;
+      const mIdx = step % melody.length;
+      const bIdx = Math.floor(step / 4) % bass.length;
 
-      // 微妙科幻低频雷达脉冲
-      if (pulsePattern[pIdx]) {
-        this._voiceSciFiPulse(this.ctx, session.gain, pIdx === 0 ? NOTE.E2 * 2 : NOTE.B2, t, 0.45, 0.09);
+      if (melody[mIdx]) {
+        this.pluckGuqin(melody[mIdx], 1.15, 0.16, t, session.gain, 0.42, 0.01);
+        if (mIdx % 2 === 0) this._voicePipa(ctx, session.gain, melody[mIdx], t, 0.36, 0.085);
       }
-
-      // 稀疏孤寂五声金属风铃 / 古筝孤音
-      if (step % 5 === 1 || (step % 11 === 4 && Math.random() > 0.3)) {
-        const f = chimePool[(step * 3 + Math.floor(Math.random() * 2)) % chimePool.length];
-        this._voiceChime(this.ctx, session.gain, f, t, 2.4, 0.085, 0.72);
-      } else if (step % 13 === 7) {
-        const f = [NOTE.E4, NOTE.G4, NOTE.B4, NOTE.D5][step % 4];
-        this._voiceGuzheng(this.ctx, session.gain, f, t, 1.9, 0.11, 0.6);
+      if (step % 4 === 0) {
+        this.pluckGuqin(bass[bIdx], 1.4, 0.12, t, session.gain, 0.22, 0);
       }
-
+      // Lively wooden clapper (梆子) rhythm
+      if (step % 8 === 0 || step % 8 === 6) {
+        this._voiceWoodClapper(ctx, session.gain, t, step % 8 === 0 ? 780 : 1040, 0.055);
+      }
+      if (step % 16 === 12) {
+        this.playBronzeBell(NOTE.A5, 1.3, 0.04, t, session.gain, 0.45);
+      }
       step++;
     };
-
     tick();
-    session.timers.push(setInterval(tick, 550));
+    session.timers.push(setInterval(tick, 310));
   }
 
-  // ==================== 音轨 4：battle（燃向国风科幻战斗·太鼓战鼓 + 科幻低音 + 急促五声主旋律） ====================
+  // 4. interior (客栈/商行/医馆内室) — Cozy, calm, slower solo Guqin tea-house ambience
+  _buildInteriorTrack(ctx, session) {
+    this._createPadDrone(ctx, session, [NOTE.G2, NOTE.D3], {
+      type: 'sine', gain: 0.08, filterFreq: 480, lfoRate: 0.07, lfoDepth: 80
+    });
 
+    const guqinSolo = [
+      NOTE.G4, 0, NOTE.A4, 0, NOTE.B4, 0, NOTE.D5, 0,
+      NOTE.B4, 0, NOTE.A4, 0, NOTE.G4, 0, 0, 0,
+      NOTE.E4, 0, NOTE.G4, 0, NOTE.A4, 0, NOTE.B4, 0,
+      NOTE.A4, 0, NOTE.G4, 0, NOTE.E4, 0, 0, 0
+    ];
+    const warmAccomp = [
+      NOTE.G3, 0, 0, 0, NOTE.D4, 0, 0, 0,
+      NOTE.E3, 0, 0, 0, NOTE.B3, 0, 0, 0,
+      NOTE.C3, 0, 0, 0, NOTE.G3, 0, 0, 0,
+      NOTE.D3, 0, 0, 0, NOTE.A3, 0, 0, 0
+    ];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.04;
+      const idx = step % guqinSolo.length;
+      if (guqinSolo[idx]) {
+        this.pluckGuqin(guqinSolo[idx], 2.1, 0.14, t, session.gain, 0.5, 0.016);
+      }
+      if (warmAccomp[idx]) {
+        this.pluckGuqin(warmAccomp[idx], 2.4, 0.095, t + 0.03, session.gain, 0.42, 0.008);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 560));
+  }
+
+  // 5. wasteland (城郊废土) — Desolate windswept sci-fi wasteland: howling wind + sparse moody low Guqin + radar pulse
+  _buildWastelandTrack(ctx, session) {
+    this._createAmbientNoise(ctx, session, {
+      gain: 0.085, filterType: 'bandpass', freq: 390, q: 2.8, lfoRate: 0.08, lfoDepth: 230
+    });
+    this._createPadDrone(ctx, session, [NOTE.E2, NOTE.B2], {
+      type: 'sawtooth', gain: 0.065, filterFreq: 280, lfoRate: 0.06, lfoDepth: 120
+    });
+
+    const lowGuqin = [
+      NOTE.E3, 0, 0, 0, 0, NOTE.G3, 0, 0,
+      NOTE.B3, 0, 0, 0, NOTE.A3, 0, 0, 0,
+      NOTE.D4, 0, 0, 0, 0, NOTE.B3, 0, 0,
+      NOTE.G3, 0, 0, 0, NOTE.E3, 0, 0, 0
+    ];
+    const radarSteps = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.04;
+      const gIdx = step % lowGuqin.length;
+      const rIdx = step % radarSteps.length;
+
+      if (lowGuqin[gIdx]) {
+        this.pluckGuqin(lowGuqin[gIdx], 2.3, 0.14, t, session.gain, 0.58, 0.02);
+      }
+      if (radarSteps[rIdx]) {
+        this._voiceSonarDrop(ctx, session.gain, rIdx === 0 ? NOTE.E5 : NOTE.B4, t, 0.055);
+        this._voiceSciFiBass(ctx, session.gain, NOTE.E2, t, 0.55, 0.11);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 540));
+  }
+
+  // 6. ruins (铁锈废都) — Cyberpunk rain-soaked ruins: dark minor-pentatonic analog synth arpeggio + rain + metallic chimes
+  _buildRuinsTrack(ctx, session) {
+    // Rain texture (highpass filtered noise)
+    this._createAmbientNoise(ctx, session, {
+      gain: 0.042, filterType: 'highpass', freq: 2400, q: 0.7, lfoRate: 0.12, lfoDepth: 400
+    });
+    this._createPadDrone(ctx, session, [NOTE.A2, NOTE.E3], {
+      type: 'sawtooth', gain: 0.06, filterFreq: 360, lfoRate: 0.09, lfoDepth: 150
+    });
+
+    const arp = [
+      NOTE.A3, NOTE.C4, NOTE.E4, NOTE.G4, NOTE.A4, NOTE.G4, NOTE.E4, NOTE.C4,
+      NOTE.F3, NOTE.A3, NOTE.C4, NOTE.E4, NOTE.G4, NOTE.E4, NOTE.C4, NOTE.A3,
+      NOTE.G3, NOTE.B3, NOTE.D4, NOTE.G4, NOTE.A4, NOTE.G4, NOTE.D4, NOTE.B3,
+      NOTE.E3, NOTE.G3, NOTE.B3, NOTE.D4, NOTE.E4, NOTE.D4, NOTE.B3, NOTE.G3
+    ];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.03;
+      const idx = step % arp.length;
+      this._voiceSynthArp(ctx, session.gain, arp[idx], t, 0.34, 0.095, 1900);
+
+      if (idx % 8 === 0) {
+        this._voiceSciFiBass(ctx, session.gain, arp[idx] * 0.5, t, 0.42, 0.14);
+      }
+      if (idx % 16 === 4 || idx % 16 === 13) {
+        this.playBronzeBell(arp[idx] * 2, 2.2, 0.055, t, session.gain, 0.65);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 285));
+  }
+
+  // 7. arsenal (赤焰兵工) — Heavy industrial danger: rhythmic metallic anvil clangs + tense low bass pulse + brooding synth swells
+  _buildArsenalTrack(ctx, session) {
+    this._createPadDrone(ctx, session, [NOTE.C2, NOTE.G2], {
+      type: 'sawtooth', gain: 0.075, filterFreq: 320, lfoRate: 0.11, lfoDepth: 160
+    });
+
+    const bassPulse = [
+      NOTE.C2, NOTE.C2, 0, NOTE.C2, NOTE.Eb2, 0, NOTE.G2, 0,
+      NOTE.C2, NOTE.C2, 0, NOTE.Bb2 * 0.5, NOTE.G2, 0, NOTE.Fs2, 0
+    ];
+    const anvilPattern = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.03;
+      const idx = step % bassPulse.length;
+
+      if (bassPulse[idx]) {
+        this._voiceSciFiBass(ctx, session.gain, bassPulse[idx], t, 0.25, 0.19);
+      }
+      if (idx % 4 === 0) {
+        this.playTaikoDrum(110, 0.28, t, session.gain, 0.32);
+      }
+      if (anvilPattern[idx]) {
+        this._voiceAnvilClang(ctx, session.gain, t, 0.12);
+      }
+      if (step % 16 === 0) {
+        this.playSciFiPad([NOTE.C3, NOTE.G3, NOTE.Eb4], 3.4, 0.085, t, session.gain, 0.45);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 270));
+  }
+
+  // 8. swamp (青瘴毒泽) — Eerie toxic mist: floating Xiao flute intervals + watery low drone + crystalline poison chimes
+  _buildSwampTrack(ctx, session) {
+    this._createPadDrone(ctx, session, [NOTE.Fs2, NOTE.C3, NOTE.G3], {
+      type: 'sine', gain: 0.10, filterFreq: 380, lfoRate: 0.22, lfoDepth: 180, q: 3.0
+    });
+    this._createAmbientNoise(ctx, session, {
+      gain: 0.035, filterType: 'bandpass', freq: 680, q: 4.5, lfoRate: 0.16, lfoDepth: 260
+    });
+
+    const fluteNotes = [
+      NOTE.Fs4, 0, 0, NOTE.A4, 0, 0, NOTE.C5, 0,
+      0, NOTE.B4, 0, 0, NOTE.Fs4, 0, 0, 0,
+      NOTE.E4, 0, 0, NOTE.G4, 0, 0, NOTE.Cs5, 0,
+      0, NOTE.A4, 0, 0, NOTE.Fs4, 0, 0, 0
+    ];
+    const poisonChimes = [NOTE.Fs5, NOTE.C6, NOTE.G5, NOTE.B5, NOTE.Cs5];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.04;
+      const idx = step % fluteNotes.length;
+      if (fluteNotes[idx]) {
+        this.playXiaoFlute(fluteNotes[idx], 2.3, 0.13, t, session.gain, 0.65);
+      }
+      if (step % 6 === 2) {
+        const cf = poisonChimes[step % poisonChimes.length];
+        this.playBronzeBell(cf, 1.9, 0.055, t, session.gain, 0.65);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 620));
+  }
+
+  // 9. cave (地下防空洞/魔窟) — Claustrophobic subterranean tension: deep bunker hum + echoing sonar water-drops + heartbeat sub-drum
+  _buildCaveTrack(ctx, session) {
+    this._createPadDrone(ctx, session, [NOTE.D2, NOTE.Ab2], {
+      type: 'sine', gain: 0.12, filterFreq: 210, lfoRate: 0.06, lfoDepth: 75
+    });
+
+    const drops = [NOTE.A5, NOTE.E5, NOTE.D6, NOTE.G5, NOTE.C6];
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.04;
+      const bar = step % 8;
+
+      // Slow tense heartbeat sub-drum (lub-dub)
+      if (bar === 0) {
+        this.playTaikoDrum(84, 0.26, t, session.gain, 0.34);
+        this.playTaikoDrum(74, 0.18, t + 0.24, session.gain, 0.30);
+      }
+      // Echoing subterranean sonar water-drops
+      if (bar === 2 || bar === 5 || (bar === 7 && step % 16 === 15)) {
+        this._voiceSonarDrop(ctx, session.gain, drops[step % drops.length], t, 0.085);
+      }
+      // Occasional distant ominous bronze resonance
+      if (step % 16 === 8) {
+        this.playBronzeBell(NOTE.D3, 3.0, 0.09, t, session.gain, 0.7);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 520));
+  }
+
+  // 10. vault (天枢核心) — Grand ancient-future destiny: lush sci-fi choir pad + bronze astrolabe arpeggio + solemn temple bell
+  _buildVaultTrack(ctx, session) {
+    const chords = [
+      [NOTE.D3, NOTE.A3, NOTE.D4, NOTE.Fs4],
+      [NOTE.B2, NOTE.Fs3, NOTE.B3, NOTE.D4],
+      [NOTE.G2, NOTE.D3, NOTE.G3, NOTE.B3],
+      [NOTE.A2, NOTE.E3, NOTE.A3, NOTE.Cs4]
+    ];
+    const astrolabe = [
+      NOTE.D5, NOTE.A4, NOTE.Fs5, NOTE.E5, NOTE.D5, NOTE.A4, NOTE.B4, NOTE.D5,
+      NOTE.B4, NOTE.Fs4, NOTE.D5, NOTE.Cs5, NOTE.B4, NOTE.Fs4, NOTE.A4, NOTE.B4,
+      NOTE.G4, NOTE.D5, NOTE.B5, NOTE.A5, NOTE.G5, NOTE.D5, NOTE.E5, NOTE.Fs5,
+      NOTE.A4, NOTE.E5, NOTE.Cs5, NOTE.A5, NOTE.E5, NOTE.Cs5, NOTE.A4, NOTE.E4
+    ];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.04;
+      const idx = step % astrolabe.length;
+
+      if (idx % 8 === 0) {
+        const chord = chords[Math.floor(idx / 8) % chords.length];
+        this.playSciFiPad(chord, 3.4, 0.14, t, session.gain, 0.55);
+        this.playBronzeBell(chord[0], 3.0, 0.12, t, session.gain, 0.6);
+      }
+      // Shimmering astrolabe arpeggio
+      this.pluckGuqin(astrolabe[idx], 1.4, 0.11, t, session.gain, 0.52, 0.008);
+      if (idx % 4 === 2) {
+        this.playBronzeBell(astrolabe[idx], 1.5, 0.055, t, session.gain, 0.6);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 410));
+  }
+
+  // 11. battle (普通战斗) — Energetic, urgent: driving Taiko war-drums + fast Pipa/Guqin ostinato + punchy bass
   _buildBattleTrack(ctx, session) {
-    // 约 138 BPM，八分音符步进 (~217ms)
-    const stepMs = 217;
-
-    // 紧迫科幻低音律动 (D 小调五声)
     const bassLine = [
       NOTE.D2, NOTE.D2, NOTE.A2, NOTE.D2, NOTE.F2, NOTE.F2, NOTE.G2, NOTE.A2,
       NOTE.C3, NOTE.C3, NOTE.A2, NOTE.G2, NOTE.F2, NOTE.G2, NOTE.A2, NOTE.D2
     ];
-
-    // 疾走国风五声战斗主旋律（琵琶轮指 + 锐利合成主音）
     const leadLine = [
       NOTE.D5, 0, NOTE.F5, NOTE.G5, NOTE.A5, 0, NOTE.G5, NOTE.F5,
       NOTE.D5, NOTE.C5, NOTE.A4, 0, NOTE.C5, NOTE.D5, NOTE.F5, 0,
       NOTE.G5, 0, NOTE.A5, NOTE.C6, NOTE.A5, 0, NOTE.G5, NOTE.F5,
-      NOTE.D5, 0, NOTE.C5, NOTE.A4, NOTE.D5, 0, 0, 0
+      NOTE.D5, 0, NOTE.C5, NOTE.A4, NOTE.D5, 0, NOTE.A4, 0
     ];
-
-    // 战鼓节奏型: 2=重太鼓, 1=中鼓, 3=鼓边脆击
-    const drumPattern = [
-      2, 0, 3, 1, 2, 0, 1, 3,
-      2, 1, 3, 0, 2, 1, 1, 3
-    ];
+    const drumPat = [2, 0, 3, 1, 2, 0, 1, 3, 2, 1, 3, 0, 2, 1, 1, 3];
 
     let step = 0;
     const tick = () => {
@@ -1204,440 +1392,720 @@ class SoundEngine {
       const t = this.ctx.currentTime + 0.03;
       const bIdx = step % bassLine.length;
       const lIdx = step % leadLine.length;
-      const dIdx = step % drumPattern.length;
+      const d = drumPat[step % drumPat.length];
 
-      // 1) 战鼓打击乐
-      const drum = drumPattern[dIdx];
-      if (drum === 2) {
-        this._voiceTaiko(this.ctx, session.gain, t, 145, 48, 0.34, 0.36);
-      } else if (drum === 1) {
-        this._voiceTaiko(this.ctx, session.gain, t, 210, 92, 0.18, 0.22);
-      } else if (drum === 3) {
-        this._voiceWoodClick(this.ctx, session.gain, t, 1150, 0.11);
-      }
+      if (d === 2) this.playTaikoDrum(138, 0.36, t, session.gain, 0.34);
+      else if (d === 1) this.playTaikoDrum(195, 0.22, t, session.gain, 0.2);
+      else if (d === 3) this._voiceWoodClapper(ctx, session.gain, t, 1180, 0.11);
 
-      // 高频金属节奏沙锤（每奇偶步微弱推进）
-      if (step % 2 === 1) {
-        this._voiceHiHat(this.ctx, session.gain, t, 0.045);
-      }
+      if (step % 2 === 1) this._voiceHiHat(ctx, session.gain, t, 0.045);
+      this._voiceSciFiBass(ctx, session.gain, bassLine[bIdx], t, 0.19, 0.18);
 
-      // 2) 驱动科幻低音
-      this._voiceSciFiBass(this.ctx, session.gain, bassLine[bIdx], t, 0.19, 0.18);
-
-      // 3) 燃向五声主旋律（琵琶急拨 + 合成器主音）
       const lead = leadLine[lIdx];
       if (lead) {
-        this._voicePipa(this.ctx, session.gain, lead, t, 0.36, 0.16);
-        // 强拍叠加锐利合成主音增强张力
-        if (lIdx % 4 === 0) {
-          this._voiceBattleLead(this.ctx, session.gain, lead, t, 0.32, 0.085);
-        }
+        this._voicePipa(ctx, session.gain, lead, t, 0.34, 0.16);
+        if (lIdx % 4 === 0) this.pluckGuqin(lead, 0.65, 0.12, t, session.gain, 0.3, 0.012);
       }
-
       step++;
     };
-
     tick();
-    session.timers.push(setInterval(tick, stepMs));
+    session.timers.push(setInterval(tick, 208));
   }
 
-  // ==================== 合成器乐器原语（零依赖 Web Audio） ====================
+  // 12. boss (首领 Boss 战) — Epic high-stakes climax: double-tempo war drums + dark brass/synth power chords + soaring intense melody
+  _buildBossTrack(ctx, session) {
+    const bassLine = [
+      NOTE.D2, NOTE.D2, NOTE.D2, NOTE.F2, NOTE.G2, NOTE.G2, NOTE.A2, NOTE.D2,
+      NOTE.Bb2 * 0.5, NOTE.Bb2 * 0.5, NOTE.C3, NOTE.C3, NOTE.A2, NOTE.G2, NOTE.F2, NOTE.E2
+    ];
+    const melody = [
+      NOTE.D5, NOTE.F5, NOTE.A5, 0, NOTE.Bb5, NOTE.A5, NOTE.G5, NOTE.F5,
+      NOTE.A5, 0, NOTE.G5, NOTE.F5, NOTE.E5, 0, NOTE.D5, NOTE.C5,
+      NOTE.D5, NOTE.F5, NOTE.A5, NOTE.C6, NOTE.D6, 0, NOTE.C6, NOTE.A5,
+      NOTE.Bb5, NOTE.A5, NOTE.G5, NOTE.F5, NOTE.A5, 0, NOTE.D5, 0
+    ];
+    const powerChords = [
+      [NOTE.D3, NOTE.A3, NOTE.D4],
+      [NOTE.G3, NOTE.D4, NOTE.G4],
+      [NOTE.Bb3, NOTE.F4, NOTE.Bb4],
+      [NOTE.A3, NOTE.E4, NOTE.A4]
+    ];
+    const drumPat = [2, 1, 3, 2, 2, 1, 3, 1, 2, 2, 3, 1, 2, 1, 2, 3];
 
-  // 持续铺底音垫（支持 LFO 滤波呼吸）
-  _createPadDrone(ctx, session, freqs, opts) {
-    const now = ctx.currentTime;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(opts.filterFreq || 480, now);
-    filter.Q.value = 1.2;
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.025;
+      const bIdx = step % bassLine.length;
+      const mIdx = step % melody.length;
+      const d = drumPat[step % drumPat.length];
 
-    const padGain = ctx.createGain();
-    padGain.gain.setValueAtTime(opts.gain || 0.12, now);
+      // Thunderous double-tempo war drums
+      if (d === 2) this.playTaikoDrum(132, 0.42, t, session.gain, 0.34);
+      else if (d === 1) this.playTaikoDrum(198, 0.25, t, session.gain, 0.18);
+      else if (d === 3) this._voiceAnvilClang(ctx, session.gain, t, 0.09);
 
-    // LFO 缓慢扫频
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(opts.lfoRate || 0.1, now);
-    lfoGain.gain.setValueAtTime(opts.lfoDepth || 120, now);
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
+      this._voiceHiHat(ctx, session.gain, t, step % 2 === 0 ? 0.055 : 0.035);
+      this._voiceSciFiBass(ctx, session.gain, bassLine[bIdx], t, 0.16, 0.21);
 
-    filter.connect(padGain);
-    padGain.connect(session.gain);
+      // Dramatic dark brass/synth power chords on downbeats
+      if (mIdx % 8 === 0) {
+        const chord = powerChords[Math.floor(mIdx / 8) % powerChords.length];
+        this._voiceBossBrass(ctx, session.gain, chord, t, 0.78, 0.15);
+      }
 
-    lfo.start(now);
-    session.nodes.push(lfo, lfoGain, filter, padGain);
+      // Soaring intense battle lead
+      const n = melody[mIdx];
+      if (n) {
+        this._voicePipa(ctx, session.gain, n, t, 0.3, 0.16);
+        this._voiceSynthArp(ctx, session.gain, n, t, 0.28, 0.11, 3200);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, 175));
+  }
 
-    freqs.forEach((f, idx) => {
-      const osc = ctx.createOscillator();
-      osc.type = opts.type || 'triangle';
-      osc.frequency.setValueAtTime(f, now);
-      osc.detune.setValueAtTime((idx % 2 === 0 ? -4 : 4), now);
-      osc.connect(filter);
-      osc.start(now);
-      session.nodes.push(osc);
+  // ==================== Realistic Multi-Layered Combat Foley SFX ====================
+
+  _sfxTone(freqStart, freqEnd, dur, type = 'sine', vol = 0.12, time = null, dest = null) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.sfxMaster || ctx.destination;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(20, freqStart), t);
+    if (freqEnd && freqEnd !== freqStart) {
+      osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t + Math.max(0.015, dur));
+    }
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + Math.min(0.008, dur * 0.25));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g);
+    g.connect(out);
+    osc.start(t);
+    osc.stop(t + dur + 0.04);
+  }
+
+  _gunshotLayer(t, dest, { heavy = false, punchVol = 0.26, crackVol = 0.24 } = {}) {
+    // High-energy supersonic gunpowder crack
+    this.playNoiseBurst(heavy ? 0.28 : 0.13, 'bandpass', heavy ? 1600 : 2800, heavy ? 220 : 520, 0.9, crackVol, t, dest);
+    // Low chamber punch
+    this._sfxTone(heavy ? 185 : 320, heavy ? 34 : 62, heavy ? 0.28 : 0.1, 'triangle', punchVol, t, dest);
+    // Brass shell casing clink
+    this.playBronzeBell(heavy ? 2450 : 3420, 0.14, 0.045, t + (heavy ? 0.14 : 0.09), dest, 0.25);
+  }
+
+  _swordSlashLayer(t, dest, { pitch = 1.0, heavy = false } = {}) {
+    // 1) Crisp steel draw shimmer
+    this.playNoiseBurst(0.06, 'highpass', 3800 * pitch, 6400 * pitch, 2.0, 0.09, t, dest);
+    // 2) Fast air-cutting blade whoosh (2600Hz -> 420Hz)
+    this.playNoiseBurst(heavy ? 0.22 : 0.16, 'bandpass', 2600 * pitch, 420 * pitch, 1.8, heavy ? 0.24 : 0.19, t + 0.02, dest);
+    // 3) Sharp metallic ring
+    this.playBronzeBell(1780 * pitch, heavy ? 0.34 : 0.22, heavy ? 0.09 : 0.065, t + 0.035, dest, 0.38);
+    // 4) Solid impact thud
+    this._sfxTone(heavy ? 165 : 135, 42, heavy ? 0.22 : 0.13, 'sine', heavy ? 0.26 : 0.17, t + 0.045, dest);
+  }
+
+  _plasmaSlashLayer(t, dest, heavy = false) {
+    // Sci-fi lightsaber ignite hum + plasma sizzle slash
+    this._sfxTone(190, 92, heavy ? 0.38 : 0.26, 'sawtooth', 0.15, t, dest);
+    this._sfxTone(1650, 290, heavy ? 0.32 : 0.21, 'sawtooth', 0.14, t + 0.01, dest);
+    this.playNoiseBurst(heavy ? 0.30 : 0.20, 'bandpass', 3800, 740, 2.4, 0.20, t + 0.015, dest);
+    this.playBronzeBell(1240, 0.22, 0.055, t + 0.02, dest, 0.35);
+  }
+
+  _explosionLayer(t, dest, scale = 1.0) {
+    // Sub-bass shockwave drop
+    this._sfxTone(135, 28, 0.52 * scale, 'sine', 0.34 * Math.min(1.2, scale), t, dest);
+    // Roaring fiery debris noise
+    this.playNoiseBurst(0.62 * scale, 'lowpass', 1100, 85, 0.8, 0.30 * Math.min(1.2, scale), t, dest);
+    // Crisp high-end shrapnel crackle
+    this.playNoiseBurst(0.24 * scale, 'bandpass', 2400, 480, 1.3, 0.18, t + 0.02, dest);
+  }
+
+  /**
+   * Weapon-matched Basic Attack SFX
+   */
+  playBasicAttackSfx(weaponObj = null) {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    const wType = String(weaponObj?.weaponType || '').toLowerCase();
+    const wId = String(weaponObj?.id || '').toLowerCase();
+    const genre = String(weaponObj?.genre || '').toLowerCase();
+
+    // Plasma / Energy blade / Railgun
+    if (wType === 'plasma' || wType === 'railgun' || wId.includes('plasma') || wId.includes('pulsesword')) {
+      this._plasmaSlashLayer(t, dest, wType === 'railgun');
+      return;
+    }
+
+    // Firearms (blunderbuss / pistol / shotgun / gatling / sniper / cannon)
+    if (['blunderbuss', 'pistol', 'shotgun', 'gatling', 'sniper', 'cannon'].includes(wType) || genre === 'military') {
+      if (wType === 'gatling') {
+        for (let i = 0; i < 3; i++) {
+          this._gunshotLayer(t + i * 0.065, dest, { heavy: false, punchVol: 0.20, crackVol: 0.19 });
+        }
+      } else if (wType === 'sniper') {
+        this._gunshotLayer(t, dest, { heavy: true, punchVol: 0.30, crackVol: 0.28 });
+        this.playNoiseBurst(0.32, 'bandpass', 1800, 320, 1.5, 0.12, t + 0.06, dest);
+      } else if (wType === 'shotgun' || wType === 'cannon') {
+        this._gunshotLayer(t, dest, { heavy: true, punchVol: 0.32, crackVol: 0.26 });
+        this.playNoiseBurst(0.22, 'highpass', 1800, 900, 1.1, 0.12, t + 0.03, dest);
+      } else {
+        this._gunshotLayer(t, dest, { heavy: false });
+      }
+      return;
+    }
+
+    // Default blade / sword
+    this._swordSlashLayer(t, dest, { pitch: 1.0, heavy: false });
+  }
+
+  /**
+   * Bespoke Multi-Layered SFX for ALL 16 Skills (supports both data.js IDs and spec aliases)
+   */
+  playSkillSfx(skillId = '', branch = 'martial') {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    const id = String(skillId || '').toLowerCase();
+
+    switch (id) {
+      // 1. 青城破风剑诀 — twin whistling steel sword slashes
+      case 'sk_slash':
+      case 'sk_qingcheng': {
+        this._swordSlashLayer(t, dest, { pitch: 1.12, heavy: false });
+        this._swordSlashLayer(t + 0.14, dest, { pitch: 0.94, heavy: true });
+        return;
+      }
+
+      // 2. 降龙墨掌劲 — rising qi hum + thunderous sub-bass dragon palm shockwave
+      case 'sk_palm':
+      case 'sk_xianglong': {
+        this._sfxTone(180, 620, 0.18, 'sine', 0.14, t, dest);
+        this.playNoiseBurst(0.18, 'bandpass', 600, 1900, 2.2, 0.12, t, dest);
+        this._sfxTone(155, 32, 0.48, 'sine', 0.34, t + 0.16, dest);
+        this.playTaikoDrum(130, 0.34, t + 0.16, dest, 0.45);
+        this.playNoiseBurst(0.38, 'lowpass', 950, 110, 0.9, 0.26, t + 0.16, dest);
+        return;
+      }
+
+      // 3. 断钢裂甲枪 — piercing spear whistle + metallic armor-cracking crunch
+      case 'sk_shatter':
+      case 'sk_duangang': {
+        this.playNoiseBurst(0.18, 'bandpass', 3600, 1200, 3.4, 0.22, t, dest);
+        this._sfxTone(1900, 620, 0.14, 'triangle', 0.12, t, dest);
+        this._voiceAnvilClang(ctx, dest, t + 0.13, 0.24);
+        this.playNoiseBurst(0.22, 'bandpass', 2400, 340, 1.4, 0.24, t + 0.14, dest);
+        this._sfxTone(170, 42, 0.26, 'sine', 0.26, t + 0.14, dest);
+        return;
+      }
+
+      // 4. 万墨归宗剑 — 5-hit cascading sword-storm whooshes + grand bronze chord
+      case 'sk_storm':
+      case 'sk_wanmo': {
+        const pitches = [1.22, 1.08, 1.32, 0.96, 0.85];
+        pitches.forEach((p, i) => {
+          this._swordSlashLayer(t + i * 0.085, dest, { pitch: p, heavy: i === 4 });
+        });
+        this.playBronzeBell(NOTE.D4, 1.5, 0.16, t + 0.42, dest, 0.55);
+        this.playBronzeBell(NOTE.A4, 1.4, 0.12, t + 0.45, dest, 0.55);
+        this.playBronzeBell(NOTE.D5, 1.3, 0.10, t + 0.48, dest, 0.55);
+        return;
+      }
+
+      // 5. 火神加特林 — rotary barrel spin-up + 7 rapid-fire punchy machine-gun cracks
+      case 'sk_burst':
+      case 'sk_gatling': {
+        this._sfxTone(120, 480, 0.18, 'sawtooth', 0.09, t, dest);
+        for (let i = 0; i < 7; i++) {
+          this._gunshotLayer(t + 0.15 + i * 0.058, dest, { heavy: false, punchVol: 0.20, crackVol: 0.21 });
+        }
+        return;
+      }
+
+      // 6. 散弹墨霰 — heavy low-end shotgun boom + pellet crackle
+      case 'sk_shotgun': {
+        this._gunshotLayer(t, dest, { heavy: true, punchVol: 0.34, crackVol: 0.30 });
+        for (let i = 0; i < 4; i++) {
+          this.playNoiseBurst(0.08, 'highpass', 2200 + i * 400, 1200, 1.6, 0.12, t + 0.04 + i * 0.032, dest);
+        }
+        return;
+      }
+
+      // 7. 反器材狙杀 — high-tech laser lock-on beep -> thunderous supersonic rifle shot + metallic echo
+      case 'sk_snipe':
+      case 'sk_sniper': {
+        this._sfxTone(1680, 1680, 0.06, 'sine', 0.11, t, dest);
+        this._sfxTone(2240, 2240, 0.08, 'sine', 0.13, t + 0.09, dest);
+        this._gunshotLayer(t + 0.20, dest, { heavy: true, punchVol: 0.34, crackVol: 0.30 });
+        this.playBronzeBell(1180, 0.55, 0.09, t + 0.23, dest, 0.55);
+        this.playNoiseBurst(0.42, 'bandpass', 1500, 240, 1.3, 0.15, t + 0.24, dest);
+        return;
+      }
+
+      // 8. 武装战隼空袭 — descending missile whistle -> massive double-stage artillery explosion
+      case 'sk_airstrike': {
+        this._sfxTone(2400, 380, 0.28, 'sine', 0.14, t, dest);
+        this.playNoiseBurst(0.26, 'bandpass', 2800, 620, 3.2, 0.14, t, dest);
+        this._explosionLayer(t + 0.26, dest, 1.0);
+        this._explosionLayer(t + 0.46, dest, 1.25);
+        return;
+      }
+
+      // 9. 重炮覆盖轰炸 / 墨甲重拳 — hydraulic servo whine + seismic iron smash
+      case 'sk_cannon':
+      case 'sk_mecha_fist': {
+        this._sfxTone(220, 680, 0.14, 'sawtooth', 0.11, t, dest);
+        this._voiceAnvilClang(ctx, dest, t + 0.14, 0.20);
+        this._explosionLayer(t + 0.15, dest, 1.15);
+        return;
+      }
+
+      // 10. 浮游炮齐射 / 微型制导齐射 — 4 staggered rocket whooshes + chain detonations
+      case 'sk_bits':
+      case 'sk_missile': {
+        for (let i = 0; i < 4; i++) {
+          const ot = t + i * 0.09;
+          this.playNoiseBurst(0.14, 'bandpass', 1800 + i * 250, 620, 2.6, 0.15, ot, dest);
+          this._sfxTone(980 + i * 120, 340, 0.12, 'sawtooth', 0.09, ot, dest);
+          this._explosionLayer(ot + 0.13, dest, 0.65);
+        }
+        return;
+      }
+
+      // 11. 量子护盾超载 / 聚能激光 — capacitor whine charge-up (450->3200Hz) -> searing plasma beam
+      case 'sk_overdrive':
+      case 'sk_laser': {
+        this._sfxTone(450, 3200, 0.26, 'sawtooth', 0.13, t, dest);
+        this._sfxTone(225, 1600, 0.26, 'sine', 0.10, t, dest);
+        // Searing continuous plasma beam buzz
+        this._sfxTone(1800, 740, 0.42, 'sawtooth', 0.17, t + 0.25, dest);
+        this._sfxTone(900, 370, 0.42, 'square', 0.10, t + 0.25, dest);
+        this.playNoiseBurst(0.42, 'bandpass', 3200, 920, 2.5, 0.20, t + 0.25, dest);
+        return;
+      }
+
+      // 12. 轨道电磁炮 / 轨道电磁脉冲 — sub-bass drop + crackling electromagnetic discharge wave
+      case 'sk_railgun':
+      case 'sk_emp': {
+        this._sfxTone(320, 2600, 0.22, 'triangle', 0.12, t, dest);
+        this._sfxTone(190, 28, 0.56, 'sine', 0.36, t + 0.20, dest);
+        this.playNoiseBurst(0.48, 'bandpass', 4200, 320, 2.2, 0.24, t + 0.20, dest);
+        for (let i = 0; i < 4; i++) {
+          this.playNoiseBurst(0.06, 'highpass', 3400, 6200, 2.4, 0.15, t + 0.24 + i * 0.075, dest);
+        }
+        return;
+      }
+
+      // 13a. 符箓引雷诀 — crisp paper talisman snap + crackling electric bolt + rolling thunderclap
+      case 'sk_thunder': {
+        this.playNoiseBurst(0.055, 'highpass', 2800, 5200, 1.5, 0.18, t, dest);
+        for (let i = 0; i < 3; i++) {
+          this.playNoiseBurst(0.075, 'bandpass', 3800 - i * 600, 1100, 3.2, 0.19, t + 0.07 + i * 0.06, dest);
+        }
+        this._sfxTone(140, 32, 0.58, 'triangle', 0.30, t + 0.16, dest);
+        this.playNoiseBurst(0.62, 'lowpass', 820, 95, 0.9, 0.26, t + 0.16, dest);
+        return;
+      }
+
+      // 13b. 玄墨金钟罩 — resonant bronze temple bell + shimmering protective qi ring
+      case 'sk_shield': {
+        this.playBronzeBell(NOTE.D4, 1.6, 0.20, t, dest, 0.55);
+        this.playBronzeBell(NOTE.A4, 1.4, 0.14, t + 0.06, dest, 0.55);
+        this.playSciFiPad([NOTE.D4, NOTE.A4, NOTE.D5], 0.9, 0.12, t + 0.04, dest, 0.45);
+        return;
+      }
+
+      // 14. 赤焰焚墨 / 九天炼火印 — rushing flame ignition roar + crystalline lotus chime
+      case 'sk_fire':
+      case 'sk_alchemy_fire': {
+        this.playNoiseBurst(0.55, 'bandpass', 320, 1650, 1.2, 0.26, t, dest);
+        this.playNoiseBurst(0.45, 'lowpass', 920, 160, 0.8, 0.22, t + 0.08, dest);
+        this.playBronzeBell(NOTE.A5, 1.1, 0.12, t + 0.12, dest, 0.55);
+        this.playBronzeBell(NOTE.E6, 0.95, 0.08, t + 0.20, dest, 0.55);
+        return;
+      }
+
+      // 15a. 妖灵附体 — fierce spectral beast howl + twin claw slashes
+      case 'sk_beast_fury': {
+        this._sfxTone(240, 520, 0.24, 'sawtooth', 0.16, t, dest);
+        this._sfxTone(520, 190, 0.26, 'sawtooth', 0.15, t + 0.22, dest);
+        this.playNoiseBurst(0.14, 'bandpass', 2400, 620, 1.8, 0.22, t + 0.20, dest);
+        this.playNoiseBurst(0.16, 'bandpass', 2800, 540, 1.8, 0.22, t + 0.34, dest);
+        return;
+      }
+
+      // 15b. 回春青莲诀 — serene healing lotus harp arpeggio + soothing flute harmonic
+      case 'sk_heal': {
+        [NOTE.D4, NOTE.Fs4, NOTE.A4, NOTE.D5, NOTE.A5].forEach((f, i) => {
+          this.pluckGuqin(f, 0.95, 0.13, t + i * 0.065, dest, 0.5, 0.01);
+        });
+        this.playXiaoFlute(NOTE.A5, 0.9, 0.11, t + 0.12, dest, 0.55);
+        return;
+      }
+
+      // 16. 墨壶镇魂印 / 天工摄魂阵 — resonant bronze bell + swirling eerie harmonic pull
+      case 'sk_crucible':
+      case 'sk_soul_bind': {
+        this.playBronzeBell(NOTE.D4, 1.7, 0.20, t, dest, 0.6);
+        this._sfxTone(310, 880, 0.48, 'sine', 0.13, t + 0.06, dest);
+        this._sfxTone(465, 1320, 0.48, 'triangle', 0.09, t + 0.06, dest);
+        this.playNoiseBurst(0.52, 'bandpass', 480, 2200, 4.2, 0.18, t + 0.05, dest);
+        return;
+      }
+
+      default:
+        this.playCombatSfx(branch, true);
+    }
+  }
+
+  /**
+   * Creature / Mech / Demon Attack Foley SFX
+   */
+  playEnemyAttackSfx(enemyTpl = null) {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    const id = String(enemyTpl?.id || '').toLowerCase();
+    const sp = String(enemyTpl?.spriteType || '').toLowerCase();
+    const tag = `${id} ${sp}`;
+
+    // 1) Quadruped beasts & slimes: guttural growl + snapping jaw bite + claw tear
+    if (/rat|dog|slime|ratking|beast|wolf|hound/.test(tag)) {
+      // Low guttural animal growl
+      const growl = ctx.createOscillator();
+      const gFilt = ctx.createBiquadFilter();
+      const gg = ctx.createGain();
+      growl.type = 'sawtooth';
+      growl.frequency.setValueAtTime(118, t);
+      growl.frequency.exponentialRampToValueAtTime(64, t + 0.24);
+      gFilt.type = 'bandpass';
+      gFilt.frequency.setValueAtTime(360, t);
+      gFilt.Q.value = 3.2;
+      gg.gain.setValueAtTime(0.0001, t);
+      gg.gain.linearRampToValueAtTime(0.24, t + 0.03);
+      gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+      growl.connect(gFilt);
+      gFilt.connect(gg);
+      gg.connect(dest);
+      growl.start(t);
+      growl.stop(t + 0.28);
+
+      // Sharp snapping jaw bite + claw tear
+      this.playNoiseBurst(0.085, 'bandpass', 2400, 620, 1.8, 0.24, t + 0.11, dest);
+      this._sfxTone(280, 75, 0.09, 'triangle', 0.22, t + 0.11, dest);
+      this.playNoiseBurst(0.12, 'highpass', 1900, 900, 1.4, 0.16, t + 0.18, dest);
+      return;
+    }
+
+    // 2) Mechs / Gunners / Raiders / Turrets: servo clank + heavy mechanical gunfire/cannon
+    if (/mech|drone|turret|raider|guard|zhurong|duangang|taotie|rakshasa/.test(tag)) {
+      // Hydraulic servo clank
+      this._sfxTone(190, 420, 0.08, 'sawtooth', 0.10, t, dest);
+      this._voiceAnvilClang(ctx, dest, t + 0.05, 0.16);
+      // Heavy mechanical gunfire / cannon impact
+      this._gunshotLayer(t + 0.10, dest, { heavy: /boss|heavy|turret|zhurong|taotie/.test(tag), punchVol: 0.28, crackVol: 0.24 });
+      return;
+    }
+
+    // 3) Demons / Mutants / Fox / Spirits: eerie spectral screech + dark qi burst
+    const screech = ctx.createOscillator();
+    const mod = ctx.createOscillator();
+    const modGain = ctx.createGain();
+    const sg = ctx.createGain();
+    screech.type = 'sawtooth';
+    screech.frequency.setValueAtTime(680, t);
+    screech.frequency.exponentialRampToValueAtTime(1480, t + 0.12);
+    screech.frequency.exponentialRampToValueAtTime(340, t + 0.34);
+
+    mod.type = 'sine';
+    mod.frequency.setValueAtTime(34, t);
+    modGain.gain.setValueAtTime(95, t);
+    mod.connect(modGain);
+    modGain.connect(screech.frequency);
+
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(1250, t);
+    filt.Q.value = 2.6;
+
+    sg.gain.setValueAtTime(0.0001, t);
+    sg.gain.linearRampToValueAtTime(0.18, t + 0.03);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+
+    screech.connect(filt);
+    filt.connect(sg);
+    sg.connect(dest);
+    screech.start(t);
+    mod.start(t);
+    screech.stop(t + 0.38);
+    mod.stop(t + 0.38);
+
+    // Dark qi burst
+    this._sfxTone(145, 38, 0.28, 'sine', 0.24, t + 0.12, dest);
+    this.playNoiseBurst(0.24, 'bandpass', 1400, 260, 1.6, 0.20, t + 0.12, dest);
+  }
+
+  /**
+   * 3-Phase Soul Capture Crucible SFX ('throw' | 'vortex' | 'success' | 'fail')
+   */
+  playCaptureSfx(phase = 'throw') {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    if (phase === 'throw') {
+      // Spinning bronze gourd whoosh + crisp bell
+      this.playNoiseBurst(0.24, 'bandpass', 620, 2400, 2.6, 0.18, t, dest);
+      this._sfxTone(380, 920, 0.18, 'triangle', 0.10, t, dest);
+      this.playBronzeBell(NOTE.A5, 0.75, 0.13, t + 0.08, dest, 0.5);
+      return;
+    }
+
+    if (phase === 'vortex') {
+      // Continuous ~1.0s rising swirling wind-vortex + resonant bronze bowl hum
+      if (this.noiseBuffer) {
+        const src = ctx.createBufferSource();
+        src.buffer = this.noiseBuffer;
+        src.loop = true;
+
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(340, t);
+        bp.frequency.exponentialRampToValueAtTime(2200, t + 0.95);
+        bp.Q.value = 4.2;
+
+        // Swirl LFO
+        const lfo = ctx.createOscillator();
+        const lg = ctx.createGain();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(6.5, t);
+        lfo.frequency.linearRampToValueAtTime(14.0, t + 0.95);
+        lg.gain.setValueAtTime(240, t);
+        lfo.connect(lg);
+        lg.connect(bp.frequency);
+
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.0001, t);
+        ng.gain.linearRampToValueAtTime(0.22, t + 0.18);
+        ng.gain.setValueAtTime(0.20, t + 0.75);
+        ng.gain.exponentialRampToValueAtTime(0.0001, t + 1.02);
+
+        src.connect(bp);
+        bp.connect(ng);
+        ng.connect(dest);
+        src.start(t);
+        lfo.start(t);
+        src.stop(t + 1.05);
+        lfo.stop(t + 1.05);
+      }
+      // Resonant bronze bowl hum rising in tension
+      this._sfxTone(196, 392, 0.98, 'sine', 0.14, t, dest);
+      this._sfxTone(294, 588, 0.98, 'triangle', 0.09, t, dest);
+      this.playBronzeBell(NOTE.D4, 1.05, 0.14, t, dest, 0.55);
+      return;
+    }
+
+    if (phase === 'success') {
+      // Satisfying magical seal SNAP + triumphant golden pentatonic chime
+      this._sfxTone(220, 48, 0.16, 'sine', 0.28, t, dest);
+      this.playNoiseBurst(0.09, 'highpass', 2400, 5600, 1.8, 0.18, t, dest);
+      [NOTE.D5, NOTE.Fs5, NOTE.A5, NOTE.D6].forEach((f, i) => {
+        this.playBronzeBell(f, 1.2, 0.13, t + 0.07 + i * 0.085, dest, 0.55);
+        this.pluckGuqin(f, 0.9, 0.11, t + 0.07 + i * 0.085, dest, 0.45, 0.01);
+      });
+      return;
+    }
+
+    // 'fail': shattering glass/energy crack + defiant monster growl
+    this.playNoiseBurst(0.22, 'highpass', 3200, 1200, 1.4, 0.24, t, dest);
+    [2980, 3640, 4420].forEach((f, i) => {
+      this.playBronzeBell(f, 0.26, 0.08, t + i * 0.035, dest, 0.35);
+    });
+    this._sfxTone(155, 62, 0.34, 'sawtooth', 0.20, t + 0.09, dest);
+    this.playNoiseBurst(0.26, 'bandpass', 720, 210, 2.2, 0.18, t + 0.10, dest);
+  }
+
+  /**
+   * Backwards-compatible branch combat SFX wrapper
+   */
+  playCombatSfx(branch = 'martial', isHeavy = false) {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    if (branch === 'firearm') {
+      this._gunshotLayer(t, dest, { heavy: isHeavy });
+      if (isHeavy) this._explosionLayer(t + 0.05, dest, 0.8);
+    } else if (branch === 'mecha') {
+      this._plasmaSlashLayer(t, dest, isHeavy);
+      if (isHeavy) this._explosionLayer(t + 0.1, dest, 0.85);
+    } else if (branch === 'mystic') {
+      this.playBronzeBell(NOTE.D5, isHeavy ? 1.1 : 0.65, 0.13, t, dest, 0.5);
+      this.playNoiseBurst(0.16, 'bandpass', 2600, 720, 2.4, 0.15, t + 0.03, dest);
+      if (isHeavy) this._sfxTone(130, 38, 0.38, 'triangle', 0.22, t + 0.05, dest);
+    } else {
+      this._swordSlashLayer(t, dest, { pitch: 1.0, heavy: isHeavy });
+    }
+  }
+
+  // ==================== World, UI & Backwards-Compatible SFX ====================
+
+  playTone(freq, duration = 0.1, type = 'sine', gainVal = 0.08, delay = 0) {
+    if (this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(gainVal, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(gain);
+    gain.connect(this.sfxMaster || ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  }
+
+  pick(quality = 'common') {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    const map = {
+      common: [NOTE.A4, NOTE.D5],
+      fine:   [NOTE.D5, NOTE.Fs5],
+      rare:   [NOTE.D5, NOTE.A5, NOTE.D6],
+      legend: [NOTE.D5, NOTE.Fs5, NOTE.A5, NOTE.D6]
+    };
+    const notes = map[quality] || map.common;
+    notes.forEach((f, idx) => {
+      if (quality === 'legend' || quality === 'rare') {
+        this.playBronzeBell(f, 0.55, 0.085, t + idx * 0.06, dest, 0.45);
+      } else {
+        this.pluckGuqin(f, 0.35, 0.10, t + idx * 0.055, dest, 0.3, 0.008);
+      }
     });
   }
 
-  // 废土风声（循环白噪声 + 慢速扫频带通滤波）
-  _createWindNoise(ctx, session, gainVal = 0.08) {
-    if (!this.noiseBuffer) return;
+  coin() {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    this.playBronzeBell(NOTE.B5, 0.24, 0.08, t, dest, 0.3);
+    this.playBronzeBell(NOTE.E6, 0.36, 0.09, t + 0.065, dest, 0.35);
+  }
+
+  disassemble(success, crit = false) {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    if (!success) {
+      this._sfxTone(190, 110, 0.18, 'sawtooth', 0.09, t, dest);
+      this.playNoiseBurst(0.14, 'lowpass', 620, 180, 1.2, 0.10, t + 0.04, dest);
+      return;
+    }
+    this._voiceAnvilClang(ctx, dest, t, 0.10);
+    this.pluckGuqin(NOTE.A4, 0.35, 0.10, t + 0.06, dest, 0.3, 0);
+    if (crit) {
+      this.playBronzeBell(NOTE.A5, 0.55, 0.11, t + 0.12, dest, 0.45);
+      this.playBronzeBell(NOTE.D6, 0.65, 0.10, t + 0.19, dest, 0.5);
+    }
+  }
+
+  alarm() {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    this.playTaikoDrum(135, 0.28, t, dest, 0.32);
+    this._sfxTone(540, 380, 0.16, 'sawtooth', 0.09, t, dest);
+    this._sfxTone(380, 290, 0.18, 'sawtooth', 0.09, t + 0.14, dest);
+  }
+
+  geiger() {
+    this.playTone(1800 + Math.random() * 600, 0.025, 'square', 0.03, 0);
+  }
+
+  ending() {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    [NOTE.D5, NOTE.Fs5, NOTE.A5, NOTE.D6].forEach((f, i) => {
+      this.pluckGuqin(f, 1.0, 0.12, t + i * 0.11, dest, 0.48, 0.01);
+      this.playBronzeBell(f, 1.1, 0.075, t + i * 0.11, dest, 0.5);
+    });
+  }
+
+  footstep(surface = 'stone', stepIndex = 0) {
+    if (this.muted || this.settings.sfxMuted || !this.settings.footstepsEnabled) return;
+    const ctx = this.ensureCtx();
+    if (!ctx || ctx.state !== 'running') return;
+
     const now = ctx.currentTime;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-    src.loop = true;
+    const dest = this.sfxMaster || ctx.destination;
+    const alt = (stepIndex % 2 === 0) ? 1.0 : 0.91;
+    const pitch = alt * (0.96 + Math.random() * 0.08);
 
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(420, now);
-    filter.Q.value = 2.6;
-
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.08, now);
-    lfoGain.gain.setValueAtTime(220, now);
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(gainVal, now);
-
-    src.connect(filter);
-    filter.connect(g);
-    g.connect(session.gain);
-
-    src.start(now);
-    lfo.start(now);
-    session.nodes.push(src, lfo, lfoGain, filter, g);
-  }
-
-  // 古筝拨弦（清润亮泽、自然衰减 + 滤波器收尾）
-  _voiceGuzheng(ctx, dest, freq, startTime, duration = 1.6, gainVal = 0.16, reverbAmount = 0.45) {
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const filter = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-
-    osc1.type = 'triangle';
-    osc1.frequency.setValueAtTime(freq, startTime);
-    osc2.type = 'sawtooth';
-    osc2.frequency.setValueAtTime(freq * 2, startTime);
-
-    const osc2Gain = ctx.createGain();
-    osc2Gain.gain.setValueAtTime(0.24, startTime);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(Math.min(freq * 7, 5200), startTime);
-    filter.frequency.exponentialRampToValueAtTime(Math.max(freq * 1.4, 320), startTime + duration * 0.85);
-    filter.Q.value = 1.5;
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc1.connect(filter);
-    osc2.connect(osc2Gain);
-    osc2Gain.connect(filter);
-    filter.connect(g);
-    g.connect(dest);
-
-    if (this.reverbSend && reverbAmount > 0) {
-      const send = ctx.createGain();
-      send.gain.setValueAtTime(reverbAmount, startTime);
-      g.connect(send);
-      send.connect(this.reverbSend);
+    if (surface === 'wood') {
+      this._sfxTone(158 * pitch, 78 * pitch, 0.072, 'triangle', 0.062, now, dest);
+      this._sfxTone(340 * pitch, 220 * pitch, 0.048, 'sine', 0.022, now, dest);
+      this.playNoiseBurst(0.042, 'lowpass', 720 * pitch, 420 * pitch, 1.0, 0.024, now, dest);
+      return;
     }
 
-    osc1.start(startTime);
-    osc2.start(startTime);
-    osc1.stop(startTime + duration + 0.05);
-    osc2.stop(startTime + duration + 0.05);
-  }
-
-  // 琵琶脆拨（起音锐利、颗粒感强）
-  _voicePipa(ctx, dest, freq, startTime, duration = 0.45, gainVal = 0.15) {
-    const osc = ctx.createOscillator();
-    const filter = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(freq * 1.008, startTime);
-    osc.frequency.exponentialRampToValueAtTime(freq, startTime + 0.03);
-
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(Math.min(freq * 3.2, 4200), startTime);
-    filter.Q.value = 1.6;
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc.connect(filter);
-    filter.connect(g);
-    g.connect(dest);
-    if (this.reverbSend) {
-      const send = ctx.createGain();
-      send.gain.setValueAtTime(0.25, startTime);
-      g.connect(send);
-      send.connect(this.reverbSend);
+    if (surface === 'dirt') {
+      this.playNoiseBurst(0.072, 'bandpass', 1450 * pitch, 980 * pitch, 1.4, 0.052, now, dest);
+      this.playNoiseBurst(0.052, 'bandpass', 2550 * pitch, 1650 * pitch, 2.1, 0.028, now + 0.016, dest);
+      this._sfxTone(112 * pitch, 62 * pitch, 0.048, 'sine', 0.026, now, dest);
+      return;
     }
 
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.04);
-  }
-
-  // 洞箫 / 竹笛（缓起音、气声质感、柔和颤音）
-  _voiceXiaoFlute(ctx, dest, freq, startTime, duration = 2.4, gainVal = 0.13) {
-    const osc = ctx.createOscillator();
-    const vib = ctx.createOscillator();
-    const vibGain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq * 0.985, startTime);
-    osc.frequency.linearRampToValueAtTime(freq, startTime + 0.22);
-
-    vib.type = 'sine';
-    vib.frequency.setValueAtTime(5.1, startTime);
-    vibGain.gain.setValueAtTime(0, startTime);
-    vibGain.gain.linearRampToValueAtTime(freq * 0.012, startTime + 0.65);
-    vib.connect(vibGain);
-    vibGain.connect(osc.frequency);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1600, startTime);
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.45);
-    g.gain.setValueAtTime(gainVal * 0.88, startTime + duration * 0.65);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc.connect(filter);
-    filter.connect(g);
-    g.connect(dest);
-
-    if (this.reverbSend) {
-      const send = ctx.createGain();
-      send.gain.setValueAtTime(0.55, startTime);
-      g.connect(send);
-      send.connect(this.reverbSend);
+    if (surface === 'swamp') {
+      this._sfxTone(106 * pitch, 52 * pitch, 0.09, 'sine', 0.046, now, dest);
+      this.playNoiseBurst(0.105, 'bandpass', 920 * pitch, 320 * pitch, 3.6, 0.048, now, dest);
+      return;
     }
 
-    // 轻微气声
-    if (this.noiseBuffer) {
-      const nSrc = ctx.createBufferSource();
-      nSrc.buffer = this.noiseBuffer;
-      const nBp = ctx.createBiquadFilter();
-      nBp.type = 'bandpass';
-      nBp.frequency.setValueAtTime(freq * 2, startTime);
-      nBp.Q.value = 5.0;
-      const nGain = ctx.createGain();
-      nGain.gain.setValueAtTime(0.0001, startTime);
-      nGain.gain.linearRampToValueAtTime(gainVal * 0.14, startTime + 0.35);
-      nGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-      nSrc.connect(nBp);
-      nBp.connect(nGain);
-      nGain.connect(dest);
-      nSrc.start(startTime);
-      nSrc.stop(startTime + duration + 0.05);
-    }
-
-    osc.start(startTime);
-    vib.start(startTime);
-    osc.stop(startTime + duration + 0.05);
-    vib.stop(startTime + duration + 0.05);
+    // Default 'stone'
+    this.playNoiseBurst(0.046, 'bandpass', 1080 * pitch, 760 * pitch, 1.9, 0.048, now, dest);
+    this._sfxTone(205 * pitch, 108 * pitch, 0.046, 'triangle', 0.04, now, dest);
   }
 
-  // 空灵编钟 / 金属风铃
-  _voiceChime(ctx, dest, freq, startTime, duration = 2.0, gainVal = 0.08, reverbAmount = 0.55) {
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const g = ctx.createGain();
-
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(freq, startTime);
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(freq * 2.756, startTime); // 金属非谐波泛音
-
-    const g2 = ctx.createGain();
-    g2.gain.setValueAtTime(0.22, startTime);
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc1.connect(g);
-    osc2.connect(g2);
-    g2.connect(g);
-    g.connect(dest);
-
-    if (this.reverbSend && reverbAmount > 0) {
-      const send = ctx.createGain();
-      send.gain.setValueAtTime(reverbAmount, startTime);
-      g.connect(send);
-      send.connect(this.reverbSend);
-    }
-
-    osc1.start(startTime);
-    osc2.start(startTime);
-    osc1.stop(startTime + duration + 0.05);
-    osc2.stop(startTime + duration + 0.05);
-  }
-
-  // 太鼓 / 朱印落印重鼓
-  _voiceTaiko(ctx, dest, startTime, startFreq = 140, endFreq = 45, duration = 0.45, gainVal = 0.35) {
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(startFreq, startTime);
-    osc.frequency.exponentialRampToValueAtTime(endFreq, startTime + Math.min(0.18, duration * 0.5));
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc.connect(g);
-    g.connect(dest);
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.05);
-
-    // 鼓皮冲击瞬态噪声
-    if (this.noiseBuffer) {
-      const nSrc = ctx.createBufferSource();
-      nSrc.buffer = this.noiseBuffer;
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.setValueAtTime(750, startTime);
-      const ng = ctx.createGain();
-      ng.gain.setValueAtTime(gainVal * 0.32, startTime);
-      ng.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.075);
-      nSrc.connect(lp);
-      lp.connect(ng);
-      ng.connect(dest);
-      nSrc.start(startTime);
-      nSrc.stop(startTime + 0.09);
-    }
-  }
-
-  // 木鱼 / 鼓边击打
-  _voiceWoodClick(ctx, dest, startTime, freq = 820, gainVal = 0.08) {
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, startTime);
-    osc.frequency.exponentialRampToValueAtTime(freq * 0.62, startTime + 0.045);
-
-    g.gain.setValueAtTime(gainVal, startTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.06);
-
-    osc.connect(g);
-    g.connect(dest);
-    osc.start(startTime);
-    osc.stop(startTime + 0.07);
-  }
-
-  // 高频金属沙锤 / 踩镲
-  _voiceHiHat(ctx, dest, startTime, gainVal = 0.045) {
-    if (!this.noiseBuffer) return;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.setValueAtTime(6200, startTime);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(gainVal, startTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.05);
-
-    src.connect(hp);
-    hp.connect(g);
-    g.connect(dest);
-    src.start(startTime);
-    src.stop(startTime + 0.06);
-  }
-
-  // 荒野科幻脉冲
-  _voiceSciFiPulse(ctx, dest, freq, startTime, duration = 0.45, gainVal = 0.09) {
-    const osc = ctx.createOscillator();
-    const filter = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(freq, startTime);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(900, startTime);
-    filter.frequency.exponentialRampToValueAtTime(160, startTime + duration);
-    filter.Q.value = 3.5;
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc.connect(filter);
-    filter.connect(g);
-    g.connect(dest);
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.04);
-  }
-
-  // 战斗科幻低音贝斯
-  _voiceSciFiBass(ctx, dest, freq, startTime, duration = 0.19, gainVal = 0.18) {
-    const osc = ctx.createOscillator();
-    const sub = ctx.createOscillator();
-    const filter = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(freq, startTime);
-    sub.type = 'sine';
-    sub.frequency.setValueAtTime(freq, startTime);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(640, startTime);
-    filter.frequency.exponentialRampToValueAtTime(180, startTime + duration);
-    filter.Q.value = 2.8;
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc.connect(filter);
-    sub.connect(filter);
-    filter.connect(g);
-    g.connect(dest);
-
-    osc.start(startTime);
-    sub.start(startTime);
-    osc.stop(startTime + duration + 0.03);
-    sub.stop(startTime + duration + 0.03);
-  }
-
-  // 战斗锐利主音叠加
-  _voiceBattleLead(ctx, dest, freq, startTime, duration = 0.3, gainVal = 0.085) {
-    const osc = ctx.createOscillator();
-    const filter = ctx.createBiquadFilter();
-    const g = ctx.createGain();
-
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(freq, startTime);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2200, startTime);
-    filter.frequency.exponentialRampToValueAtTime(650, startTime + duration);
-
-    g.gain.setValueAtTime(0.0001, startTime);
-    g.gain.linearRampToValueAtTime(gainVal, startTime + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-    osc.connect(filter);
-    filter.connect(g);
-    g.connect(dest);
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.04);
+  uiTick() {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    this._sfxTone(760, 520, 0.038, 'triangle', 0.034, now, dest);
+    this._sfxTone(NOTE.D6, NOTE.D6, 0.088, 'sine', 0.02, now + 0.006, dest);
   }
 }
 

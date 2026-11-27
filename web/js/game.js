@@ -29,7 +29,7 @@ import {
   WORLD_LORE_ENTRIES
 } from './data.js?v=27';
 import { InkWorldEngine } from './rpg_world.js?v=27';
-import { sfx } from './audio.js?v=6';
+import { sfx } from './audio.js?v=28';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';
 
@@ -658,7 +658,15 @@ function tryUnlockRegion(regionId, silent = false) {
 
 function getBgmTrackForMap(mapId) {
   const id = String(mapId || state.mapId || 'town');
-  return id === 'town' || id.startsWith('interior_') ? 'town' : 'wild';
+  if (id === 'town') return 'town';
+  if (id.startsWith('interior_')) return 'interior';
+  if (id.startsWith('cave_')) return 'cave';
+  if (id === 'wasteland') return 'wasteland';
+  if (id === 'ruins') return 'ruins';
+  if (id === 'arsenal') return 'arsenal';
+  if (id === 'swamp') return 'swamp';
+  if (id === 'vault') return 'vault';
+  return 'wasteland';
 }
 
 function isStudioSplashActive() {
@@ -2538,7 +2546,7 @@ function startBattle(worldEnemy, skipPreCutscene = false) {
   updateBattleUI();
   startBattleAmbient();
   sfx.alarm();
-  sfx.playBgm?.('battle');
+  sfx.playBgm?.(tpl.isBoss ? 'boss' : 'battle');
 }
 
 function closeBattle() {
@@ -2937,6 +2945,7 @@ function runEnemyTurn(prevLogs = []) {
       triggerBattleLunge(false);
       triggerHitAnim(false, isSpecial);
       spawnBattleSlashVfx('hero', 'enemy');
+      sfx.playEnemyAttackSfx?.(tpl);
       if (rawDmg > 0) {
         spawnBattleDmgNum('hero', isSpecial ? `${tpl.specialName || '重创'} -${rawDmg}` : `-${rawDmg}`, 'enemy-hit');
       } else if (absorbed > 0) {
@@ -3011,7 +3020,9 @@ function battlePlayerAttack() {
 
   triggerBattleLunge(true);
   const { impactMs, totalMs } = spawnBattleCombatVfx(branch, { isCrit });
-  if (typeof sfx.playCombatSfx === 'function') {
+  if (typeof sfx.playBasicAttackSfx === 'function') {
+    sfx.playBasicAttackSfx(state.equipped?.weapon);
+  } else if (typeof sfx.playCombatSfx === 'function') {
     sfx.playCombatSfx(branch, isHeavy);
   } else {
     sfx.disassemble(true, isCrit);
@@ -3091,7 +3102,7 @@ function battleUseSkill(skill) {
       battle.heroShield += sh;
       battle.dmgReduceTurns = 2;
       spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
-      sfx.pick('rare');
+      sfx.playSkillSfx?.(skill.id, skill.branch || skill.category || 'mystic');
       logs.push(`${flavorPrefix}施展【${skill.name}】，获得 ${sh} 点护盾并减伤 30%！`);
     } else if (skill.selfBuff === 'overdrive') {
       const sh = skill.baseShield || 65;
@@ -3099,7 +3110,7 @@ function battleUseSkill(skill) {
       battle.overdriveTurns = 3;
       spawnBattleDmgNum('hero', `护盾 +${sh}`, 'shield');
       spawnBattleDmgNum('hero', '狂涌 +30%', 'mystic', { offsetY: -30 });
-      sfx.pick('legend');
+      sfx.playSkillSfx?.(skill.id, skill.branch || skill.category || 'mecha');
       logs.push(`${flavorPrefix}启动【${skill.name}】，护盾 +${sh}，3 回合内攻击 +30%！`);
     } else if (skill.selfBuff === 'heal') {
       const heal = Math.round(stats.maxHp * (skill.healPct || 0.45));
@@ -3109,7 +3120,7 @@ function battleUseSkill(skill) {
         battle.heroStatus.poison = 0;
       }
       spawnBattleDmgNum('hero', `+${heal} HP`, 'heal');
-      sfx.pick('fine');
+      sfx.playSkillSfx?.(skill.id, skill.branch || skill.category || 'mystic');
       logs.push(`${flavorPrefix}运转【${skill.name}】，恢复 ${heal} 气血并净化负面状态！`);
     }
 
@@ -3140,7 +3151,9 @@ function battleUseSkill(skill) {
   updateBattleUI();
   triggerBattleLunge(true);
   const { impactMs, totalMs } = spawnBattleCombatVfx(branch, { skillId: skill.id, isCrit });
-  if (typeof sfx.playCombatSfx === 'function') {
+  if (typeof sfx.playSkillSfx === 'function') {
+    sfx.playSkillSfx(skill.id, branch);
+  } else if (typeof sfx.playCombatSfx === 'function') {
     sfx.playCombatSfx(branch, isHeavy);
   } else {
     sfx.disassemble(true, true);
@@ -3201,7 +3214,7 @@ function battleAttemptCapture() {
   // ===== Phase 1 — 祭壶飞出 (0ms → 420ms) =====
   triggerBattleLunge(true);
   logBattle(`沈砚挥袖祭出【天工墨壶】！青玉流光破空飞向「${battle.tpl.name}」！`);
-  sfx.pick?.('rare');
+  sfx.playCaptureSfx?.('throw');
 
   let crucibleEl = null;
   let baguaEl = null;
@@ -3229,7 +3242,7 @@ function battleAttemptCapture() {
     if (!battle) { cleanupCaptureVfx(); return; }
     if (crucibleEl) crucibleEl.classList.add('is-hovering');
     logBattle(`泼墨太极大阵展开！倒悬天工墨壶倾泻灵涡，疯狂牵引【${battle.tpl.name}】妖魂！`);
-    sfx.playCombatSfx?.('mystic', false);
+    sfx.playCaptureSfx?.('vortex');
 
     if (container) {
       baguaEl = document.createElement('div');
@@ -3271,7 +3284,7 @@ function battleAttemptCapture() {
       if (gameSettings.screenShakeEnabled) {
         triggerClassAnim($('rpg-battle-overlay'), 'screen-shake', 340);
       }
-      sfx.pick?.('legend');
+      sfx.playCaptureSfx?.('success');
 
       if (container) {
         sparksEl = document.createElement('div');
@@ -3308,7 +3321,7 @@ function battleAttemptCapture() {
         setTimeout(() => burst.remove(), 500);
       }
       spawnBattleDmgNum('enemy', '挣脱束缚!', 'capture');
-      sfx.disassemble(false);
+      sfx.playCaptureSfx?.('fail');
       const logs = [`八卦大阵被震碎！${battle.tpl.name}挣脱了天工墨壶束缚！（当前血量 ${Math.round(ratio * 100)}%，压至 ≤40% 成功率极高）`];
       logBattle(logs[0]);
 
