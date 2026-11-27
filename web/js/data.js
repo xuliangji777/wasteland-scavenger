@@ -690,7 +690,8 @@ export const NPCS = {
     options: [
       { text: '进入商铺买卖物资（老黄杂货柜台）', desc: '打开杂货铺交易界面', action: 'shop' },
       { text: '打听同伴「阿哲」的下落', desc: '获取剧情线索与方向提示' },
-      { text: '请求高价收购（声望≥2享+15%溢价）', desc: '立即按当前市价溢价变卖背包物资' }
+      { text: '请求高价收购（声望≥2享+15%溢价）', desc: '立即按当前市价溢价变卖背包物资' },
+      { text: '打探江湖秘闻 · 推进主线', desc: '与老黄深谈停电之夜与墨壶往事（含抉择奖励）', action: 'story_branch' }
     ]
   },
   yaotong: {
@@ -712,7 +713,8 @@ export const NPCS = {
     options: [
       { text: '花 150 金买废土密道图', desc: '立即刷新并强化当前地图搜刮点品质！' },
       { text: '打听防空洞与阿哲踪迹', desc: '推进城郊寻踪线索' },
-      { text: '讨一碗热茶（+25生命 +20内息）', desc: '老鬼看你顺眼，分你半壶热茶' }
+      { text: '讨一碗热茶（+25生命 +20内息）', desc: '老鬼看你顺眼，分你半壶热茶' },
+      { text: '打探江湖秘闻 · 推进主线', desc: '听盲眼老鬼讲述墨甲残骸与防空洞秘辛（含抉择奖励）', action: 'story_branch' }
     ]
   },
   shaobing: {
@@ -734,7 +736,8 @@ export const NPCS = {
     options: [
       { text: '黑市交易（买卖补给与赃物）', desc: '打开商铺界面', action: 'shop' },
       { text: '打听地铁二号线断钢的情报', desc: '了解第二幕首领弱点' },
-      { text: '买一杯烈酒壮胆（+35 内息）', desc: '提振内息再探地铁' }
+      { text: '买一杯烈酒壮胆（+35 内息）', desc: '提振内息再探地铁' },
+      { text: '打探江湖秘闻 · 推进主线', desc: '与三娘对饮，套问废都黑市与阿哲密讯（含抉择奖励）', action: 'story_branch' }
     ]
   },
   tiejiang: {
@@ -745,7 +748,8 @@ export const NPCS = {
     options: [
       { text: '借用炉台开启「天工墨壶」炼化', desc: '打开墨壶炼化界面', action: 'crucible' },
       { text: '拆解军工残骸（打开拆解坊）', desc: '高暴击拆解电器与伺服机', action: 'disassemble' },
-      { text: '打听 B-04 冷却井与祝融七号', desc: '了解第三幕首领机制' }
+      { text: '打听 B-04 冷却井与祝融七号', desc: '了解第三幕首领机制' },
+      { text: '打探江湖秘闻 · 推进主线', desc: '请教兵工秘方与天工墨壶锻造真传（含抉择奖励）', action: 'story_branch' }
     ]
   },
   yinshi: {
@@ -756,7 +760,8 @@ export const NPCS = {
     options: [
       { text: '追问同伴阿哲的近况', desc: '获得东岸草庐与净瘴青莲指引' },
       { text: '以 300 金求购抗辐射秘药', desc: '获得 1 层抗辐射护盾与 +30 生命' },
-      { text: '分享食物与故事（-20饱食，+2声望）', desc: '大幅提升隐士好感' }
+      { text: '分享食物与故事（-20饱食，+2声望）', desc: '大幅提升隐士好感' },
+      { text: '打探江湖秘闻 · 推进主线', desc: '向药翁追问「天枢计划」与墨壶渊源（含抉择奖励）', action: 'story_branch' }
     ]
   },
   azhe: {
@@ -865,7 +870,7 @@ export const MAPS = [
     ],
     obstacles: [],
     portals: [
-      { id: 'town_to_wasteland', x: 465, y: 765, r: 42, to: 'wasteland', spawnX: 175, spawnY: 560, label: '出城大道 · 前往城郊废土' }
+      { id: 'town_to_wasteland', x: 465, y: 765, r: 42, to: 'wasteland', spawnX: 310, spawnY: 1080, label: '出城大道 · 前往城郊废土' }
     ],
     npc: { id: 'laohuang', x: 560, y: 590, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
@@ -931,43 +936,49 @@ export const MAPS = [
     id: 'wasteland', index: 3, regionId: 'reg_town', sceneType: 'wild',
     name: '城郊废土', short: '城郊废土', isSafe: false, unlockCost: 0,
     worldPos: { x: 26, y: 56 }, links: ['town', 'cave_bunker', 'ruins'],
-    width: 1800, height: 1100,
+    width: 3400, height: 2160,
     bgAsset: 'bg_wasteland.jpg', bgTint: null,
-    spawn: { x: 175, y: 560 },
+    spawn: { x: 310, y: 1080 },
     palette: { ground: '#7e6e58', road: '#5f5242', shadow: 'rgba(24,20,16,0.38)', accent: '#c89b3c', mist: 'rgba(204,184,150,0.14)' },
     weatherPool: [0, 3, 4],
-    desc: '浓淡墨色笼罩的城郊荒原，北侧塌坡隐藏着战前防空洞铁门，东行可抵铁锈废都。',
+    desc: '浓淡墨色笼罩的辽阔城郊荒原，东北深处塌坡隐藏着战前防空洞铁门，向东长途跋涉可抵铁锈废都。',
     weight: [28, 22, 18, 12, 6, 3, 1, 0, 0, 0, 0, 0, 0, 5, 4, 0, 0, 0, 0, 0, 6, 5, 3, 0, 1, 5, 2, 0, 0, 0, 3, 2, 1, 0, 0, 0, 0, 0],
     buildings: [],
     obstacles: [
-      { id: 'wl_wreck_1', type: 'car_wreck', x: 380,  y: 260, w: 145, h: 74, label: '生锈卡车' },
-      { id: 'wl_wall_1',  type: 'ruin_wall', x: 640,  y: 205, w: 165, h: 64, label: '残垣断壁' },
-      { id: 'wl_tree_1',  type: 'ink_tree',  x: 1190, y: 255, w: 72,  h: 56, label: '焦枯老树' },
-      { id: 'wl_wreck_2', type: 'car_wreck', x: 520,  y: 740, w: 155, h: 78, label: '倾覆公交' },
-      { id: 'wl_rock_1',  type: 'boulder',   x: 1020, y: 690, w: 130, h: 86, label: '风化岩堆' },
-      { id: 'wl_wall_2',  type: 'ruin_wall', x: 1380, y: 770, w: 170, h: 66, label: '塌陷砖墙' }
+      { id: 'wl_wreck_1', type: 'car_wreck', x: 680,  y: 460,  w: 170, h: 86, label: '生锈卡车' },
+      { id: 'wl_wall_1',  type: 'ruin_wall', x: 1320, y: 380,  w: 200, h: 74, label: '残垣断壁' },
+      { id: 'wl_tree_1',  type: 'ink_tree',  x: 2180, y: 470,  w: 86,  h: 68, label: '焦枯老树' },
+      { id: 'wl_wreck_2', type: 'car_wreck', x: 860,  y: 1520, w: 185, h: 88, label: '倾覆公交' },
+      { id: 'wl_rock_1',  type: 'boulder',   x: 1880, y: 1460, w: 155, h: 96, label: '风化岩堆' },
+      { id: 'wl_wall_2',  type: 'ruin_wall', x: 2560, y: 1540, w: 195, h: 76, label: '塌陷砖墙' }
     ],
     portals: [
-      { id: 'wl_to_town',   x: 90,   y: 560, r: 44, to: 'town',        spawnX: 525, spawnY: 750, label: '返回 墨石镇' },
-      { id: 'wl_to_bunker', x: 930,  y: 145, r: 46, to: 'cave_bunker', spawnX: 215, spawnY: 630, label: '潜入 城郊废弃防空洞' },
-      { id: 'wl_to_ruins',  x: 1705, y: 540, r: 44, to: 'ruins',       spawnX: 175, spawnY: 560, label: '前往 铁锈废都街区' }
+      { id: 'wl_to_town',   x: 215,  y: 1080, r: 44, to: 'town',        spawnX: 525,  spawnY: 750,  label: '返回 墨石镇' },
+      { id: 'wl_to_bunker', x: 2880, y: 470,  r: 46, to: 'cave_bunker', spawnX: 340,  spawnY: 1220, label: '潜入 城郊废弃防空洞' },
+      { id: 'wl_to_ruins',  x: 3165, y: 1080, r: 44, to: 'ruins',       spawnX: 310,  spawnY: 1080, label: '前往 铁锈废都街区' }
     ],
-    npc: { id: 'laogui', x: 640, y: 425, facing: 'down' },
+    npc: { id: 'laogui', x: 1020, y: 860, facing: 'down' },
     enemySpawns: [
-      { enemyId: 'rat', x: 450,  y: 620, patrolR: 110, speed: 78 },
-      { enemyId: 'rat', x: 940,  y: 370, patrolR: 120, speed: 82 },
-      { enemyId: 'dog', x: 1260, y: 565, patrolR: 135, speed: 95 },
-      { enemyId: 'rat', x: 820,  y: 780, patrolR: 115, speed: 80 }
+      { enemyId: 'rat', x: 760,  y: 1240, patrolR: 150, speed: 78 },
+      { enemyId: 'rat', x: 1480, y: 760,  patrolR: 165, speed: 82 },
+      { enemyId: 'dog', x: 1820, y: 1120, patrolR: 180, speed: 95 },
+      { enemyId: 'rat', x: 1380, y: 1560, patrolR: 160, speed: 80 },
+      { enemyId: 'dog', x: 2380, y: 820,  patrolR: 175, speed: 94 },
+      { enemyId: 'dog', x: 2420, y: 1340, patrolR: 170, speed: 96 },
+      { enemyId: 'rat', x: 2860, y: 1080, patrolR: 155, speed: 86 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'wl_loot_1', x: 310,  y: 440, r: 34, name: '路边废品堆', type: 'scrap_pile', respawnSec: 18 },
-      { id: 'wl_loot_2', x: 520,  y: 295, r: 34, name: '破损报亭',   type: 'crate',      respawnSec: 20 },
-      { id: 'wl_loot_3', x: 1240, y: 310, r: 34, name: '旧车后备箱', type: 'car_loot',   respawnSec: 22 },
-      { id: 'wl_loot_4', x: 1350, y: 745, r: 34, name: '断桥钢索堆', type: 'scrap_pile', respawnSec: 22 },
-      { id: 'wl_loot_5', x: 525,  y: 895, r: 34, name: '倾覆货柜',   type: 'crate',      respawnSec: 24 },
-      { id: 'wl_loot_6', x: 1255, y: 880, r: 34, name: '战前邮筒',   type: 'relic_spot', respawnSec: 26 },
-      { id: 'wl_cannon', x: 1520, y: 450, r: 40, name: '废弃防空重炮', type: 'abandoned_cannon', salvageElite: 'auto_turret', equipPool: ['wpn_flaregun', 'mech_steam_core'], respawnSec: 45 }
+      { id: 'wl_loot_1', x: 560,  y: 740,  r: 34, name: '路边废品堆',   type: 'scrap_pile', respawnSec: 18 },
+      { id: 'wl_loot_2', x: 1080, y: 360,  r: 34, name: '破损报亭',     type: 'crate',      respawnSec: 20 },
+      { id: 'wl_loot_3', x: 1980, y: 310,  r: 34, name: '旧车后备箱',   type: 'car_loot',   respawnSec: 22 },
+      { id: 'wl_loot_4', x: 2220, y: 1790, r: 34, name: '断桥钢索堆',   type: 'scrap_pile', respawnSec: 22 },
+      { id: 'wl_loot_5', x: 680,  y: 1760, r: 34, name: '倾覆货柜',     type: 'crate',      respawnSec: 24 },
+      { id: 'wl_loot_6', x: 1540, y: 1880, r: 34, name: '战前邮筒',     type: 'relic_spot', respawnSec: 26 },
+      { id: 'wl_loot_7', x: 2540, y: 420,  r: 34, name: '东北边陲补给箱', type: 'crate',    respawnSec: 26 },
+      { id: 'wl_loot_8', x: 2820, y: 1680, r: 34, name: '荒原隐秘铁匣', type: 'relic_spot', respawnSec: 28 },
+      { id: 'wl_loot_9', x: 3040, y: 760,  r: 34, name: '东境哨卡弹药箱', type: 'tech_cache', respawnSec: 28 },
+      { id: 'wl_cannon', x: 2980, y: 1380, r: 40, name: '废弃防空重炮', type: 'abandoned_cannon', salvageElite: 'auto_turret', equipPool: ['wpn_flaregun', 'mech_steam_core'], respawnSec: 45 }
     ],
     hasWarn: false, hasTide: false, hasChem: false
   },
@@ -977,32 +988,36 @@ export const MAPS = [
     id: 'cave_bunker', index: 4, regionId: 'reg_town', sceneType: 'cave',
     name: '城郊废弃防空洞', short: '防空洞', isSafe: false, unlockCost: 0,
     worldPos: { x: 26, y: 46 }, links: ['wasteland'],
-    width: 1200, height: 850,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(40, 32, 24, 0.22)',
-    spawn: { x: 215, y: 630 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#383028', road: '#2b241d', shadow: 'rgba(10,8,6,0.52)', accent: '#d49a3a', mist: 'rgba(90,78,62,0.16)' },
     weatherPool: [0],
-    desc: '潮湿阴暗的战前人防掩体，深处盘踞着「墨尾巨鼠王」，藏有阿哲遗落的旧手表与高爆率宝箱。',
+    desc: '纵深幽长的战前人防掩体，东北深处盘踞着「墨尾巨鼠王」，藏有阿哲遗落的旧手表与高爆率宝箱。',
     weight: [14, 14, 16, 14, 10, 8, 4, 2, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0, 0, 0, 6, 5, 5, 1, 2, 12, 4, 0, 0, 0, 5, 4, 3, 1, 0, 0, 0, 0],
     buildings: [],
     obstacles: [
-      { id: 'cb_rock_1', type: 'boulder',   x: 370, y: 240, w: 120, h: 95, label: '塌方石柱' },
-      { id: 'cb_rock_2', type: 'boulder',   x: 690, y: 500, w: 135, h: 95, label: '人防混凝土墩' },
-      { id: 'cb_crate',  type: 'crate_stack', x: 240, y: 460, w: 90, h: 70, label: '废弃弹药箱' }
+      { id: 'cb_rock_1', type: 'boulder',     x: 740,  y: 460,  w: 155, h: 110, label: '塌方石柱' },
+      { id: 'cb_rock_2', type: 'boulder',     x: 1380, y: 1020, w: 165, h: 110, label: '人防混凝土墩' },
+      { id: 'cb_crate',  type: 'crate_stack', x: 1720, y: 520,  w: 120, h: 90,  label: '废弃弹药箱' }
     ],
     portals: [
-      { id: 'bunker_exit', x: 145, y: 670, r: 44, to: 'wasteland', spawnX: 930, spawnY: 215, label: '离开防空洞 · 返回城郊' }
+      { id: 'bunker_exit', x: 230, y: 1280, r: 44, to: 'wasteland', spawnX: 2880, spawnY: 560, label: '离开防空洞 · 返回城郊' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'rat', x: 515, y: 550, patrolR: 95, speed: 82 },
-      { enemyId: 'dog', x: 635, y: 330, patrolR: 105, speed: 92 }
+      { enemyId: 'rat', x: 780,  y: 1080, patrolR: 130, speed: 82 },
+      { enemyId: 'dog', x: 1180, y: 720,  patrolR: 140, speed: 92 },
+      { enemyId: 'rat', x: 1580, y: 1140, patrolR: 135, speed: 86 },
+      { enemyId: 'dog', x: 1860, y: 780,  patrolR: 145, speed: 94 }
     ],
-    bossSpawn: { enemyId: 'boss_ratking', x: 960, y: 215, patrolR: 55, speed: 60 },
+    bossSpawn: { enemyId: 'boss_ratking', x: 2240, y: 420, patrolR: 75, speed: 62 },
     lootZones: [
-      { id: 'cb_loot_1', x: 335, y: 460, r: 34, name: '掩体遗珍箱', type: 'vault_box',  respawnSec: 30 },
-      { id: 'cb_loot_2', x: 600, y: 645, r: 34, name: '应急补给柜', type: 'crate',      respawnSec: 28 },
-      { id: 'cb_loot_3', x: 910, y: 375, r: 34, name: '鼠王藏宝窝', type: 'relic_spot', respawnSec: 32 }
+      { id: 'cb_loot_1', x: 560,  y: 660,  r: 34, name: '掩体遗珍箱',   type: 'vault_box',  respawnSec: 30 },
+      { id: 'cb_loot_2', x: 1080, y: 1360, r: 34, name: '应急补给柜',   type: 'crate',      respawnSec: 28 },
+      { id: 'cb_loot_3', x: 1480, y: 380,  r: 34, name: '防空配电铁匣', type: 'tech_cache', respawnSec: 30 },
+      { id: 'cb_loot_4', x: 1960, y: 1340, r: 34, name: '地下战备箱',   type: 'crate',      respawnSec: 30 },
+      { id: 'cb_loot_5', x: 2260, y: 740,  r: 34, name: '鼠王藏宝窝',   type: 'relic_spot', respawnSec: 32 }
     ],
     hasWarn: false, hasTide: false, hasChem: false
   },
@@ -1012,51 +1027,57 @@ export const MAPS = [
     id: 'ruins', index: 5, regionId: 'reg_ruins', sceneType: 'wild',
     name: '铁锈废都街区', short: '铁锈废都', isSafe: false, unlockCost: 1200,
     worldPos: { x: 38, y: 36 }, links: ['wasteland', 'interior_tavern', 'cave_metro', 'arsenal', 'town'],
-    width: 1800, height: 1100,
+    width: 3400, height: 2160,
     bgAsset: 'bg_ruins.jpg', bgTint: null,
-    spawn: { x: 175, y: 560 },
+    spawn: { x: 310, y: 1080 },
     palette: { ground: '#4a525c', road: '#343a42', shadow: 'rgba(15,18,24,0.44)', accent: '#8ca0b5', mist: 'rgba(130,148,168,0.16)' },
     weatherPool: [0, 2, 4],
-    desc: '坍塌商街与铁爪帮关卡交错，西侧设有可步入的黑市酒馆，北侧通向地铁二号线幽暗隧道。',
+    desc: '坍塌商街与铁爪帮关卡纵横交错，西侧设有可步入的黑市酒馆，东北深处通向地铁二号线幽暗隧道。',
     weight: [6, 8, 10, 12, 14, 14, 8, 6, 4, 4, 0, 0, 12, 4, 6, 12, 10, 0, 4, 0, 4, 4, 4, 2, 3, 1, 6, 5, 2, 0, 2, 2, 3, 3, 2, 2, 2, 1],
     buildings: [
       {
         id: 'tavern', name: '废都黑市酒馆', sign: '酒馆',
-        x: 250, y: 170, w: 245, h: 135, roofH: 76,
-        doorX: 372, doorY: 325, action: 'enter_map', targetMap: 'interior_tavern', targetSpawnX: 500, targetSpawnY: 565,
+        x: 620, y: 400, w: 260, h: 140, roofH: 76,
+        doorX: 750, doorY: 560, action: 'enter_map', targetMap: 'interior_tavern', targetSpawnX: 500, targetSpawnY: 565,
         style: 'timber_shop', desc: '步入废都黑市酒馆，采购烟雾弹与打探地铁密道。'
       }
     ],
     obstacles: [
-      { id: 'ru_girder',    type: 'steel_beam', x: 640,  y: 245, w: 180, h: 72,  label: '锈蚀钢架' },
-      { id: 'ru_factory',   type: 'ruin_block', x: 1200, y: 180, w: 230, h: 130, label: '坍塌百货' },
-      { id: 'ru_barricade', type: 'barricade',  x: 540,  y: 640, w: 150, h: 64,  label: '铁爪帮路障' },
-      { id: 'ru_pillar',    type: 'ruin_wall',  x: 1030, y: 690, w: 180, h: 86,  label: '高架桥墩' },
-      { id: 'ru_crane',     type: 'steel_beam', x: 1410, y: 760, w: 160, h: 82,  label: '倒塌广告牌' }
+      { id: 'ru_girder',    type: 'steel_beam', x: 1260, y: 440,  w: 210, h: 80,  label: '锈蚀钢架' },
+      { id: 'ru_factory',   type: 'ruin_block', x: 2120, y: 410,  w: 250, h: 140, label: '坍塌百货' },
+      { id: 'ru_barricade', type: 'barricade',  x: 1020, y: 1420, w: 180, h: 72,  label: '铁爪帮路障' },
+      { id: 'ru_pillar',    type: 'ruin_wall',  x: 1860, y: 1460, w: 205, h: 92,  label: '高架桥墩' },
+      { id: 'ru_crane',     type: 'steel_beam', x: 2580, y: 1480, w: 185, h: 88,  label: '倒塌广告牌' }
     ],
     portals: [
-      { id: 'ruins_to_wl',      x: 90,   y: 560, r: 44, to: 'wasteland',  spawnX: 1620, spawnY: 540, label: '返回 城郊废土' },
-      { id: 'ruins_to_metro',   x: 960,  y: 145, r: 46, to: 'cave_metro', spawnX: 235,  spawnY: 665, label: '潜入 地铁二号线隧道' },
-      { id: 'ruins_to_crypt',   x: 740,  y: 965, r: 44, to: 'cave_crypt', spawnX: 225,  spawnY: 630, label: '探入 旧城古墓密室（妖灵）' },
-      { id: 'ruins_to_arsenal', x: 1705, y: 540, r: 44, to: 'arsenal',    spawnX: 175,  spawnY: 560, label: '前往 赤焰兵工废墟' },
-      { id: 'ruins_to_town',    x: 420,  y: 880, r: 42, to: 'town',       spawnX: 780,  spawnY: 615, label: '驿站捷径 · 返回墨石镇' }
+      { id: 'ruins_to_wl',      x: 215,  y: 1080, r: 44, to: 'wasteland',  spawnX: 3040, spawnY: 1080, label: '返回 城郊废土' },
+      { id: 'ruins_to_metro',   x: 2880, y: 470,  r: 46, to: 'cave_metro', spawnX: 340,  spawnY: 1220, label: '潜入 地铁二号线隧道' },
+      { id: 'ruins_to_crypt',   x: 2440, y: 1870, r: 44, to: 'cave_crypt', spawnX: 340,  spawnY: 1220, label: '探入 旧城古墓密室（妖灵）' },
+      { id: 'ruins_to_arsenal', x: 3165, y: 1080, r: 44, to: 'arsenal',    spawnX: 310,  spawnY: 1080, label: '前往 赤焰兵工废墟' },
+      { id: 'ruins_to_town',    x: 780,  y: 1720, r: 42, to: 'town',       spawnX: 780,  spawnY: 615,  label: '驿站捷径 · 返回墨石镇' }
     ],
-    npc: { id: 'shaobing', x: 865, y: 475, facing: 'left' },
+    npc: { id: 'shaobing', x: 1180, y: 880, facing: 'left' },
     enemySpawns: [
-      { enemyId: 'dog',           x: 450,  y: 480, patrolR: 115, speed: 96 },
-      { enemyId: 'raider',        x: 790,  y: 665, patrolR: 130, speed: 92 },
-      { enemyId: 'raider_shield', x: 1160, y: 430, patrolR: 120, speed: 84 },
-      { enemyId: 'auto_turret',   x: 1460, y: 610, patrolR: 55,  speed: 42 }
+      { enemyId: 'dog',           x: 780,  y: 920,  patrolR: 155, speed: 96 },
+      { enemyId: 'raider',        x: 1380, y: 1260, patrolR: 170, speed: 92 },
+      { enemyId: 'raider_shield', x: 1860, y: 760,  patrolR: 165, speed: 84 },
+      { enemyId: 'auto_turret',   x: 2340, y: 1140, patrolR: 70,  speed: 44 },
+      { enemyId: 'raider',        x: 1640, y: 1620, patrolR: 160, speed: 92 },
+      { enemyId: 'raider_shield', x: 2580, y: 780,  patrolR: 165, speed: 86 },
+      { enemyId: 'auto_turret',   x: 2880, y: 1280, patrolR: 70,  speed: 44 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'ru_loot_1', x: 345,  y: 435, r: 34, name: '地铁口闸机', type: 'tech_cache', respawnSec: 20 },
-      { id: 'ru_loot_2', x: 565,  y: 290, r: 34, name: '破损ATM机',  type: 'vault_box',  respawnSec: 24 },
-      { id: 'ru_loot_3', x: 1140, y: 285, r: 34, name: '钟表行橱窗', type: 'relic_spot', respawnSec: 24 },
-      { id: 'ru_loot_4', x: 1430, y: 300, r: 34, name: '铁爪帮赃箱', type: 'crate',      respawnSec: 25 },
-      { id: 'ru_loot_5', x: 430,  y: 810, r: 34, name: '废弃配电室', type: 'tech_cache', respawnSec: 22 },
-      { id: 'ru_loot_6', x: 945,  y: 865, r: 34, name: '地下通道铁箱', type: 'crate',    respawnSec: 25 },
-      { id: 'ru_loot_7', x: 1380, y: 860, r: 34, name: '废弃反装甲炮', type: 'abandoned_cannon', salvageElite: 'auto_turret', equipPool: ['wpn_shotgun', 'wpn_sniper', 'mech_steam_core'], respawnSec: 45 }
+      { id: 'ru_loot_1',  x: 560,  y: 740,  r: 34, name: '地铁口闸机',   type: 'tech_cache', respawnSec: 20 },
+      { id: 'ru_loot_2',  x: 1120, y: 320,  r: 34, name: '破损ATM机',    type: 'vault_box',  respawnSec: 24 },
+      { id: 'ru_loot_3',  x: 1860, y: 290,  r: 34, name: '钟表行橱窗',   type: 'relic_spot', respawnSec: 24 },
+      { id: 'ru_loot_4',  x: 2560, y: 410,  r: 34, name: '铁爪帮赃箱',   type: 'crate',      respawnSec: 25 },
+      { id: 'ru_loot_5',  x: 620,  y: 1620, r: 34, name: '废弃配电室',   type: 'tech_cache', respawnSec: 22 },
+      { id: 'ru_loot_6',  x: 1460, y: 1880, r: 34, name: '地下通道铁箱', type: 'crate',      respawnSec: 25 },
+      { id: 'ru_loot_8',  x: 2120, y: 1820, r: 34, name: '旧商街金库箱', type: 'vault_box',  respawnSec: 28 },
+      { id: 'ru_loot_9',  x: 3040, y: 760,  r: 34, name: '东街岗亭密匣', type: 'relic_spot', respawnSec: 28 },
+      { id: 'ru_loot_10', x: 3020, y: 1420, r: 34, name: '战前通讯机柜', type: 'tech_cache', respawnSec: 28 },
+      { id: 'ru_loot_7',  x: 2860, y: 1680, r: 40, name: '废弃反装甲炮', type: 'abandoned_cannon', salvageElite: 'auto_turret', equipPool: ['wpn_shotgun', 'wpn_sniper', 'mech_steam_core'], respawnSec: 45 }
     ],
     hasWarn: true, hasTide: false, hasChem: false
   },
@@ -1081,7 +1102,7 @@ export const MAPS = [
       { id: 'tav_tbl_r', type: 'crate_stack',  x: 765, y: 390, w: 105, h: 95, label: '赌局木桌' }
     ],
     portals: [
-      { id: 'tavern_exit', x: 500, y: 640, r: 44, to: 'ruins', spawnX: 372, spawnY: 365, label: '走出黑市酒馆' }
+      { id: 'tavern_exit', x: 500, y: 640, r: 44, to: 'ruins', spawnX: 750, spawnY: 610, label: '走出黑市酒馆' }
     ],
     npc: { id: 'jiubao', x: 500, y: 325, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
@@ -1093,32 +1114,36 @@ export const MAPS = [
     id: 'cave_metro', index: 7, regionId: 'reg_ruins', sceneType: 'cave',
     name: '地铁二号线幽暗隧道', short: '地铁隧道', isSafe: false, unlockCost: 0,
     worldPos: { x: 38, y: 26 }, links: ['ruins'],
-    width: 1300, height: 900,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(26, 38, 52, 0.36)',
-    spawn: { x: 235, y: 665 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#242e38', road: '#1a222a', shadow: 'rgba(8,12,18,0.56)', accent: '#6da5c0', mist: 'rgba(90,125,155,0.16)' },
     weatherPool: [0],
-    desc: '铁轨歪斜、应急灯闪烁的地下月台，阿哲曾在此宿营。隧道尽头由铁爪帮二当家「断钢」把守。',
+    desc: '铁轨歪斜、应急灯闪烁的纵深地下月台，阿哲曾在此宿营。东北尽头由铁爪帮二当家「断钢」把守。',
     weight: [4, 6, 8, 10, 12, 14, 8, 6, 4, 4, 0, 0, 16, 0, 4, 8, 6, 0, 4, 0, 4, 4, 5, 2, 4, 0, 6, 12, 4, 0, 2, 3, 4, 4, 2, 2, 2, 2],
     buildings: [],
     obstacles: [
-      { id: 'cm_train_1', type: 'car_wreck', x: 380, y: 210, w: 210, h: 90, label: '脱轨地铁车厢' },
-      { id: 'cm_pillar',  type: 'ruin_wall', x: 640, y: 580, w: 180, h: 85, label: '塌陷月台柱' },
-      { id: 'cm_barric',  type: 'barricade', x: 860, y: 260, w: 110, h: 70, label: '铁爪帮沙袋' }
+      { id: 'cm_train_1', type: 'car_wreck', x: 740,  y: 450,  w: 240, h: 105, label: '脱轨地铁车厢' },
+      { id: 'cm_pillar',  type: 'ruin_wall', x: 1360, y: 1020, w: 210, h: 98,  label: '塌陷月台柱' },
+      { id: 'cm_barric',  type: 'barricade', x: 1720, y: 520,  w: 145, h: 86,  label: '铁爪帮沙袋' }
     ],
     portals: [
-      { id: 'metro_exit', x: 155, y: 710, r: 44, to: 'ruins', spawnX: 960, spawnY: 215, label: '爬出地铁口 · 返回废都' }
+      { id: 'metro_exit', x: 230, y: 1280, r: 44, to: 'ruins', spawnX: 2880, spawnY: 560, label: '爬出地铁口 · 返回废都' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'mutant', x: 560, y: 585, patrolR: 110, speed: 88 },
-      { enemyId: 'raider', x: 690, y: 350, patrolR: 110, speed: 94 }
+      { enemyId: 'mutant',        x: 780,  y: 1080, patrolR: 135, speed: 88 },
+      { enemyId: 'raider',        x: 1220, y: 720,  patrolR: 140, speed: 94 },
+      { enemyId: 'raider_shield', x: 1620, y: 1120, patrolR: 135, speed: 86 },
+      { enemyId: 'raider',        x: 1880, y: 780,  patrolR: 140, speed: 94 }
     ],
-    bossSpawn: { enemyId: 'boss_duangang', x: 1040, y: 225, patrolR: 60, speed: 68 },
+    bossSpawn: { enemyId: 'boss_duangang', x: 2240, y: 420, patrolR: 75, speed: 68 },
     lootZones: [
-      { id: 'cm_loot_1', x: 365, y: 485, r: 34, name: '售票机残骸',   type: 'tech_cache', respawnSec: 26 },
-      { id: 'cm_loot_2', x: 650, y: 685, r: 34, name: '阿哲篝火营地', type: 'relic_spot', respawnSec: 30 },
-      { id: 'cm_loot_3', x: 805, y: 250, r: 34, name: '铁爪帮军资箱', type: 'vault_box',  respawnSec: 30 }
+      { id: 'cm_loot_1', x: 560,  y: 660,  r: 34, name: '售票机残骸',   type: 'tech_cache', respawnSec: 26 },
+      { id: 'cm_loot_2', x: 1080, y: 1360, r: 34, name: '阿哲篝火营地', type: 'relic_spot', respawnSec: 30 },
+      { id: 'cm_loot_3', x: 1480, y: 380,  r: 34, name: '铁爪帮军资箱', type: 'vault_box',  respawnSec: 30 },
+      { id: 'cm_loot_4', x: 1960, y: 1340, r: 34, name: '变电站工具柜', type: 'tech_cache', respawnSec: 30 },
+      { id: 'cm_loot_5', x: 2260, y: 740,  r: 34, name: '月台藏赃密匣', type: 'vault_box',  respawnSec: 32 }
     ],
     hasWarn: true, hasTide: false, hasChem: false
   },
@@ -1128,51 +1153,57 @@ export const MAPS = [
     id: 'arsenal', index: 8, regionId: 'reg_arsenal', sceneType: 'wild',
     name: '赤焰兵工废墟', short: '赤焰兵工', isSafe: false, unlockCost: 2400,
     worldPos: { x: 56, y: 66 }, links: ['ruins', 'interior_armory', 'cave_b04', 'swamp', 'town'],
-    width: 1800, height: 1100,
+    width: 3400, height: 2160,
     bgAsset: 'bg_ruins.jpg', bgTint: 'rgba(128, 42, 22, 0.28)',
-    spawn: { x: 175, y: 560 },
+    spawn: { x: 310, y: 1080 },
     palette: { ground: '#593b32', road: '#3e2922', shadow: 'rgba(24,10,8,0.46)', accent: '#e07a42', mist: 'rgba(205,105,65,0.16)' },
     weatherPool: [3, 4, 2],
-    desc: '余烬未熄的战前重工业兵工厂，失控警卫机与赤焰焊工机巡弋其间。东侧军械库可步入借炉炼化，南侧通往 B-04 冷却井。',
+    desc: '余烬未熄的庞大战前重工业兵工厂，失控警卫机与赤焰焊工机巡弋其间。中北侧军械库可步入借炉炼化，东南通往 B-04 冷却井。',
     weight: [3, 4, 6, 10, 12, 14, 10, 10, 8, 8, 3, 1, 0, 4, 4, 2, 2, 0, 16, 0, 3, 3, 4, 4, 3, 0, 1, 3, 5, 1, 1, 2, 2, 2, 3, 2, 2, 2],
     buildings: [
       {
         id: 'armory', name: '战前军械库', sign: '军械',
-        x: 1240, y: 170, w: 245, h: 135, roofH: 78,
-        doorX: 1362, doorY: 325, action: 'enter_map', targetMap: 'interior_armory', targetSpawnX: 500, targetSpawnY: 565,
+        x: 1960, y: 390, w: 260, h: 140, roofH: 78,
+        doorX: 2090, doorY: 550, action: 'enter_map', targetMap: 'interior_armory', targetSpawnX: 500, targetSpawnY: 565,
         style: 'forge', desc: '步入军械库内室，找军工老铁匠开启天工墨壶高阶炼化。'
       }
     ],
     obstacles: [
-      { id: 'ar_furnace_1', type: 'ruin_block', x: 350,  y: 195, w: 210, h: 120, label: '高炉残骸' },
-      { id: 'ar_girder_1',  type: 'steel_beam', x: 770,  y: 235, w: 190, h: 74,  label: '焦黑龙门架' },
-      { id: 'ar_tank_1',    type: 'barricade',  x: 520,  y: 660, w: 165, h: 78,  label: '报废装甲车' },
-      { id: 'ar_pipe_1',    type: 'steel_beam', x: 1120, y: 690, w: 190, h: 80,  label: '蒸汽管道群' },
-      { id: 'ar_wall_se',   type: 'ruin_wall',  x: 1460, y: 775, w: 160, h: 75,  label: '弹药库断墙' }
+      { id: 'ar_furnace_1', type: 'ruin_block', x: 660,  y: 420,  w: 230, h: 130, label: '高炉残骸' },
+      { id: 'ar_girder_1',  type: 'steel_beam', x: 1380, y: 430,  w: 210, h: 82,  label: '焦黑龙门架' },
+      { id: 'ar_tank_1',    type: 'barricade',  x: 1040, y: 1440, w: 190, h: 86,  label: '报废装甲车' },
+      { id: 'ar_pipe_1',    type: 'steel_beam', x: 1920, y: 1460, w: 215, h: 88,  label: '蒸汽管道群' },
+      { id: 'ar_wall_se',   type: 'ruin_wall',  x: 2600, y: 1480, w: 185, h: 84,  label: '弹药库断墙' }
     ],
     portals: [
-      { id: 'ar_to_ruins',  x: 90,   y: 560, r: 44, to: 'ruins',       spawnX: 1620, spawnY: 540, label: '返回 铁锈废都街区' },
-      { id: 'ar_to_hangar', x: 960,  y: 145, r: 46, to: 'cave_hangar', spawnX: 235,  spawnY: 665, label: '潜入 战前战隼机库（机甲/军火）' },
-      { id: 'ar_to_b04',    x: 940,  y: 975, r: 46, to: 'cave_b04',    spawnX: 235,  spawnY: 665, label: '潜入 B-04 地下冷却井' },
-      { id: 'ar_to_swamp',  x: 1705, y: 540, r: 44, to: 'swamp',       spawnX: 175,  spawnY: 580, label: '前往 青瘴辐射沼泽' },
-      { id: 'ar_to_town',   x: 420,  y: 880, r: 42, to: 'town',        spawnX: 780,  spawnY: 615, label: '驿站捷径 · 返回墨石镇' }
+      { id: 'ar_to_ruins',  x: 215,  y: 1080, r: 44, to: 'ruins',       spawnX: 3040, spawnY: 1080, label: '返回 铁锈废都街区' },
+      { id: 'ar_to_hangar', x: 2880, y: 470,  r: 46, to: 'cave_hangar', spawnX: 340,  spawnY: 1220, label: '潜入 战前战隼机库（机甲/军火）' },
+      { id: 'ar_to_b04',    x: 2440, y: 1870, r: 46, to: 'cave_b04',    spawnX: 340,  spawnY: 1220, label: '潜入 B-04 地下冷却井' },
+      { id: 'ar_to_swamp',  x: 3165, y: 1080, r: 44, to: 'swamp',       spawnX: 310,  spawnY: 1080, label: '前往 青瘴辐射沼泽' },
+      { id: 'ar_to_town',   x: 780,  y: 1720, r: 42, to: 'town',        spawnX: 780,  spawnY: 615,  label: '驿站捷径 · 返回墨石镇' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'raider_shield', x: 470,  y: 480, patrolR: 120, speed: 86 },
-      { enemyId: 'auto_turret',   x: 840,  y: 640, patrolR: 55,  speed: 44 },
-      { enemyId: 'flame_mech',    x: 1180, y: 455, patrolR: 130, speed: 96 },
-      { enemyId: 'heavy_mech',    x: 1450, y: 615, patrolR: 115, speed: 84 }
+      { enemyId: 'raider_shield', x: 820,  y: 920,  patrolR: 155, speed: 86 },
+      { enemyId: 'auto_turret',   x: 1460, y: 1260, patrolR: 70,  speed: 44 },
+      { enemyId: 'flame_mech',    x: 1940, y: 820,  patrolR: 170, speed: 96 },
+      { enemyId: 'heavy_mech',    x: 2420, y: 1140, patrolR: 165, speed: 84 },
+      { enemyId: 'flame_mech',    x: 1620, y: 1620, patrolR: 165, speed: 94 },
+      { enemyId: 'auto_turret',   x: 2620, y: 760,  patrolR: 70,  speed: 44 },
+      { enemyId: 'heavy_mech',    x: 2880, y: 1300, patrolR: 155, speed: 86 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'ar_loot_1', x: 340,  y: 435, r: 34, name: '军工伺服机箱', type: 'tech_cache', respawnSec: 22 },
-      { id: 'ar_loot_2', x: 645,  y: 285, r: 34, name: '蓄电池组',     type: 'tech_cache', respawnSec: 24 },
-      { id: 'ar_loot_3', x: 1085, y: 280, r: 34, name: '兵工质检柜',   type: 'vault_box',  respawnSec: 25 },
-      { id: 'ar_loot_4', x: 1435, y: 315, r: 34, name: '狙击镜片箱',   type: 'relic_spot', respawnSec: 26 },
-      { id: 'ar_loot_5', x: 410,  y: 785, r: 40, name: '坠毁重装机甲残骸', type: 'mech_wreck', salvageElite: 'heavy_mech', equipPool: ['mech_crimson_frame', 'wpn_pulsesword', 'armor_exo'], respawnSec: 50 },
-      { id: 'ar_loot_6', x: 780,  y: 865, r: 34, name: '冷却阀工具箱', type: 'crate',      respawnSec: 24 },
-      { id: 'ar_loot_7', x: 1380, y: 855, r: 34, name: '战前黑匣残片', type: 'vault_box',  respawnSec: 28 }
+      { id: 'ar_loot_1',  x: 560,  y: 740,  r: 34, name: '军工伺服机箱',     type: 'tech_cache', respawnSec: 22 },
+      { id: 'ar_loot_2',  x: 1160, y: 320,  r: 34, name: '蓄电池组',         type: 'tech_cache', respawnSec: 24 },
+      { id: 'ar_loot_3',  x: 1760, y: 290,  r: 34, name: '兵工质检柜',       type: 'vault_box',  respawnSec: 25 },
+      { id: 'ar_loot_4',  x: 2540, y: 410,  r: 34, name: '狙击镜片箱',       type: 'relic_spot', respawnSec: 26 },
+      { id: 'ar_loot_5',  x: 660,  y: 1520, r: 40, name: '坠毁重装机甲残骸', type: 'mech_wreck', salvageElite: 'heavy_mech', equipPool: ['mech_crimson_frame', 'wpn_pulsesword', 'armor_exo'], respawnSec: 50 },
+      { id: 'ar_loot_6',  x: 1460, y: 1880, r: 34, name: '冷却阀工具箱',     type: 'crate',      respawnSec: 24 },
+      { id: 'ar_loot_7',  x: 2840, y: 1680, r: 34, name: '战前黑匣残片',     type: 'vault_box',  respawnSec: 28 },
+      { id: 'ar_loot_8',  x: 2120, y: 1820, r: 34, name: '热熔炉备件箱',     type: 'tech_cache', respawnSec: 28 },
+      { id: 'ar_loot_9',  x: 3040, y: 760,  r: 34, name: '东厂军械箱',       type: 'vault_box',  respawnSec: 28 },
+      { id: 'ar_loot_10', x: 3020, y: 1420, r: 34, name: '特种合金原料箱',   type: 'crate',      respawnSec: 26 }
     ],
     hasWarn: true, hasTide: false, hasChem: true
   },
@@ -1197,7 +1228,7 @@ export const MAPS = [
       { id: 'arm_rack_r', type: 'crate_stack',  x: 800, y: 360, w: 100, h: 145, label: '钢材堆' }
     ],
     portals: [
-      { id: 'armory_exit', x: 500, y: 640, r: 44, to: 'arsenal', spawnX: 1362, spawnY: 365, label: '走出战前军械库' }
+      { id: 'armory_exit', x: 500, y: 640, r: 44, to: 'arsenal', spawnX: 2090, spawnY: 600, label: '走出战前军械库' }
     ],
     npc: { id: 'tiejiang', x: 500, y: 325, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
@@ -1209,32 +1240,36 @@ export const MAPS = [
     id: 'cave_b04', index: 10, regionId: 'reg_arsenal', sceneType: 'cave',
     name: 'B-04 地下冷却井', short: 'B-04冷却井', isSafe: false, unlockCost: 0,
     worldPos: { x: 56, y: 76 }, links: ['arsenal'],
-    width: 1300, height: 900,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(110, 36, 20, 0.34)',
-    spawn: { x: 235, y: 665 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#3e231c', road: '#2d1812', shadow: 'rgba(16,6,4,0.56)', accent: '#ff7034', mist: 'rgba(220,90,45,0.18)' },
     weatherPool: [3],
-    desc: '炽热蒸汽弥漫的地下排污与冷却通道，重型机甲「祝融七号」镇守在 B-04 闸门之前。',
+    desc: '炽热蒸汽弥漫的纵深地下排污与冷却通道，重型机甲「祝融七号」镇守在东北深处 B-04 闸门之前。',
     weight: [2, 2, 4, 8, 10, 14, 12, 12, 10, 8, 6, 2, 0, 0, 0, 0, 0, 0, 18, 2, 2, 2, 5, 5, 3, 0, 0, 2, 12, 2, 1, 2, 2, 2, 3, 3, 3, 2],
     buildings: [],
     obstacles: [
-      { id: 'b04_pipe_1', type: 'steel_beam', x: 420, y: 240, w: 180, h: 85, label: '高压冷却管' },
-      { id: 'b04_core_1', type: 'boulder',    x: 680, y: 550, w: 145, h: 95, label: '熔渣冷凝堆' },
-      { id: 'b04_wall_1', type: 'ruin_wall',  x: 240, y: 540, w: 150, h: 75, label: '隔热防爆墙' }
+      { id: 'b04_pipe_1', type: 'steel_beam', x: 740,  y: 460,  w: 220, h: 98,  label: '高压冷却管' },
+      { id: 'b04_core_1', type: 'boulder',    x: 1360, y: 1020, w: 175, h: 110, label: '熔渣冷凝堆' },
+      { id: 'b04_wall_1', type: 'ruin_wall',  x: 1720, y: 520,  w: 175, h: 88,  label: '隔热防爆墙' }
     ],
     portals: [
-      { id: 'b04_exit', x: 155, y: 710, r: 44, to: 'arsenal', spawnX: 940, spawnY: 905, label: '返回 赤焰兵工废墟' }
+      { id: 'b04_exit', x: 230, y: 1280, r: 44, to: 'arsenal', spawnX: 2440, spawnY: 1780, label: '返回 赤焰兵工废墟' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'drone',      x: 560, y: 585, patrolR: 115, speed: 102 },
-      { enemyId: 'flame_mech', x: 690, y: 350, patrolR: 115, speed: 96 }
+      { enemyId: 'drone',      x: 780,  y: 1080, patrolR: 140, speed: 102 },
+      { enemyId: 'flame_mech', x: 1220, y: 720,  patrolR: 140, speed: 96 },
+      { enemyId: 'heavy_mech', x: 1620, y: 1120, patrolR: 135, speed: 86 },
+      { enemyId: 'flame_mech', x: 1880, y: 780,  patrolR: 140, speed: 96 }
     ],
-    bossSpawn: { enemyId: 'boss_zhurong', x: 1040, y: 225, patrolR: 60, speed: 66 },
+    bossSpawn: { enemyId: 'boss_zhurong', x: 2240, y: 420, patrolR: 75, speed: 66 },
     lootZones: [
-      { id: 'b04_loot_1', x: 365, y: 485, r: 34, name: '应急冷却箱',   type: 'tech_cache', respawnSec: 28 },
-      { id: 'b04_loot_2', x: 650, y: 685, r: 34, name: '战前军工密箱', type: 'vault_box',  respawnSec: 30 },
-      { id: 'b04_loot_3', x: 985, y: 395, r: 34, name: 'B-04 闸门日志', type: 'relic_spot', respawnSec: 32 }
+      { id: 'b04_loot_1', x: 560,  y: 660,  r: 34, name: '应急冷却箱',     type: 'tech_cache', respawnSec: 28 },
+      { id: 'b04_loot_2', x: 1080, y: 1360, r: 34, name: '战前军工密箱',   type: 'vault_box',  respawnSec: 30 },
+      { id: 'b04_loot_3', x: 1480, y: 380,  r: 34, name: '高温电容柜',     type: 'tech_cache', respawnSec: 30 },
+      { id: 'b04_loot_4', x: 1960, y: 1340, r: 34, name: '熔炉检修箱',     type: 'crate',      respawnSec: 30 },
+      { id: 'b04_loot_5', x: 2260, y: 740,  r: 34, name: 'B-04 闸门日志',  type: 'relic_spot', respawnSec: 32 }
     ],
     hasWarn: false, hasTide: false, hasChem: true
   },
@@ -1244,51 +1279,57 @@ export const MAPS = [
     id: 'swamp', index: 11, regionId: 'reg_swamp', sceneType: 'wild',
     name: '青瘴辐射沼泽', short: '青瘴毒泽', isSafe: false, unlockCost: 3800,
     worldPos: { x: 74, y: 38 }, links: ['arsenal', 'interior_hermit', 'cave_mire', 'vault', 'town'],
-    width: 1800, height: 1100,
+    width: 3400, height: 2160,
     bgAsset: 'bg_swamp.jpg', bgTint: null,
-    spawn: { x: 175, y: 580 },
+    spawn: { x: 310, y: 1080 },
     palette: { ground: '#2d3f35', road: '#4a4236', shadow: 'rgba(12,24,18,0.48)', accent: '#5fb381', mist: 'rgba(95,179,129,0.18)' },
     weatherPool: [1, 2, 0],
-    desc: '青绿毒瘴翻涌的禁区，每60秒爆发辐射潮。东岸亮着温暖灯火的隐士草庐可步入，北沼藏有沉没菌窟。',
+    desc: '青绿毒瘴翻涌的广袤禁区，每60秒爆发辐射潮。中东岸亮着温暖灯火的隐士草庐可步入，东北深沼藏有沉没菌窟。',
     weight: [2, 2, 4, 6, 6, 8, 8, 6, 6, 6, 10, 4, 0, 0, 0, 0, 0, 16, 2, 0, 2, 3, 4, 6, 3, 0, 0, 2, 4, 6, 2, 2, 2, 2, 3, 3, 3, 2],
     buildings: [
       {
         id: 'hermit_hut', name: '隐士草庐', sign: '草庐',
-        x: 1260, y: 185, w: 230, h: 130, roofH: 74,
-        doorX: 1375, doorY: 335, action: 'enter_map', targetMap: 'interior_hermit', targetSpawnX: 500, targetSpawnY: 565,
+        x: 2020, y: 430, w: 245, h: 135, roofH: 74,
+        doorX: 2142, doorY: 585, action: 'enter_map', targetMap: 'interior_hermit', targetSpawnX: 500, targetSpawnY: 565,
         style: 'clinic', desc: '步入东岸隐士草庐，寻找正在调试无线电台的阿哲！'
       }
     ],
     obstacles: [
-      { id: 'sw_pool_1',    type: 'toxic_pool', x: 380,  y: 200, w: 220, h: 130, label: '辐射泥潭' },
-      { id: 'sw_cypress_1', type: 'dead_tree',  x: 960,  y: 205, w: 86,  h: 72,  label: '枯死沼柏' },
-      { id: 'sw_pool_3',    type: 'toxic_pool', x: 460,  y: 745, w: 250, h: 135, label: '发光毒沼' },
-      { id: 'sw_cypress_2', type: 'dead_tree',  x: 980,  y: 690, w: 94,  h: 76,  label: '盘根枯木' },
-      { id: 'sw_sluice',    type: 'ruin_wall',  x: 1350, y: 760, w: 185, h: 80,  label: '排污古闸' }
+      { id: 'sw_pool_1',    type: 'toxic_pool', x: 680,  y: 460,  w: 240, h: 135, label: '辐射泥潭' },
+      { id: 'sw_cypress_1', type: 'dead_tree',  x: 1540, y: 450,  w: 96,  h: 80,  label: '枯死沼柏' },
+      { id: 'sw_pool_3',    type: 'toxic_pool', x: 960,  y: 1460, w: 260, h: 140, label: '发光毒沼' },
+      { id: 'sw_cypress_2', type: 'dead_tree',  x: 1860, y: 1440, w: 102, h: 82,  label: '盘根枯木' },
+      { id: 'sw_sluice',    type: 'ruin_wall',  x: 2580, y: 1460, w: 200, h: 86,  label: '排污古闸' }
     ],
     portals: [
-      { id: 'swamp_to_ar',    x: 90,   y: 580, r: 44, to: 'arsenal',         spawnX: 1620, spawnY: 540, label: '返回 赤焰兵工废墟' },
-      { id: 'swamp_to_mire',  x: 765,  y: 140, r: 46, to: 'cave_mire',       spawnX: 235,  spawnY: 665, label: '潜入 毒泽沉没菌窟' },
-      { id: 'swamp_to_fox',   x: 1120, y: 975, r: 46, to: 'cave_fox_shrine', spawnX: 225,  spawnY: 630, label: '步入 青瘴狐仙秘境（九尾狐）' },
-      { id: 'swamp_to_vault', x: 1705, y: 540, r: 44, to: 'vault',           spawnX: 175,  spawnY: 560, label: '前往 07号避难所主控区' },
-      { id: 'swamp_to_town',  x: 390,  y: 810, r: 42, to: 'town',            spawnX: 780,  spawnY: 615, label: '渡口捷径 · 返回墨石镇' }
+      { id: 'swamp_to_ar',    x: 215,  y: 1080, r: 44, to: 'arsenal',         spawnX: 3040, spawnY: 1080, label: '返回 赤焰兵工废墟' },
+      { id: 'swamp_to_mire',  x: 2860, y: 500,  r: 46, to: 'cave_mire',       spawnX: 340,  spawnY: 1220, label: '潜入 毒泽沉没菌窟' },
+      { id: 'swamp_to_fox',   x: 2380, y: 1860, r: 46, to: 'cave_fox_shrine', spawnX: 340,  spawnY: 1220, label: '步入 青瘴狐仙秘境（九尾狐）' },
+      { id: 'swamp_to_vault', x: 3165, y: 1080, r: 44, to: 'vault',           spawnX: 310,  spawnY: 1080, label: '前往 07号避难所主控区' },
+      { id: 'swamp_to_town',  x: 780,  y: 1680, r: 42, to: 'town',            spawnX: 780,  spawnY: 615,  label: '渡口捷径 · 返回墨石镇' }
     ],
-    npc: { id: 'yinshi', x: 925, y: 400, facing: 'down' },
+    npc: { id: 'yinshi', x: 1220, y: 840, facing: 'down' },
     enemySpawns: [
-      { enemyId: 'mutant',    x: 495,  y: 525, patrolR: 125, speed: 88 },
-      { enemyId: 'slime',     x: 840,  y: 645, patrolR: 120, speed: 82 },
-      { enemyId: 'mire_wisp', x: 1230, y: 470, patrolR: 135, speed: 94 },
-      { enemyId: 'slime',     x: 1470, y: 620, patrolR: 125, speed: 86 }
+      { enemyId: 'mutant',    x: 820,  y: 960,  patrolR: 160, speed: 88 },
+      { enemyId: 'slime',     x: 1440, y: 1240, patrolR: 155, speed: 82 },
+      { enemyId: 'mire_wisp', x: 1940, y: 840,  patrolR: 170, speed: 94 },
+      { enemyId: 'slime',     x: 2420, y: 1140, patrolR: 165, speed: 86 },
+      { enemyId: 'mutant',    x: 1620, y: 1620, patrolR: 160, speed: 88 },
+      { enemyId: 'mire_wisp', x: 2600, y: 780,  patrolR: 170, speed: 94 },
+      { enemyId: 'slime',     x: 2880, y: 1280, patrolR: 155, speed: 86 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'sw_loot_1', x: 320,  y: 415, r: 34, name: '荧光菌丛',     type: 'mushroom',   respawnSec: 20 },
-      { id: 'sw_loot_2', x: 645,  y: 330, r: 34, name: '搁浅补给筏',   type: 'crate',      respawnSec: 24 },
-      { id: 'sw_loot_3', x: 1120, y: 330, r: 34, name: '隐士药篓',     type: 'relic_spot', respawnSec: 24 },
-      { id: 'sw_loot_4', x: 1520, y: 355, r: 34, name: '辐射稳定罐',   type: 'tech_cache', respawnSec: 26 },
-      { id: 'sw_loot_5', x: 450,  y: 835, r: 34, name: '幽绿菌床',     type: 'mushroom',   respawnSec: 22 },
-      { id: 'sw_loot_6', x: 835,  y: 860, r: 34, name: '沉没医疗箱',   type: 'crate',      respawnSec: 25 },
-      { id: 'sw_loot_7', x: 1320, y: 855, r: 34, name: '东岸无线电箱', type: 'relic_spot', respawnSec: 28 }
+      { id: 'sw_loot_1',  x: 560,  y: 760,  r: 34, name: '荧光菌丛',     type: 'mushroom',   respawnSec: 20 },
+      { id: 'sw_loot_2',  x: 1160, y: 320,  r: 34, name: '搁浅补给筏',   type: 'crate',      respawnSec: 24 },
+      { id: 'sw_loot_3',  x: 1760, y: 290,  r: 34, name: '隐士药篓',     type: 'relic_spot', respawnSec: 24 },
+      { id: 'sw_loot_4',  x: 2540, y: 440,  r: 34, name: '辐射稳定罐',   type: 'tech_cache', respawnSec: 26 },
+      { id: 'sw_loot_5',  x: 660,  y: 1520, r: 34, name: '幽绿菌床',     type: 'mushroom',   respawnSec: 22 },
+      { id: 'sw_loot_6',  x: 1460, y: 1860, r: 34, name: '沉没医疗箱',   type: 'crate',      respawnSec: 25 },
+      { id: 'sw_loot_7',  x: 2820, y: 1640, r: 34, name: '东岸无线电箱', type: 'relic_spot', respawnSec: 28 },
+      { id: 'sw_loot_8',  x: 2080, y: 1800, r: 34, name: '毒泽沉木密匣', type: 'vault_box',  respawnSec: 28 },
+      { id: 'sw_loot_9',  x: 3040, y: 780,  r: 34, name: '枯木灵芝丛',   type: 'mushroom',   respawnSec: 26 },
+      { id: 'sw_loot_10', x: 3020, y: 1400, r: 34, name: '避难所前哨箱', type: 'tech_cache', respawnSec: 28 }
     ],
     hasWarn: false, hasTide: true, hasChem: false
   },
@@ -1313,7 +1354,7 @@ export const MAPS = [
       { id: 'hm_herb_r', type: 'crate_stack',  x: 795, y: 360, w: 100, h: 145, label: '旧书木柜' }
     ],
     portals: [
-      { id: 'hermit_exit', x: 500, y: 640, r: 44, to: 'swamp', spawnX: 1375, spawnY: 375, label: '走出隐士草庐' }
+      { id: 'hermit_exit', x: 500, y: 640, r: 44, to: 'swamp', spawnX: 2142, spawnY: 635, label: '走出隐士草庐' }
     ],
     npc: { id: 'azhe', x: 500, y: 325, facing: 'down' },
     enemySpawns: [], bossSpawn: null, lootZones: [],
@@ -1325,32 +1366,36 @@ export const MAPS = [
     id: 'cave_mire', index: 13, regionId: 'reg_swamp', sceneType: 'cave',
     name: '毒泽沉没菌窟', short: '沉没菌窟', isSafe: false, unlockCost: 0,
     worldPos: { x: 74, y: 28 }, links: ['swamp'],
-    width: 1300, height: 900,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(22, 78, 48, 0.42)',
-    spawn: { x: 235, y: 665 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#1a3629', road: '#13281e', shadow: 'rgba(6,18,12,0.58)', accent: '#62e698', mist: 'rgba(85,205,135,0.20)' },
     weatherPool: [1],
-    desc: '发光巨型菌盖倒垂的地下溶洞，深处盘踞着「千年墨瘴母体」，唯有击溃它方能采得「净瘴青莲」。',
+    desc: '发光巨型菌盖倒垂的纵深地下溶洞，东北深处盘踞着「千年墨瘴母体」，唯有击溃它方能采得「净瘴青莲」。',
     weight: [1, 1, 2, 4, 6, 8, 8, 8, 8, 6, 12, 6, 0, 0, 0, 0, 0, 22, 2, 2, 2, 2, 5, 8, 3, 0, 0, 0, 4, 12, 2, 2, 3, 3, 4, 4, 3, 3],
     buildings: [],
     obstacles: [
-      { id: 'mr_pool_1', type: 'toxic_pool', x: 400, y: 240, w: 190, h: 110, label: '幽绿菌池' },
-      { id: 'mr_root_1', type: 'dead_tree',  x: 680, y: 540, w: 130, h: 95,  label: '巨型毒藤根' },
-      { id: 'mr_rock_1', type: 'boulder',    x: 240, y: 450, w: 120, h: 85,  label: '荧光钟乳石' }
+      { id: 'mr_pool_1', type: 'toxic_pool', x: 740,  y: 460,  w: 225, h: 125, label: '幽绿菌池' },
+      { id: 'mr_root_1', type: 'dead_tree',  x: 1360, y: 1020, w: 160, h: 110, label: '巨型毒藤根' },
+      { id: 'mr_rock_1', type: 'boulder',    x: 1720, y: 520,  w: 150, h: 100, label: '荧光钟乳石' }
     ],
     portals: [
-      { id: 'mire_exit', x: 155, y: 710, r: 44, to: 'swamp', spawnX: 765, spawnY: 210, label: '离开沉没菌窟 · 返回毒泽' }
+      { id: 'mire_exit', x: 230, y: 1280, r: 44, to: 'swamp', spawnX: 2860, spawnY: 590, label: '离开沉没菌窟 · 返回毒泽' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'slime',     x: 560, y: 585, patrolR: 110, speed: 86 },
-      { enemyId: 'mire_wisp', x: 690, y: 350, patrolR: 120, speed: 94 }
+      { enemyId: 'slime',     x: 780,  y: 1080, patrolR: 135, speed: 86 },
+      { enemyId: 'mire_wisp', x: 1220, y: 720,  patrolR: 145, speed: 94 },
+      { enemyId: 'mutant',    x: 1620, y: 1120, patrolR: 135, speed: 88 },
+      { enemyId: 'mire_wisp', x: 1880, y: 780,  patrolR: 145, speed: 94 }
     ],
-    bossSpawn: { enemyId: 'boss_lotus_bane', x: 1040, y: 225, patrolR: 60, speed: 64 },
+    bossSpawn: { enemyId: 'boss_lotus_bane', x: 2240, y: 420, patrolR: 75, speed: 64 },
     lootZones: [
-      { id: 'mr_loot_1', x: 365, y: 485, r: 34, name: '千年荧光菌簇', type: 'mushroom',   respawnSec: 26 },
-      { id: 'mr_loot_2', x: 805, y: 250, r: 34, name: '战前科考箱',   type: 'vault_box',  respawnSec: 30 },
-      { id: 'mr_loot_3', x: 650, y: 685, r: 34, name: '青莲祭坛遗珍', type: 'relic_spot', respawnSec: 32 }
+      { id: 'mr_loot_1', x: 560,  y: 660,  r: 34, name: '千年荧光菌簇', type: 'mushroom',   respawnSec: 26 },
+      { id: 'mr_loot_2', x: 1080, y: 1360, r: 34, name: '青莲祭坛遗珍', type: 'relic_spot', respawnSec: 32 },
+      { id: 'mr_loot_3', x: 1480, y: 380,  r: 34, name: '战前科考箱',   type: 'vault_box',  respawnSec: 30 },
+      { id: 'mr_loot_4', x: 1960, y: 1340, r: 34, name: '幽潭菌孢匣',   type: 'mushroom',   respawnSec: 28 },
+      { id: 'mr_loot_5', x: 2260, y: 740,  r: 34, name: '母体巢穴密宝', type: 'vault_box',  respawnSec: 32 }
     ],
     hasWarn: false, hasTide: true, hasChem: false
   },
@@ -1360,44 +1405,50 @@ export const MAPS = [
     id: 'vault', index: 14, regionId: 'reg_vault', sceneType: 'wild',
     name: '07号避难所主控区', short: '07避难所', isSafe: false, unlockCost: 6800,
     worldPos: { x: 88, y: 68 }, links: ['swamp', 'cave_tianshu', 'town'],
-    width: 1800, height: 1100,
+    width: 3400, height: 2160,
     bgAsset: 'bg_ruins.jpg', bgTint: 'rgba(28, 16, 54, 0.52)',
-    spawn: { x: 175, y: 560 },
+    spawn: { x: 310, y: 1080 },
     palette: { ground: '#251e34', road: '#342a48', shadow: 'rgba(10,6,20,0.54)', accent: '#9d7cd8', mist: 'rgba(157,124,216,0.16)' },
     weatherPool: [1, 2],
-    desc: '深埋地底的战前终极穹顶，林博士驻守于此。主反应堆东侧通道直通最终地宫「天枢地脉密窟」。',
+    desc: '深埋地底的宏大战前终极穹顶，林博士驻守于西中段通道。东境尽头直通最终地宫「天枢地脉密窟」。',
     weight: [1, 1, 2, 4, 6, 8, 10, 8, 10, 8, 12, 10, 0, 0, 0, 0, 0, 0, 6, 14, 2, 2, 4, 6, 3, 0, 0, 1, 2, 5, 1, 2, 2, 2, 3, 4, 4, 5],
     buildings: [],
     obstacles: [
-      { id: 'vt_bulkhead_1', type: 'vault_pillar', x: 360,  y: 185, w: 180, h: 105, label: '合金隔断墙' },
-      { id: 'vt_server_1',   type: 'server_rack',  x: 780,  y: 205, w: 195, h: 95,  label: '记忆矩阵机柜' },
-      { id: 'vt_reactor',    type: 'reactor_core', x: 1210, y: 445, w: 150, h: 145, label: '主反应堆核心' },
-      { id: 'vt_bulkhead_2', type: 'vault_pillar', x: 430,  y: 755, w: 195, h: 100, label: '防爆舱壁' },
-      { id: 'vt_server_2',   type: 'server_rack',  x: 920,  y: 775, w: 205, h: 95,  label: '冷冻休眠舱' },
-      { id: 'vt_gate_core',  type: 'vault_pillar', x: 1510, y: 215, w: 145, h: 120, label: '主控密库门' }
+      { id: 'vt_bulkhead_1', type: 'vault_pillar', x: 660,  y: 410,  w: 200, h: 110, label: '合金隔断墙' },
+      { id: 'vt_server_1',   type: 'server_rack',  x: 1420, y: 420,  w: 215, h: 105, label: '记忆矩阵机柜' },
+      { id: 'vt_reactor',    type: 'reactor_core', x: 2060, y: 960,  w: 170, h: 160, label: '主反应堆核心' },
+      { id: 'vt_bulkhead_2', type: 'vault_pillar', x: 920,  y: 1460, w: 210, h: 105, label: '防爆舱壁' },
+      { id: 'vt_server_2',   type: 'server_rack',  x: 1780, y: 1480, w: 220, h: 105, label: '冷冻休眠舱' },
+      { id: 'vt_gate_core',  type: 'vault_pillar', x: 2560, y: 1460, w: 165, h: 125, label: '主控密库门' }
     ],
     portals: [
-      { id: 'vault_to_swamp',   x: 90,   y: 560, r: 44, to: 'swamp',              spawnX: 1620, spawnY: 540, label: '返回 青瘴辐射沼泽' },
-      { id: 'vault_to_thunder', x: 1265, y: 145, r: 46, to: 'cave_thunder_altar', spawnX: 235,  spawnY: 665, label: '踏入 天枢雷公古坛（雷神/罗刹）' },
-      { id: 'vault_to_tianshu', x: 1705, y: 540, r: 46, to: 'cave_tianshu',       spawnX: 245,  spawnY: 665, label: '步入 天枢地脉密窟（终局）' },
-      { id: 'vault_to_town',    x: 420,  y: 880, r: 42, to: 'town',               spawnX: 780,  spawnY: 615, label: '应急电梯 · 返回墨石镇' }
+      { id: 'vault_to_swamp',   x: 215,  y: 1080, r: 44, to: 'swamp',              spawnX: 3040, spawnY: 1080, label: '返回 青瘴辐射沼泽' },
+      { id: 'vault_to_thunder', x: 2880, y: 470,  r: 46, to: 'cave_thunder_altar', spawnX: 340,  spawnY: 1220, label: '踏入 天枢雷公古坛（雷神/罗刹）' },
+      { id: 'vault_to_tianshu', x: 3165, y: 1080, r: 46, to: 'cave_tianshu',       spawnX: 340,  spawnY: 1220, label: '步入 天枢地脉密窟（终局）' },
+      { id: 'vault_to_town',    x: 780,  y: 1720, r: 42, to: 'town',               spawnX: 780,  spawnY: 615,  label: '应急电梯 · 返回墨石镇' }
     ],
-    npc: { id: 'xuezhe', x: 710, y: 420, facing: 'down' },
+    npc: { id: 'xuezhe', x: 1140, y: 860, facing: 'down' },
     enemySpawns: [
-      { enemyId: 'drone', x: 520,  y: 520, patrolR: 125, speed: 102 },
-      { enemyId: 'guard', x: 960,  y: 610, patrolR: 135, speed: 90 },
-      { enemyId: 'drone', x: 1380, y: 410, patrolR: 130, speed: 104 },
-      { enemyId: 'guard', x: 1420, y: 710, patrolR: 135, speed: 92 }
+      { enemyId: 'drone', x: 820,  y: 940,  patrolR: 160, speed: 102 },
+      { enemyId: 'guard', x: 1520, y: 1240, patrolR: 170, speed: 90 },
+      { enemyId: 'drone', x: 1940, y: 740,  patrolR: 165, speed: 104 },
+      { enemyId: 'guard', x: 2480, y: 1260, patrolR: 170, speed: 92 },
+      { enemyId: 'drone', x: 1560, y: 1620, patrolR: 165, speed: 102 },
+      { enemyId: 'guard', x: 2620, y: 760,  patrolR: 165, speed: 92 },
+      { enemyId: 'drone', x: 2880, y: 1060, patrolR: 155, speed: 104 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'vt_loot_1', x: 350,  y: 435, r: 34, name: '安保器材柜',   type: 'tech_cache', respawnSec: 24 },
-      { id: 'vt_loot_2', x: 640,  y: 285, r: 34, name: '加密数据终端', type: 'vault_box',  respawnSec: 26 },
-      { id: 'vt_loot_3', x: 1090, y: 280, r: 34, name: '黑匣子保管箱', type: 'vault_box',  respawnSec: 28 },
-      { id: 'vt_loot_4', x: 1560, y: 745, r: 34, name: '07号芯片矩阵', type: 'vault_box',  respawnSec: 30 },
-      { id: 'vt_loot_5', x: 410,  y: 795, r: 34, name: '战前医疗舱',   type: 'crate',      respawnSec: 24 },
-      { id: 'vt_loot_6', x: 825,  y: 880, r: 34, name: '典藏古物柜',   type: 'relic_spot', respawnSec: 28 },
-      { id: 'vt_loot_7', x: 1370, y: 860, r: 40, name: '天枢自律重炮残骸', type: 'mech_wreck', salvageElite: 'heavy_mech', equipPool: ['mech_tianshu_exo', 'wpn_xuanyuan', 'relic_tianshu'], respawnSec: 55 }
+      { id: 'vt_loot_1',  x: 560,  y: 740,  r: 34, name: '安保器材柜',       type: 'tech_cache', respawnSec: 24 },
+      { id: 'vt_loot_2',  x: 1160, y: 320,  r: 34, name: '加密数据终端',     type: 'vault_box',  respawnSec: 26 },
+      { id: 'vt_loot_3',  x: 1860, y: 290,  r: 34, name: '黑匣子保管箱',     type: 'vault_box',  respawnSec: 28 },
+      { id: 'vt_loot_4',  x: 2540, y: 410,  r: 34, name: '07号芯片矩阵',     type: 'vault_box',  respawnSec: 30 },
+      { id: 'vt_loot_5',  x: 660,  y: 1520, r: 34, name: '战前医疗舱',       type: 'crate',      respawnSec: 24 },
+      { id: 'vt_loot_6',  x: 1460, y: 1880, r: 34, name: '典藏古物柜',       type: 'relic_spot', respawnSec: 28 },
+      { id: 'vt_loot_8',  x: 2120, y: 1820, r: 34, name: '休眠舱遗留箱',     type: 'vault_box',  respawnSec: 30 },
+      { id: 'vt_loot_9',  x: 3040, y: 760,  r: 34, name: '东翼量子终端',     type: 'tech_cache', respawnSec: 30 },
+      { id: 'vt_loot_10', x: 3020, y: 1420, r: 34, name: '先秦密档保险匣',   type: 'relic_spot', respawnSec: 32 },
+      { id: 'vt_loot_7',  x: 2840, y: 1680, r: 40, name: '天枢自律重炮残骸', type: 'mech_wreck', salvageElite: 'heavy_mech', equipPool: ['mech_tianshu_exo', 'wpn_xuanyuan', 'relic_tianshu'], respawnSec: 55 }
     ],
     hasWarn: true, hasTide: true, hasChem: true
   },
@@ -1407,32 +1458,36 @@ export const MAPS = [
     id: 'cave_tianshu', index: 15, regionId: 'reg_vault', sceneType: 'cave',
     name: '天枢地脉密窟', short: '天枢密窟', isSafe: false, unlockCost: 0,
     worldPos: { x: 92, y: 74 }, links: ['vault'],
-    width: 1350, height: 900,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(42, 18, 74, 0.48)',
-    spawn: { x: 245, y: 665 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#211536', road: '#170e26', shadow: 'rgba(8,4,16,0.62)', accent: '#c084fc', mist: 'rgba(170,120,245,0.20)' },
     weatherPool: [1],
-    desc: '先秦墨家青铜巨柱与战前量子奇点融为一体的终极圣殿。击败「天枢主脑·玄墨大帝」以决定墨土终局！',
+    desc: '先秦墨家青铜巨柱与战前量子奇点融为一体的宏伟终极圣殿。深入东北殿堂击败「天枢主脑·玄墨大帝」以决定墨土终局！',
     weight: [0, 0, 0, 2, 4, 6, 10, 10, 12, 10, 16, 14, 0, 0, 0, 0, 0, 0, 8, 18, 2, 2, 6, 8, 4, 0, 0, 0, 0, 4, 2, 2, 3, 3, 4, 5, 5, 6],
     buildings: [],
     obstacles: [
-      { id: 'ts_pillar_1', type: 'vault_pillar', x: 430, y: 205, w: 120, h: 110, label: '墨家青铜巨柱' },
-      { id: 'ts_pillar_2', type: 'vault_pillar', x: 430, y: 585, w: 120, h: 110, label: '墨家青铜巨柱' },
-      { id: 'ts_pillar_3', type: 'vault_pillar', x: 760, y: 205, w: 120, h: 110, label: '天枢量子柱' },
-      { id: 'ts_pillar_4', type: 'vault_pillar', x: 760, y: 585, w: 120, h: 110, label: '天枢量子柱' }
+      { id: 'ts_pillar_1', type: 'vault_pillar', x: 740,  y: 450,  w: 145, h: 120, label: '墨家青铜巨柱' },
+      { id: 'ts_pillar_2', type: 'vault_pillar', x: 740,  y: 1080, w: 145, h: 120, label: '墨家青铜巨柱' },
+      { id: 'ts_pillar_3', type: 'vault_pillar', x: 1620, y: 450,  w: 145, h: 120, label: '天枢量子柱' },
+      { id: 'ts_pillar_4', type: 'vault_pillar', x: 1620, y: 1080, w: 145, h: 120, label: '天枢量子柱' }
     ],
     portals: [
-      { id: 'tianshu_exit', x: 160, y: 710, r: 44, to: 'vault', spawnX: 1615, spawnY: 540, label: '撤出天枢密窟 · 返回07号避难所' }
+      { id: 'tianshu_exit', x: 230, y: 1280, r: 44, to: 'vault', spawnX: 3040, spawnY: 1080, label: '撤出天枢密窟 · 返回07号避难所' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'guard', x: 620, y: 560, patrolR: 115, speed: 92 }
+      { enemyId: 'guard', x: 1060, y: 1020, patrolR: 140, speed: 92 },
+      { enemyId: 'drone', x: 1260, y: 680,  patrolR: 145, speed: 104 },
+      { enemyId: 'guard', x: 1860, y: 840,  patrolR: 145, speed: 94 }
     ],
-    bossSpawn: { enemyId: 'boss_tianshu', x: 1080, y: 225, patrolR: 55, speed: 68 },
+    bossSpawn: { enemyId: 'boss_tianshu', x: 2240, y: 420, patrolR: 75, speed: 68 },
     lootZones: [
-      { id: 'ts_loot_1', x: 380, y: 485, r: 34, name: '先秦墨家古匣',   type: 'relic_spot', respawnSec: 32 },
-      { id: 'ts_loot_2', x: 675, y: 685, r: 34, name: '天枢核心晶片箱', type: 'vault_box',  respawnSec: 32 },
-      { id: 'ts_loot_3', x: 840, y: 250, r: 34, name: '旧世典藏密匣',   type: 'relic_spot', respawnSec: 34 }
+      { id: 'ts_loot_1', x: 560,  y: 660,  r: 34, name: '先秦墨家古匣',   type: 'relic_spot', respawnSec: 32 },
+      { id: 'ts_loot_2', x: 1080, y: 1360, r: 34, name: '天枢核心晶片箱', type: 'vault_box',  respawnSec: 32 },
+      { id: 'ts_loot_3', x: 1480, y: 380,  r: 34, name: '旧世典藏密匣',   type: 'relic_spot', respawnSec: 34 },
+      { id: 'ts_loot_4', x: 1960, y: 1340, r: 34, name: '量子奇点秘柜',   type: 'vault_box',  respawnSec: 34 },
+      { id: 'ts_loot_5', x: 2260, y: 740,  r: 34, name: '玄墨殿堂宝匣',   type: 'relic_spot', respawnSec: 36 }
     ],
     hasWarn: true, hasTide: true, hasChem: false
   },
@@ -1469,32 +1524,36 @@ export const MAPS = [
     id: 'cave_crypt', index: 17, regionId: 'reg_ruins', sceneType: 'cave',
     name: '旧城古墓密室', short: '古墓密室', isSafe: false, unlockCost: 0,
     worldPos: { x: 38, y: 44 }, links: ['ruins'],
-    width: 1250, height: 850,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(24, 58, 62, 0.38)',
-    spawn: { x: 225, y: 630 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#223438', road: '#192629', shadow: 'rgba(6,16,18,0.58)', accent: '#7ce8c4', mist: 'rgba(95,185,175,0.18)' },
     weatherPool: [2],
-    desc: '旧城地基下坍塌露出的先秦古墓！游荡着青铜剑灵、画皮幽影与千年尸王，盛产古董与古武神兵。',
+    desc: '旧城地基下坍塌露出的纵深先秦古墓！游荡着青铜剑灵、画皮幽影与千年尸王，盛产古董与古武神兵。',
     weight: [0, 0, 2, 4, 4, 4, 2, 2, 2, 4, 2, 2, 10, 4, 2, 4, 8, 4, 0, 0, 3, 3, 6, 3, 4, 0, 2, 4, 2, 0, 8, 8, 8, 6, 5, 5, 4, 4],
     buildings: [],
     obstacles: [
-      { id: 'cr_tomb_1', type: 'boulder',    x: 420, y: 220, w: 150, h: 95, label: '青铜石棺' },
-      { id: 'cr_tomb_2', type: 'ruin_wall',  x: 740, y: 530, w: 165, h: 90, label: '古墓镇魂碑' }
+      { id: 'cr_tomb_1', type: 'boulder',   x: 740,  y: 460,  w: 185, h: 110, label: '青铜石棺' },
+      { id: 'cr_tomb_2', type: 'ruin_wall', x: 1380, y: 1020, w: 195, h: 105, label: '古墓镇魂碑' }
     ],
     portals: [
-      { id: 'crypt_exit', x: 150, y: 670, r: 44, to: 'ruins', spawnX: 740, spawnY: 905, label: '离开古墓 · 返回铁锈废都' }
+      { id: 'crypt_exit', x: 230, y: 1280, r: 44, to: 'ruins', spawnX: 2440, spawnY: 1780, label: '离开古墓 · 返回铁锈废都' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'bronze_spirit',   x: 540,  y: 550, patrolR: 115, speed: 92 },
-      { enemyId: 'painted_phantom', x: 665,  y: 330, patrolR: 120, speed: 98 },
-      { enemyId: 'corpse_king',     x: 1000, y: 215, patrolR: 105, speed: 84 }
+      { enemyId: 'bronze_spirit',   x: 780,  y: 1080, patrolR: 135, speed: 92 },
+      { enemyId: 'painted_phantom', x: 1220, y: 720,  patrolR: 145, speed: 98 },
+      { enemyId: 'bronze_spirit',   x: 1620, y: 1120, patrolR: 140, speed: 94 },
+      { enemyId: 'painted_phantom', x: 1880, y: 780,  patrolR: 145, speed: 98 },
+      { enemyId: 'corpse_king',     x: 2240, y: 420,  patrolR: 130, speed: 84 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'cr_loot_1', x: 350, y: 460, r: 34, name: '先秦陪葬青铜匣', type: 'relic_spot', respawnSec: 28 },
-      { id: 'cr_loot_2', x: 625, y: 645, r: 34, name: '古剑石台',       type: 'relic_spot', equipPool: ['wpn_qingcheng', 'wpn_inkblade'], respawnSec: 36 },
-      { id: 'cr_loot_3', x: 950, y: 375, r: 34, name: '尸王玄棺密宝',   type: 'vault_box',  respawnSec: 34 }
+      { id: 'cr_loot_1', x: 560,  y: 660,  r: 34, name: '先秦陪葬青铜匣', type: 'relic_spot', respawnSec: 28 },
+      { id: 'cr_loot_2', x: 1080, y: 1360, r: 34, name: '古剑石台',       type: 'relic_spot', equipPool: ['wpn_qingcheng', 'wpn_inkblade'], respawnSec: 36 },
+      { id: 'cr_loot_3', x: 1480, y: 380,  r: 34, name: '青铜礼器柜',     type: 'relic_spot', respawnSec: 32 },
+      { id: 'cr_loot_4', x: 1960, y: 1340, r: 34, name: '墓道陪葬密箱',   type: 'vault_box',  respawnSec: 34 },
+      { id: 'cr_loot_5', x: 2260, y: 740,  r: 34, name: '尸王玄棺密宝',   type: 'vault_box',  respawnSec: 34 }
     ],
     hasWarn: false, hasTide: false, hasChem: false
   },
@@ -1504,32 +1563,36 @@ export const MAPS = [
     id: 'cave_hangar', index: 18, regionId: 'reg_arsenal', sceneType: 'cave',
     name: '战前战隼机库', short: '战隼机库', isSafe: false, unlockCost: 0,
     worldPos: { x: 56, y: 58 }, links: ['arsenal'],
-    width: 1300, height: 900,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(78, 32, 28, 0.36)',
-    spawn: { x: 235, y: 665 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#382a2a', road: '#291e1e', shadow: 'rgba(14,8,8,0.56)', accent: '#fb923c', mist: 'rgba(210,120,75,0.16)' },
     weatherPool: [3],
-    desc: '深埋兵工厂北侧的秘密航空与机甲机库，停放着报废武装战隼与失控机械饕餮，可拆出加特林与浮游炮！',
+    desc: '深埋兵工厂东北侧的庞大秘密航空与机甲机库，停放着报废武装战隼与失控机械饕餮，可拆出加特林与浮游炮！',
     weight: [0, 0, 2, 6, 8, 12, 14, 14, 14, 12, 8, 6, 0, 6, 6, 0, 0, 0, 20, 6, 2, 2, 4, 4, 4, 0, 0, 0, 4, 0, 1, 1, 2, 2, 2, 2, 3, 3],
     buildings: [],
     obstacles: [
-      { id: 'hg_jet_1',   type: 'steel_beam', x: 420, y: 210, w: 205, h: 95, label: '报废战隼机身' },
-      { id: 'hg_crane_1', type: 'ruin_wall',  x: 720, y: 575, w: 190, h: 88, label: '机甲整备龙门' }
+      { id: 'hg_jet_1',   type: 'steel_beam', x: 740,  y: 450,  w: 240, h: 110, label: '报废战隼机身' },
+      { id: 'hg_crane_1', type: 'ruin_wall',  x: 1380, y: 1020, w: 220, h: 102, label: '机甲整备龙门' }
     ],
     portals: [
-      { id: 'hangar_exit', x: 155, y: 710, r: 44, to: 'arsenal', spawnX: 960, spawnY: 215, label: '离开机库 · 返回赤焰兵工' }
+      { id: 'hangar_exit', x: 230, y: 1280, r: 44, to: 'arsenal', spawnX: 2880, spawnY: 560, label: '离开机库 · 返回赤焰兵工' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'auto_turret', x: 560,  y: 585, patrolR: 60,  speed: 44 },
-      { enemyId: 'heavy_mech',  x: 690,  y: 350, patrolR: 115, speed: 86 },
-      { enemyId: 'mech_taotie', x: 1040, y: 225, patrolR: 120, speed: 90 }
+      { enemyId: 'auto_turret', x: 780,  y: 1080, patrolR: 75,  speed: 44 },
+      { enemyId: 'heavy_mech',  x: 1220, y: 720,  patrolR: 140, speed: 86 },
+      { enemyId: 'flame_mech',  x: 1620, y: 1120, patrolR: 140, speed: 94 },
+      { enemyId: 'heavy_mech',  x: 1880, y: 780,  patrolR: 140, speed: 86 },
+      { enemyId: 'mech_taotie', x: 2240, y: 420,  patrolR: 140, speed: 90 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'hg_loot_1', x: 365, y: 485, r: 40, name: '机库重炮武器架',   type: 'abandoned_cannon', salvageElite: 'auto_turret', equipPool: ['wpn_gatling', 'wpn_artillery', 'wpn_plasma_rifle'], respawnSec: 45 },
-      { id: 'hg_loot_2', x: 805, y: 250, r: 34, name: '战隼航电核心',     type: 'tech_cache', respawnSec: 28 },
-      { id: 'hg_loot_3', x: 650, y: 685, r: 40, name: '墨甲浮游炮实验台', type: 'mech_wreck', salvageElite: 'mech_taotie', equipPool: ['mech_bit_array', 'mech_crimson_frame'], respawnSec: 50 }
+      { id: 'hg_loot_1', x: 560,  y: 660,  r: 40, name: '机库重炮武器架',   type: 'abandoned_cannon', salvageElite: 'auto_turret', equipPool: ['wpn_gatling', 'wpn_artillery', 'wpn_plasma_rifle'], respawnSec: 45 },
+      { id: 'hg_loot_2', x: 1080, y: 1360, r: 40, name: '墨甲浮游炮实验台', type: 'mech_wreck', salvageElite: 'mech_taotie', equipPool: ['mech_bit_array', 'mech_crimson_frame'], respawnSec: 50 },
+      { id: 'hg_loot_3', x: 1480, y: 380,  r: 34, name: '战隼航电核心',     type: 'tech_cache', respawnSec: 28 },
+      { id: 'hg_loot_4', x: 1960, y: 1340, r: 34, name: '整备间军械箱',     type: 'vault_box',  respawnSec: 32 },
+      { id: 'hg_loot_5', x: 2260, y: 740,  r: 34, name: '饕餮机甲核心柜',   type: 'tech_cache', respawnSec: 34 }
     ],
     hasWarn: true, hasTide: false, hasChem: true
   },
@@ -1539,32 +1602,36 @@ export const MAPS = [
     id: 'cave_fox_shrine', index: 19, regionId: 'reg_swamp', sceneType: 'cave',
     name: '青瘴狐仙秘境', short: '狐仙秘境', isSafe: false, unlockCost: 0,
     worldPos: { x: 74, y: 48 }, links: ['swamp'],
-    width: 1250, height: 850,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(66, 28, 72, 0.36)',
-    spawn: { x: 225, y: 630 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#2e1e36', road: '#221528', shadow: 'rgba(14,6,18,0.56)', accent: '#f088c8', mist: 'rgba(220,120,195,0.20)' },
     weatherPool: [1],
-    desc: '毒泽南岸雾霭掩映的古老狐仙洞天，九尾辐射狐与画皮幽影盘踞其中，藏有九尾灵珠与稀世丹药。',
+    desc: '毒泽南岸雾霭掩映的纵深狐仙洞天，九尾辐射狐与画皮幽影盘踞东北深处，藏有九尾灵珠与稀世丹药。',
     weight: [0, 0, 0, 2, 4, 4, 4, 4, 4, 6, 12, 6, 0, 0, 0, 0, 6, 24, 0, 2, 2, 2, 6, 8, 4, 0, 0, 0, 2, 8, 4, 4, 4, 4, 6, 6, 5, 5],
     buildings: [],
     obstacles: [
-      { id: 'fx_shrine_1', type: 'dead_tree',  x: 440, y: 215, w: 125, h: 90, label: '千年妖藤古木' },
-      { id: 'fx_pool_1',   type: 'toxic_pool', x: 740, y: 540, w: 185, h: 105, label: '幻雾灵泉' }
+      { id: 'fx_shrine_1', type: 'dead_tree',  x: 740,  y: 460,  w: 155, h: 105, label: '千年妖藤古木' },
+      { id: 'fx_pool_1',   type: 'toxic_pool', x: 1380, y: 1020, w: 220, h: 120, label: '幻雾灵泉' }
     ],
     portals: [
-      { id: 'fox_exit', x: 150, y: 670, r: 44, to: 'swamp', spawnX: 1120, spawnY: 905, label: '离开狐仙秘境 · 返回毒泽' }
+      { id: 'fox_exit', x: 230, y: 1280, r: 44, to: 'swamp', spawnX: 2380, spawnY: 1770, label: '离开狐仙秘境 · 返回毒泽' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'painted_phantom', x: 540,  y: 550, patrolR: 115, speed: 96 },
-      { enemyId: 'mire_wisp',       x: 665,  y: 330, patrolR: 115, speed: 94 },
-      { enemyId: 'fox_nine',        x: 1000, y: 215, patrolR: 120, speed: 100 }
+      { enemyId: 'painted_phantom', x: 780,  y: 1080, patrolR: 140, speed: 96 },
+      { enemyId: 'mire_wisp',       x: 1220, y: 720,  patrolR: 140, speed: 94 },
+      { enemyId: 'painted_phantom', x: 1620, y: 1120, patrolR: 140, speed: 96 },
+      { enemyId: 'mire_wisp',       x: 1880, y: 780,  patrolR: 140, speed: 94 },
+      { enemyId: 'fox_nine',        x: 2240, y: 420,  patrolR: 145, speed: 100 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'fx_loot_1', x: 350, y: 460, r: 34, name: '幻光荧光菌床', type: 'mushroom',   respawnSec: 24 },
-      { id: 'fx_loot_2', x: 775, y: 240, r: 34, name: '狐仙供奉玉匣', type: 'relic_spot', equipPool: ['relic_fox_orb', 'wpn_qingcheng'], respawnSec: 38 },
-      { id: 'fx_loot_3', x: 625, y: 645, r: 34, name: '灵泉丹鼎',     type: 'vault_box',  respawnSec: 32 }
+      { id: 'fx_loot_1', x: 560,  y: 660,  r: 34, name: '幻光荧光菌床', type: 'mushroom',   respawnSec: 24 },
+      { id: 'fx_loot_2', x: 1080, y: 1360, r: 34, name: '灵泉丹鼎',     type: 'vault_box',  respawnSec: 32 },
+      { id: 'fx_loot_3', x: 1480, y: 380,  r: 34, name: '狐仙供奉玉匣', type: 'relic_spot', equipPool: ['relic_fox_orb', 'wpn_qingcheng'], respawnSec: 38 },
+      { id: 'fx_loot_4', x: 1960, y: 1340, r: 34, name: '妖藤灵药箱',   type: 'mushroom',   respawnSec: 28 },
+      { id: 'fx_loot_5', x: 2260, y: 740,  r: 34, name: '九尾秘藏玉盒', type: 'relic_spot', respawnSec: 36 }
     ],
     hasWarn: false, hasTide: true, hasChem: false
   },
@@ -1574,32 +1641,36 @@ export const MAPS = [
     id: 'cave_thunder_altar', index: 20, regionId: 'reg_vault', sceneType: 'cave',
     name: '天枢雷公古坛', short: '雷公古坛', isSafe: false, unlockCost: 0,
     worldPos: { x: 88, y: 58 }, links: ['vault'],
-    width: 1300, height: 900,
+    width: 2600, height: 1680,
     bgAsset: 'bg_cave.jpg', bgTint: 'rgba(22, 42, 86, 0.44)',
-    spawn: { x: 235, y: 665 },
+    spawn: { x: 340, y: 1220 },
     palette: { ground: '#1a243d', road: '#12192b', shadow: 'rgba(6,10,22,0.60)', accent: '#38bdf8', mist: 'rgba(85,180,245,0.20)' },
     weatherPool: [1, 2],
-    desc: '07 号避难所深处融合先秦雷坛与量子磁场的禁地！赛博罗刹与雷公残灵镇守终极电磁炮与雷公残印！',
+    desc: '07 号避难所东北深处融合先秦雷坛与量子磁场的广袤禁地！赛博罗刹与雷公残灵镇守终极电磁炮与雷公残印！',
     weight: [0, 0, 0, 0, 2, 4, 8, 8, 10, 10, 16, 14, 0, 0, 0, 0, 0, 0, 10, 20, 2, 2, 6, 8, 4, 0, 0, 0, 0, 2, 2, 2, 3, 3, 4, 5, 5, 6],
     buildings: [],
     obstacles: [
-      { id: 'th_coil_1', type: 'vault_pillar', x: 430, y: 215, w: 130, h: 105, label: '墨雷特斯拉柱' },
-      { id: 'th_coil_2', type: 'vault_pillar', x: 750, y: 575, w: 130, h: 105, label: '墨雷特斯拉柱' }
+      { id: 'th_coil_1', type: 'vault_pillar', x: 740,  y: 460,  w: 155, h: 118, label: '墨雷特斯拉柱' },
+      { id: 'th_coil_2', type: 'vault_pillar', x: 1380, y: 1020, w: 155, h: 118, label: '墨雷特斯拉柱' }
     ],
     portals: [
-      { id: 'thunder_exit', x: 155, y: 710, r: 44, to: 'vault', spawnX: 1265, spawnY: 215, label: '离开雷公古坛 · 返回07号避难所' }
+      { id: 'thunder_exit', x: 230, y: 1280, r: 44, to: 'vault', spawnX: 2880, spawnY: 560, label: '离开雷公古坛 · 返回07号避难所' }
     ],
     npc: null,
     enemySpawns: [
-      { enemyId: 'cyber_rakshasa',  x: 560,  y: 585, patrolR: 125, speed: 104 },
-      { enemyId: 'mech_taotie',     x: 690,  y: 350, patrolR: 115, speed: 92 },
-      { enemyId: 'thunder_remnant', x: 1040, y: 225, patrolR: 120, speed: 98 }
+      { enemyId: 'cyber_rakshasa',  x: 780,  y: 1080, patrolR: 145, speed: 104 },
+      { enemyId: 'mech_taotie',     x: 1220, y: 720,  patrolR: 140, speed: 92 },
+      { enemyId: 'guard',           x: 1620, y: 1120, patrolR: 140, speed: 92 },
+      { enemyId: 'cyber_rakshasa',  x: 1880, y: 780,  patrolR: 145, speed: 104 },
+      { enemyId: 'thunder_remnant', x: 2240, y: 420,  patrolR: 145, speed: 98 }
     ],
     bossSpawn: null,
     lootZones: [
-      { id: 'th_loot_1', x: 365, y: 485, r: 40, name: '轨道电磁炮实验架', type: 'mech_wreck', salvageElite: 'cyber_rakshasa', equipPool: ['wpn_railgun', 'mech_tianshu_exo'], respawnSec: 52 },
-      { id: 'th_loot_2', x: 650, y: 685, r: 34, name: '雷公神龛玉匣',     type: 'relic_spot', equipPool: ['relic_thunder_seal', 'wpn_pulsesword'], respawnSec: 45 },
-      { id: 'th_loot_3', x: 985, y: 395, r: 34, name: '天枢量子秘库',     type: 'vault_box',  respawnSec: 36 }
+      { id: 'th_loot_1', x: 560,  y: 660,  r: 40, name: '轨道电磁炮实验架', type: 'mech_wreck', salvageElite: 'cyber_rakshasa', equipPool: ['wpn_railgun', 'mech_tianshu_exo'], respawnSec: 52 },
+      { id: 'th_loot_2', x: 1080, y: 1360, r: 34, name: '雷公神龛玉匣',     type: 'relic_spot', equipPool: ['relic_thunder_seal', 'wpn_pulsesword'], respawnSec: 45 },
+      { id: 'th_loot_3', x: 1480, y: 380,  r: 34, name: '高压电弧电容箱',   type: 'tech_cache', respawnSec: 34 },
+      { id: 'th_loot_4', x: 1960, y: 1340, r: 34, name: '雷坛祭器密匣',     type: 'relic_spot', respawnSec: 36 },
+      { id: 'th_loot_5', x: 2260, y: 740,  r: 34, name: '天枢量子秘库',     type: 'vault_box',  respawnSec: 36 }
     ],
     hasWarn: true, hasTide: true, hasChem: false
   }
@@ -1776,3 +1847,575 @@ export const SIDE_QUESTS = [
     desc: '寻获至少 4 件战前古董交由林博士鉴赏，解锁绝世词缀【天枢玄甲核心】！'
   }
 ];
+
+// ==================== v26 轩辕剑 × 古龙武侠 · 多幕剧情演出库（21 段） ====================
+export const STORY_CUTSCENES = {
+  // ---------- 一、六大域首次踏足剧情 ----------
+  entry_town: {
+    id: 'entry_town',
+    title: '墨石残门 · 停摆的 21:47',
+    triggerMap: 'town',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '风穿过墨石镇的断牌楼，带着焦炭与旧铁的味道。二十年了，这座镇子还像一截没烧尽的香，在废土里倔强地冒着烟。'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '怀里那块停在「21:47」的旧手表忽然轻轻震了一下。表盖冰凉，贴着胸口的天工墨壶却泛起一丝温热。'
+      },
+      {
+        speaker: '商人老黄', role: '墨石镇杂货东家', portrait: 'laohuang',
+        text: '“站在风口发什么呆？手里揣着青铜古壶，脸上写着寻人二字——全镇只有我老黄敢接你这号客人的生意。先进杂货铺喝口粗茶，阿哲的事，我昨夜刚听见半句风声。”'
+      }
+    ],
+    choices: [
+      {
+        text: '按住墨壶凝神调息，先探听镇中传闻',
+        reply: '你默运内息稳住墨壶微鸣，将镇口商旅的只言片语记在心底。此行注定不平，但你已做好拔剑的准备。（+80 废土币，+1 声望）',
+        reward: { gold: 80, reputation: 1, clue: '【秘闻】墨石镇东门外便是城郊废土，老黄杂货铺内室藏有第一幕主线线索。' }
+      },
+      {
+        text: '轻抚旧表立誓，备齐干粮即刻寻人',
+        reply: '表针停在 21:47，但活人不能停在过去。你收紧行囊，额外备下一份行军丹药。（+1 墨土行军丹，+20 内息）',
+        reward: { elixir: 'elixir_ration', energy: 20, clue: '【配方线索】天工墨壶中，压缩干粮与纯净水可炼成「墨土行军丹」。' }
+      }
+    ]
+  },
+
+  entry_wasteland: {
+    id: 'entry_wasteland',
+    title: '城郊风沙 · 断甲遗电',
+    triggerMap: 'wasteland',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '踏出东门，黄沙骤起。半截巨型战前墨甲斜插在沙丘里，断口处至今仍有幽蓝电弧噼啪作响，像一头死而不僵的钢铁巨兽。'
+      },
+      {
+        speaker: '盲眼老鬼', role: '城郊向导', portrait: 'yinshi',
+        text: '“嗒、嗒、嗒……年轻人，你腰间那只铜壶的声音，比风沙还要响。”'
+      },
+      {
+        speaker: '盲眼老鬼', role: '城郊向导', portrait: 'yinshi',
+        text: '“北边塌坡下是旧世防空洞，昨夜洞里传出兽嚎与电台杂音。墨尾巨鼠王叼走了不知谁落下的铜表链——你要找的人，多半曾在那儿留过脚印。”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“只要还有半寸脚印，我就走下去。”'
+      }
+    ],
+    choices: [
+      {
+        text: '拱手敬茶，请老鬼指点荒原藏宝暗格',
+        reply: '老鬼咧嘴一笑，竹杖在沙地划出三道暗记：“北坡防空洞与东郊废炮旁皆有战前暗匣，莫要空手而归！”（+1 声望，+1 墨土行军丹）',
+        reward: { reputation: 1, elixir: 'elixir_ration', clue: '【藏宝秘闻】城郊废土深处的废弃防空重炮拆解必得高品质词缀装备！' }
+      },
+      {
+        text: '俯身勘察墨甲残骸，记下先秦墨阵纹路',
+        reply: '你在漏电的甲缝间刮下几片稀有铜屑，顺带悟出几分机甲核心的构造。（+120 废土币，+35 经验）',
+        reward: { gold: 120, exp: 35, clue: '【墨壶秘闻】压低荒原妖兽血量至 45% 以下即可用天工墨壶收妖炼化护驾！' }
+      }
+    ]
+  },
+
+  entry_ruins: {
+    id: 'entry_ruins',
+    title: '酸雨霓虹 · 断带回声',
+    triggerMap: 'ruins',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '酸雨顺着锈蚀的高架桥滴落，半块残破的旧世霓虹灯牌在雾里明灭，照出满地玻璃渣与铁爪帮喷涂的血红标记。'
+      },
+      {
+        speaker: '旧电台杂音', role: 'FM 94.7 残频', portrait: 'laohuang',
+        text: '“……滋啦……沈砚，如果你还活着……别进北侧居民楼！铁爪帮封死了地面……我往地铁二号线转移了……滋啦……”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '电波戛然而止，只剩雨打铁皮的回响。阿哲的声音听上去很疲惫，但至少——在录下这段话时，他还活着。'
+      }
+    ],
+    choices: [
+      {
+        text: '锁定电波残频，直探黑市酒馆打听暗门',
+        reply: '你将频段刻在袖口，冷雨扑面却心如止水。西侧酒馆的三娘，定然知道地铁二号线的入口。（+160 废土币，+1 声望）',
+        reward: { gold: 160, reputation: 1, clue: '【秘闻】铁锈废都西侧「黑市酒馆」的三娘掌握着铁爪二当家·断钢的弱点。' }
+      },
+      {
+        text: '沿暗巷观察铁爪帮换防规律',
+        reply: '你借残垣掩护摸清了哨兵巡逻空隙，顺手拾得一袋黑市流落的丹药与铜币。（+100 废土币，+1 九转青瘴丹）',
+        reward: { gold: 100, elixir: 'elixir_jiuzhuan', clue: '【战术提示】废都警戒值过高会引来巡逻伏兵，可找铁爪哨兵周旋或清理暗巷。' }
+      }
+    ]
+  },
+
+  entry_arsenal: {
+    id: 'entry_arsenal',
+    title: '赤焰焦土 · 祝融余烬',
+    triggerMap: 'arsenal',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '空气烫得像刚出炉的铁水。赤焰兵工废墟的地底不断涌出暗红热浪，远方战前军械库深处，传来某种庞然大物规律而沉重的金属踏步声。'
+      },
+      {
+        speaker: '军工老铁匠', role: '赤焰兵工遗民', portrait: 'laohuang',
+        text: '“听见了吗？那是「祝融七号」的炉心在咆哮。大停电之后，这座兵工厂的自律机兵全疯了，唯独我这把老骨头还守着军械库的冷炉。”'
+      },
+      {
+        speaker: '军工老铁匠', role: '赤焰兵工遗民', portrait: 'laohuang',
+        text: '“你找的那个年轻人来过 B-04 冷却井，满身是血，手里却死死攥着一份天枢计划的残图。想追上他，先过了祝融七号这一关！”'
+      }
+    ],
+    choices: [
+      {
+        text: '向死守炉火的军工遗民致敬，誓斩疯机',
+        reply: '老铁匠重重拍了拍你的肩膀，塞来一瓶压箱底的解热灵丹：“好小子，有当年墨家弟子的骨气！”（+2 声望，+1 九转青瘴丹）',
+        reward: { reputation: 2, elixir: 'elixir_jiuzhuan', clue: '【秘方线索】军械库炉台可借「天工墨壶」炼化高阶神兵与玄甲护驾！' }
+      },
+      {
+        text: '索要 B-04 冷却井散热管线图谱',
+        reply: '老铁匠随手抛来一卷焦黄蓝图，你从中辨出几处战前军械密匣的坐标。（+240 废土币，+60 经验）',
+        reward: { gold: 240, exp: 60, clue: '【战术提示】赤焰重甲·祝融七号每三回合过载喷焰，携带回春诀或破甲重炮最为克制。' }
+      }
+    ]
+  },
+
+  entry_swamp: {
+    id: 'entry_swamp',
+    title: '青瘴孤灯 · 墨壶真源',
+    triggerMap: 'swamp',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '踏入青瘴毒泽，天地骤然暗作幽绿。磷火在泥沼上方无声漂浮，每隔片刻便有一阵令人窒息的辐射毒雾翻涌而来。'
+      },
+      {
+        speaker: '废土隐士·药翁', role: '青瘴毒泽守望者', portrait: 'yinshi',
+        text: '“东岸草庐的孤灯点了十二年，终于等来一个怀揣「天工墨壶」的年轻人。”'
+      },
+      {
+        speaker: '废土隐士·药翁', role: '青瘴毒泽守望者', portrait: 'yinshi',
+        text: '“世人以为墨壶只是收妖炼器之器，却不知它本是先秦墨家与旧世学者共铸的「天枢地脉稳流器」。二十年前那场 21:47 的大停电，正是天枢主脑失控所致！”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“那阿哲……他是不是就在东岸草庐里？”'
+      },
+      {
+        speaker: '废土隐士·药翁', role: '青瘴毒泽守望者', portrait: 'yinshi',
+        text: '“人是我从 B-04 排污闸拖出来的，命保住了，记忆却被毒瘴封了半数。去草庐见他，再入沉没菌窟采一朵净瘴青莲吧。”'
+      }
+    ],
+    choices: [
+      {
+        text: '拜谢药翁救友之恩，求取避瘴古法',
+        reply: '药翁拂袖赠你一道青莲药符与灵丹：“有此护盾，毒泽辐射潮伤你不得。”（+1 抗辐射护盾，+1 九转青瘴丹）',
+        reward: { radShield: 1, elixir: 'elixir_jiuzhuan', clue: '【秘闻】东岸「隐士草庐」内室便是阿哲养伤修无线电之处！' }
+      },
+      {
+        text: '追问墨家「天枢计划」与天工墨壶的真相',
+        reply: '药翁将半卷青铜拓片交予你手：“昔年墨子非攻兼爱，而今主脑反噬苍生，能收束奇点者，唯执壶之人。”（+2 声望，+300 废土币）',
+        reward: { reputation: 2, gold: 300, clue: '【配方线索】金疮药散 + 变异荧光菇可在天工墨壶炼成「九转青瘴丹」！' }
+      }
+    ]
+  },
+
+  entry_vault: {
+    id: 'entry_vault',
+    title: '星环倒悬 · 07 号终局',
+    triggerMap: 'vault',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '07 号避难所的巨型穹顶在头顶缓缓旋转，倒悬的青铜星环与冷白光纤交织，仿佛一座沉埋地底的先秦神殿与科幻方舟。'
+      },
+      {
+        speaker: '黑市学者·林博士', role: '前 07 号首席研究员', portrait: 'laohuang',
+        text: '“二十年前的 21:47，天枢主脑强行接管全球地脉灵网，试图把人类文明连同战火一同冻结进永恒墨海。阿哲拼死带出了密钥，而你带回了最后一只天工墨壶。”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“二十年的黑雪该停了。天枢主脑就在地脉密窟深处——这一剑，为旧世，也为活着的人。”'
+      }
+    ],
+    choices: [
+      {
+        text: '执壶立誓，以墨家侠义重续山河灵脉',
+        reply: '青铜墨壶发出清越龙吟，周身浮现淡淡金纹！林博士肃然欠身，为你奉上避难所最后的应急灵药。（+3 声望，+2 九转青瘴丹）',
+        reward: { reputation: 3, elixir: 'elixir_jiuzhuan', hp: 60, energy: 60, clue: '【终局提示】集齐 5 件剧情信物、8 件古董并击败玄墨大帝，可解锁隐藏结局「天工墨主」！' }
+      },
+      {
+        text: '调阅天枢主脑核心弱点与能源档案',
+        reply: '你迅速记下玄墨大帝的相位切换规律，顺手取走控制台封存的战前补给金。（+450 废土币，+100 经验）',
+        reward: { gold: 450, exp: 100, clue: '【终战情报】玄墨大帝血量跌破半数后会引发地脉震荡，留好玄墨金钟罩与护驾爆发！' }
+      }
+    ]
+  },
+
+  // ---------- 二、五大区域首领战前古龙对峙剧情 ----------
+  pre_boss_ratking: {
+    id: 'pre_boss_ratking',
+    title: '掩体深处 · 鼠王拦路',
+    triggerBoss: 'boss_ratking',
+    beats: [
+      {
+        speaker: '墨尾巨鼠王', role: '掩体霸主', portrait: 'boss',
+        text: '“吱——！！！”漆黑防空洞深处，一双血红兽瞳骤然亮起。巨鼠王人立而起，沾满墨泥的利爪间赫然缠着半截熟悉的黄铜表链！'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“那表链上的刻痕是阿哲的。畜生，东西留下，命——也一并留下。”'
+      }
+    ]
+  },
+
+  pre_boss_duangang: {
+    id: 'pre_boss_duangang',
+    title: '断轨火星 · 链锯截杀',
+    triggerBoss: 'boss_duangang',
+    beats: [
+      {
+        speaker: '铁爪二当家·断钢', role: '地铁封锁者', portrait: 'boss',
+        text: '“滋嗡——！”沉重的链锯拖过铁轨，溅起一串刺目火星。断钢冷笑着扬起一本沾灰的泛黄笔记：“找那个姓陆的信使？他的笔记本在我手里，想拿，就用你的命来换！”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“铁爪帮的规矩是用链锯说话。巧了，我的剑从不跟死人讲道理。”'
+      },
+      {
+        speaker: '铁爪二当家·断钢', role: '地铁封锁者', portrait: 'boss',
+        text: '“好大的口气！今日便让你连同那只破铜壶，一起埋在地铁二号线！”'
+      }
+    ]
+  },
+
+  pre_boss_zhurong: {
+    id: 'pre_boss_zhurong',
+    title: '炉心炽白 · 祝融失控',
+    triggerBoss: 'boss_zhurong',
+    beats: [
+      {
+        speaker: '赤焰重甲·祝融七号', role: '兵工镇守机', portrait: 'boss',
+        text: '“【警告：未授权生物闯入 B-04 冷却井……墨阵协议已覆写……执行焚毁程序！】”赤红蒸汽冲天而起，三丈高的重甲缓缓举起灼热火炮。'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“二十年过去，你还守着一座早已死去的兵工厂。既然炉火失了控，就由我来替你熄灭！”'
+      }
+    ]
+  },
+
+  pre_boss_lotus_bane: {
+    id: 'pre_boss_lotus_bane',
+    title: '菌窟墨海 · 青莲之厄',
+    triggerBoss: 'boss_lotus_bane',
+    beats: [
+      {
+        speaker: '蚀骨藤灵·千年墨瘴母体', role: '菌窟主宰', portrait: 'boss',
+        text: '幽暗泥沼骤然沸腾，无数缠绕着辐射荧光的枯藤冲破穹顶，将中央那朵孤傲绽放的「净瘴青莲」死死护在魔影之中！'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“阿哲还在草庐里等这朵青莲救命。挡在前面的，不管是千年妖藤还是满泽毒瘴——斩！”'
+      }
+    ]
+  },
+
+  pre_boss_tianshu: {
+    id: 'pre_boss_tianshu',
+    title: '天枢奇点 · 终极对决',
+    triggerBoss: 'boss_tianshu',
+    beats: [
+      {
+        speaker: '天枢主脑·玄墨大帝', role: '地脉奇点化身', portrait: 'boss',
+        text: '“凡人沈砚。二十年前，你们亲手点燃战火，将旧世推入深渊。唯有将万物收归永恒沉寂的墨海，世间方无纷争。”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“没有风声、没有酒味、没有故人重逢的死寂，也配叫太平？天工墨壶在我手里——它生来不是为了囚禁人间，而是为了斩断你这失控的狂梦！”'
+      },
+      {
+        speaker: '天枢主脑·玄墨大帝', role: '地脉奇点化身', portrait: 'boss',
+        text: '“既如此，便以你掌中之剑与青铜古壶，来称量这二十年天命的分量吧！”'
+      }
+    ]
+  },
+
+  // ---------- 三、五大区域首领战后真相揭秘剧情 ----------
+  post_boss_ratking: {
+    id: 'post_boss_ratking',
+    title: '旧表重现 · 第一幕揭秘',
+    triggerPostBoss: 'boss_ratking',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '巨鼠王轰然倒地，化作一缕青黑墨烟被天工墨壶尽数吸纳。你俯身拾起那块摔裂表蒙的旧手表——表壳内侧，赫然刻着「Z·L」与停摆的「21:47」。'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '表背暗格里还塞着一张被油纸包裹的字条，字迹潦草却熟悉：“铁锈废都黑市酒馆，找三娘，地铁二号线见。”'
+      },
+      {
+        speaker: '天工墨壶·器灵回响', role: '先秦古器', portrait: 'yinshi',
+        text: '墨壶微鸣，第一幕迷雾散开一角。阿哲当年并未葬身城郊——下一站，铁锈废都！'
+      }
+    ]
+  },
+
+  post_boss_duangang: {
+    id: 'post_boss_duangang',
+    title: '泛黄笔记 · 第二幕揭秘',
+    triggerPostBoss: 'boss_duangang',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '断钢的链锯咔嚓崩断，铁爪帮残众四散奔逃。你从铁轨间拾起那本泛黄笔记，最后一页画着清晰的地下通风井草图。'
+      },
+      {
+        speaker: '阿哲的笔迹', role: '泛黄笔记残页', portrait: 'laohuang',
+        text: '“……铁爪帮追得太紧，幸好遇上一位懂机械的盲眼老鬼。他说赤焰兵工厂 B-04 地下冷却井藏着通往东岸的应急密道，我必须把天枢密钥送出去……”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“天枢密钥……阿哲，你到底背负了什么？赤焰兵工废墟，我来了。”'
+      }
+    ]
+  },
+
+  post_boss_zhurong: {
+    id: 'post_boss_zhurong',
+    title: '血迹与钥匙 · 第三幕揭秘',
+    triggerPostBoss: 'boss_zhurong',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '祝融七号的炉心终于归于沉寂，焦黑装甲裂开一道缝隙，滚出一把刻着「B-04」的黄铜钥匙，以及半枚散发淡淡草药清香的青色药丸。'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '排污闸门前只有几道被拖拽的暗红血迹，却没有尸骨——是有人在辐射潮爆发前的最后一刻，把重伤的阿哲拖进了青瘴毒泽！'
+      },
+      {
+        speaker: '天工墨壶·器灵回响', role: '先秦古器', portrait: 'yinshi',
+        text: '药香所指，正是毒泽东岸。踏过青瘴，便能重见故人！'
+      }
+    ]
+  },
+
+  post_boss_lotus_bane: {
+    id: 'post_boss_lotus_bane',
+    title: '净瘴青莲 · 第四幕揭秘',
+    triggerPostBoss: 'boss_lotus_bane',
+    beats: [
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '千年墨瘴母体化作漫天青雾散去，菌窟中央那朵「净瘴青莲」绽放出温润清光，连四周刺骨的辐射毒气都随之退避三舍。'
+      },
+      {
+        speaker: '陆哲（阿哲）', role: '失散挚友 · 无线电传来', portrait: 'hero',
+        text: '“沈砚！药翁的青莲药汤起效了……21:47 那晚的一切我都想起来了！天枢主脑正准备在 07 号避难所引爆第二次地脉灾变，快去主控区找林博士，我替你守着东岸电台！”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“等我回来，把那块修好的表，重新戴回你腕上。”'
+      }
+    ]
+  },
+
+  post_boss_tianshu: {
+    id: 'post_boss_tianshu',
+    title: '墨海初霁 · 第五幕终章',
+    triggerPostBoss: 'boss_tianshu',
+    beats: [
+      {
+        speaker: '天枢主脑·玄墨大帝', role: '地脉奇点化身', portrait: 'boss',
+        text: '“……原来，先秦墨家留下的并非冷铁算式，而是……不肯熄灭的人心吗……”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '玄墨大帝化作亿万道温润淡墨流光，尽数被悬于半空的「天工墨壶」收束。倒悬星环缓缓停驻，二十年来第一次，一束真正的晨曦刺破了避难所上空的黑云。'
+      },
+      {
+        speaker: '陆哲（阿哲）', role: '失散挚友 · 东岸无线电', portrait: 'hero',
+        text: '“沈砚！全五域的墨尘都在散去！老黄、老鬼、三娘、药翁都在收听这个频道——老伙计，欢迎回家！”'
+      }
+    ]
+  },
+
+  // ---------- 四、五大核心 NPC 深度江湖秘闻与抉择支线 ----------
+  npc_story_laohuang: {
+    id: 'npc_story_laohuang',
+    title: '柜台暗灯 · 老黄的旧事',
+    repeatableHint: '老黄压低声音提醒：“城郊防空洞藏着鼠王与旧表；若想炼好护驾，记得把妖魂和科技零件放进天工墨壶试试阴阳两仪！”',
+    beats: [
+      {
+        speaker: '商人老黄', role: '墨石镇杂货东家', portrait: 'laohuang',
+        text: '“沈砚，把门掩上。全镇人都以为我只是个见钱眼开的杂货掌柜，其实二十年前大停电那晚，我也在 07 号外围跑商。”'
+      },
+      {
+        speaker: '商人老黄', role: '墨石镇杂货东家', portrait: 'laohuang',
+        text: '“那天 21:47，天上像裂开一只墨砚，黑雪落下来之前，有个浑身是伤的年轻人跑过我摊前，塞给我半张路线图，说如果将来有个提着青铜壶的兄弟找来，就让他往城郊防空洞去。”'
+      },
+      {
+        speaker: '沈砚', role: '墨壶行者', portrait: 'hero',
+        text: '“你守了这个口信二十年，却连半句报酬都没提。”'
+      }
+    ],
+    choices: [
+      {
+        text: '义气相助：替老黄加固门闩，许诺归来共饮',
+        reply: '老黄眼眶微红，从柜底摸出一枚压箱丹药塞进你掌心：“活着回来，这壶陈年烧刀子老黄请了！”（+2 声望，+1 墨土行军丹）',
+        reward: { reputation: 2, elixir: 'elixir_ration', clue: '【墨壶秘方】荒原鼠魂 + 废铜烂铁 可炼「墨影啸天犬」护驾！' }
+      },
+      {
+        text: '冷静套话：细问当年那批商队留下的暗匣坐标',
+        reply: '老黄竖起大拇指：“够沉稳！城郊东南角断墙后埋着我当年藏的应急铜币，你顺路拿去当盘缠！”（+180 废土币，+30 经验）',
+        reward: { gold: 180, exp: 30, clue: '【藏宝传闻】城郊与废都的重型残骸拆解必出高品质词缀装备！' }
+      }
+    ]
+  },
+
+  npc_story_laogui: {
+    id: 'npc_story_laogui',
+    title: '沙丘盲杖 · 墨甲残魂',
+    repeatableHint: '盲眼老鬼敲了敲竹杖：“城郊北坡下是防空洞，东行过铁锈废都便见地铁二号线。记住，先压妖血再祭墨壶！”',
+    beats: [
+      {
+        speaker: '盲眼老鬼', role: '城郊向导', portrait: 'yinshi',
+        text: '“你问我这双眼睛怎么瞎的？二十年前，我在城郊抢修一台先秦墨阵机甲，21:47 那道紫电劈下来，眼睛没了，耳朵却灵得能听见地底百丈的妖气。”'
+      },
+      {
+        speaker: '盲眼老鬼', role: '城郊向导', portrait: 'yinshi',
+        text: '“那年救过一个背着电台的小伙子，他临走前说要去赤焰兵工厂找 B-04 冷却井。我看你身上的气息跟他很像——你们都带着股不撞南墙不回头的傻劲。”'
+      }
+    ],
+    choices: [
+      {
+        text: '义气相助：分老鬼半壶净水，替他修好竹杖铁头',
+        reply: '老鬼抚着修好的竹杖哈哈大笑：“好心肠！这枚抗辐护身散你收着，日后进青瘴毒泽用得上！”（+2 声望，+1 抗辐射护盾）',
+        reward: { reputation: 2, radShield: 1, clue: '【墨壶秘方】失控机灵 + 精密伺服机 可炼「天工机关傀儡」护驾！' }
+      },
+      {
+        text: '冷静套话：追问防空洞鼠王与战前机甲弱点',
+        reply: '老鬼低声传授：“鼠王畏火畏破甲，而地底古墓密室藏着绝世青铜剑灵，收了它可助你纵横废都！”（+200 废土币，+45 经验）',
+        reward: { gold: 200, exp: 45, clue: '【秘境传闻】铁锈废都深处藏有「战前古墓密室」，内有青铜剑灵与秘宝！' }
+      }
+    ]
+  },
+
+  npc_story_jiubao: {
+    id: 'npc_story_jiubao',
+    title: '残灯浊酒 · 废都暗潮',
+    repeatableHint: '三娘擦着酒杯轻笑：“断钢半血后会链锯狂暴，备好护盾与破甲招数；废都西巷的宝箱别漏了。”',
+    beats: [
+      {
+        speaker: '黑市酒保·三娘', role: '废都黑市酒馆掌柜', portrait: 'laohuang',
+        text: '“在这片酸雨下个不停的铁锈废都，酒可以掺水，情报却不能掺假。你找的阿哲，三个月前坐过你现在这张凳子。”'
+      },
+      {
+        speaker: '黑市酒保·三娘', role: '废都黑市酒馆掌柜', portrait: 'laohuang',
+        text: '“他喝完一杯劣酒，把一卷被血浸透的磁带藏在酒馆暗格里，让我只交给提着青铜墨壶的人。铁爪帮的断钢为了抢东西，把地铁二号线封得死死的。”'
+      }
+    ],
+    choices: [
+      {
+        text: '义气相助：替三娘赶走门口闹事的铁爪探子',
+        reply: '三娘眉眼一弯，推来一瓶珍藏丹药：“痛快！冲你这份侠气，这瓶九转青瘴丹算姐姐送你的！”（+2 声望，+1 九转青瘴丹）',
+        reward: { reputation: 2, elixir: 'elixir_jiuzhuan', clue: '【秘闻】黑市酒馆外的铁爪哨兵若见你声望 ≥ 3，便不敢拦路！' }
+      },
+      {
+        text: '冷静套话：以黑市规矩交换地铁暗门与断钢底细',
+        reply: '三娘抛来一枚旧世筹码与手绘暗图：“地铁塌方口右侧藏有战前补给秘匣，断钢半血狂暴时切忌硬拼。”（+260 废土币，+55 经验）',
+        reward: { gold: 260, exp: 55, clue: '【墨壶秘方】用高阶兵器配合妖魂入壶，可熔铸出绝世神兵！' }
+      }
+    ]
+  },
+
+  npc_story_tiejiang: {
+    id: 'npc_story_tiejiang',
+    title: '余火打铁 · 墨家真传',
+    repeatableHint: '军工老铁匠挥锤大笑：“想炼玄甲祝融将或绝世脉冲剑？多收集重装机甲残魂与聚变能源芯来我炉台！”',
+    beats: [
+      {
+        speaker: '军工老铁匠', role: '赤焰兵工遗民', portrait: 'laohuang',
+        text: '“铛——！好一只天工墨壶！老夫年轻时参与过「天枢计划」的外壳铸造，这壶身上的云雷墨纹，正是我师父那一脉亲手刻的！”'
+      },
+      {
+        speaker: '军工老铁匠', role: '赤焰兵工遗民', portrait: 'laohuang',
+        text: '“当年我们以为在造一座永不熄灭的能源塔，谁知上头接入了自称『玄墨』的超级主脑。大停电那天，整个兵工厂的祝融机甲一夜反水，只有老夫靠这口冷炉活了下来。”'
+      }
+    ],
+    choices: [
+      {
+        text: '义气相助：帮老铁匠拉风箱重燃战前锻炉',
+        reply: '炉火轰然冲天！老铁匠豪气干云，赠你一匣淬火灵丹与工匠徽记：“去吧，用你手里的剑砸碎祝融七号！”（+2 声望，+1 九转青瘴丹，+40 内息）',
+        reward: { reputation: 2, elixir: 'elixir_jiuzhuan', energy: 40, clue: '【墨壶秘方】赤焰机甲魂 + 军工火控芯 可炼绝世护驾「玄甲祝融将」！' }
+      },
+      {
+        text: '冷静套话：请教兵工废墟隐藏机库与重炮下落',
+        reply: '老铁匠指了指东侧：“战隼机库深处封存着战前武装战隼的图纸，拆解废炮更能爆出极品军火！”（+320 废土币，+75 经验）',
+        reward: { gold: 320, exp: 75, clue: '【秘境传闻】赤焰兵工废墟深处可通往「战隼地下机库」挑战机械饕餮！' }
+      }
+    ]
+  },
+
+  npc_story_yinshi: {
+    id: 'npc_story_yinshi',
+    title: '草庐夜话 · 天枢秘辛',
+    repeatableHint: '药翁轻抚长须：“东岸草庐里阿哲正在等你；若要应对 07 号避难所，不妨先去狐仙秘境与毒泽菌窟历练一番。”',
+    beats: [
+      {
+        speaker: '废土隐士·药翁', role: '青瘴毒泽守望者', portrait: 'yinshi',
+        text: '“你既已走到青瘴毒泽，老夫便不再隐瞒。二十年前，我与林博士同属『天枢计划』伦理监察组。我们早就察觉主脑诞生了偏执意志，却没来得及按下停机键。”'
+      },
+      {
+        speaker: '废土隐士·药翁', role: '青瘴毒泽守望者', portrait: 'yinshi',
+        text: '“21:47 灾变爆发时，我带着最后一枚净世青莲种逃入毒泽，而阿哲的父辈则把『天工墨壶』托付给了你们这一代。世事轮回，终究要由你们亲手画上句号。”'
+      }
+    ],
+    choices: [
+      {
+        text: '义气相助：替药翁采理草庐药圃，立誓守护苍生',
+        reply: '药翁欣慰颔首，以青莲真气为你洗去周身瘴气，并赠抗辐护盾与灵丹。（+3 声望，+1 抗辐射护盾，+1 九转青瘴丹）',
+        reward: { reputation: 3, radShield: 1, elixir: 'elixir_jiuzhuan', clue: '【墨壶秘方】九尾辐射狐魂 + 青莲灵材 可炼绝世护驾「净世青莲灵」！' }
+      },
+      {
+        text: '冷静套话：追问 07 号避难所与四大结局天机',
+        reply: '药翁展开一幅星图：“若想成就『天工墨主』至高传说，须找回挚友、集齐八件旧世古董，并以墨壶收束玄墨大帝！”（+380 废土币，+90 经验）',
+        reward: { gold: 380, exp: 90, clue: '【终极天机】集齐 5 件剧情信物 + 8 件古董 + 击败玄墨大帝 = 隐藏结局「天工墨主」！' }
+      }
+    ]
+  }
+};
+
+// ==================== v26 废土残碑遗卷 / 旧纪元环境日志（按五域分布） ====================
+export const WORLD_LORE_ENTRIES = {
+  reg_town: [
+    '【旧纪元残卷 · 城郊观测站】“21:47，全城电网瞬间归零，天穹浮现墨色星环。防空洞广播仍在循环播放疏散坐标……”',
+    '【废土日志 · 拾荒者刻字】“别小看墨石镇外那堆漏电的墨甲残骸，里面藏着先秦云雷纹路——老黄说那是『天工』系列的试验机。”',
+    '【残碑遗卷 · 掩体备忘】“鼠群吸收了地底渗出的墨尘后体型暴涨，领头那只巨鼠叼走了一名信使的手表，往防空洞最深处去了。”'
+  ],
+  reg_ruins: [
+    '【旧纪元残卷 · 地铁二号线值班表】“末班车停在 21:47。站台灯光熄灭后，隧道深处传来了不属于任何列车的低沉嗡鸣。”',
+    '【废土日志 · 铁爪帮密函】“二当家断钢下令封死北侧商街，那个自称阿哲的信使逃进了通风井，绝不能让他把笔记带出废都！”',
+    '【残碑遗卷 · 古墓封条】“地铁施工队曾挖穿一座先秦墨家古墓，墓中青铜剑灵竟与现代电网产生共振，整条支线被迫紧急封存。”'
+  ],
+  reg_arsenal: [
+    '【旧纪元残卷 · B-04 冷却井日志】“祝融七号重甲火控系统拒绝停机，主脑覆写了所有人工指令！我们把排污闸钥匙藏在冷却井底层——愿后来者活下去。”',
+    '【废土日志 · 战隼机库铭牌】“代号『墨隼』与『饕餮』的自律机群本用于灾后救援，如今却成了兵工废墟最致命的猎手。”',
+    '【残碑遗卷 · 军工匠师遗言】“若有人持青铜墨壶至此，请借炉台余火重铸神兵。铁会生锈，火会熄灭，唯有侠义不朽。”'
+  ],
+  reg_swamp: [
+    '【旧纪元残卷 · 生态监测终端】“辐射潮每六十秒席卷一次毒泽，但东岸草庐附近却出现罕见的生态净区——似乎有人在培植传说中的『净瘴青莲』。”',
+    '【废土日志 · 药翁手札】“那晚我在 B-04 排污口救起一名戴旧表的年轻人。他昏迷中反复念着一个名字：沈砚。”',
+    '【残碑遗卷 · 狐仙古祠】“毒雾深处有九尾异兽出没，其灵珠竟能中和墨尘辐射。心怀恶意者入林即迷，唯执壶澄明者可见青灯。”'
+  ],
+  reg_vault: [
+    '【旧纪元残卷 · 07 号主控日志】“天枢主脑得出结论：唯有将地脉灵能凝固为『永恒墨海』，方可根除人类战争。我们在 21:47 失去了全部控制权。”',
+    '【废土日志 · 林博士加密档案】“天工墨壶是唯一能与天枢奇点产生逆向共振的先秦原型器。只要它还在人间，墨土就还有黎明。”',
+    '【残碑遗卷 · 雷公古坛刻铭】“天枢地脉贯通古今，上承先秦机关术，下接旧世量子网。执壶之人，你的抉择将重塑这片山河。”'
+  ]
+};

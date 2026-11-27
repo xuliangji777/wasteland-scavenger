@@ -23,8 +23,26 @@ const {
   SIDE_QUESTS,
   SKILL_BRANCHES,
   SHOP_STOCK,
+  STORY_CUTSCENES,
+  WORLD_LORE_ENTRIES,
   resolveAssetPath
 } = require('../../utils/data.js');
+
+const CUTSCENE_PORTRAITS = {
+  hero: 'assets/portrait_hero.jpg',
+  laohuang: 'assets/portrait_laohuang.jpg',
+  yinshi: 'assets/portrait_yinshi.jpg',
+  boss: 'assets/sprites/enemy_demon.png'
+};
+
+const MAP_ENTRY_CUTSCENES = {
+  town: 'entry_town',
+  wasteland: 'entry_wasteland',
+  ruins: 'entry_ruins',
+  arsenal: 'entry_arsenal',
+  swamp: 'entry_swamp',
+  vault: 'entry_vault'
+};
 const { storage } = require('../../utils/storage.js');
 const { sfx } = require('../../utils/audio.js');
 const rpgWorldMod = require('../../utils/rpg_world.js');
@@ -324,6 +342,8 @@ function createInitialState() {
     defeatedBosses: [],
     openedChests: [],
     seenEnemies: [],
+    seenCutscenes: [],
+    seenLore: [],
     endingsUnlocked: [],
     stats: { pick: 0, dis: 0, sellGold: 0, battleWin: 0, capture: 0, fuse: 0, salvageHeavy: 0, defeatHeavy: 0 }
   };
@@ -350,6 +370,8 @@ function migrateState(raw) {
   s.defeatedBosses = Array.isArray(raw.defeatedBosses) ? raw.defeatedBosses : [];
   s.openedChests = Array.isArray(raw.openedChests) ? raw.openedChests.filter(Boolean) : [];
   s.seenEnemies = Array.isArray(raw.seenEnemies) ? raw.seenEnemies : [];
+  s.seenCutscenes = Array.isArray(raw.seenCutscenes) ? raw.seenCutscenes.filter(Boolean) : [];
+  s.seenLore = Array.isArray(raw.seenLore) ? raw.seenLore.filter(Boolean) : [];
   s.endingsUnlocked = Array.isArray(raw.endingsUnlocked) ? raw.endingsUnlocked : [];
   s.stats = { ...base.stats, ...(raw.stats || {}) };
   if (!MAPS_BY_ID[s.mapId]) s.mapId = 'town';
@@ -576,6 +598,7 @@ Page({
         this.world.start();
       }
       this.showSceneBanner(map.name, reg ? reg.name : '墨土五域');
+      this._maybeTriggerMapEntryCutscene(map.id);
     });
   },
 
@@ -916,6 +939,7 @@ Page({
     sfx.uiTick();
     this.syncHUD();
     this.scheduleSave();
+    this._maybeTriggerMapEntryCutscene(target.id);
   },
 
   // ==================== 世界交互、搜刮与辐射潮 ====================
@@ -1092,7 +1116,161 @@ Page({
     if (s.mapId === 'vault') this.advanceQuestTrigger('loot_vault');
     this.gainExp(18 + regionIdx * 8 + (isPremiumChest ? 12 : 0));
     this.showToast(`开启「${node.name || '宝箱'}」：${lootParts.join('、')}！`, 'success');
+    if (isPremiumChest || Math.random() < 0.45) {
+      this._revealRegionLore(map.regionId);
+    }
     this.syncHUD();
+    this.scheduleSave();
+  },
+
+  // ==================== v26 多幕剧情演出与环境残卷引擎 ====================
+  _applyCutsceneReward(reward) {
+    if (!reward || typeof reward !== 'object') return;
+    const s = this.state;
+    const stats = this.getHeroStats();
+    if (reward.gold) s.gold += reward.gold;
+    if (reward.reputation) s.reputation = (s.reputation || 0) + reward.reputation;
+    if (reward.radShield) s.radShield = (s.radShield || 0) + reward.radShield;
+    if (reward.hp) s.hp = Math.min(stats.maxHp, s.hp + reward.hp);
+    if (reward.energy) s.energy = Math.min(stats.maxEnergy, s.energy + reward.energy);
+    if (reward.elixir) {
+      s.elixirs[reward.elixir] = (s.elixirs[reward.elixir] || 0) + 1;
+    }
+    if (reward.exp) this.gainExp(reward.exp);
+    if (reward.storyId !== undefined) this.unlockStoryRelic(reward.storyId);
+    if (reward.clue) this.showToast(reward.clue, 'success');
+    sfx.pick('rare');
+    this.syncHUD();
+    this.scheduleSave();
+  },
+
+  _finishCutscene(markSeen = true) {
+    const ctx = this.activeCutscene;
+    this.activeCutscene = null;
+    if (!ctx) return;
+    this.state.seenCutscenes = this.state.seenCutscenes || [];
+    if (markSeen && !this.state.seenCutscenes.includes(ctx.cs.id)) {
+      this.state.seenCutscenes.push(ctx.cs.id);
+      this.scheduleSave();
+    }
+    const cb = ctx.onComplete;
+    if (typeof cb === 'function') {
+      setTimeout(() => cb(), 30);
+    }
+  },
+
+  _renderCutsceneBeat() {
+    const ctx = this.activeCutscene;
+    if (!ctx) return;
+    const { cs, beatIdx } = ctx;
+    const beats = cs.beats || [];
+    const beat = beats[beatIdx] || beats[beats.length - 1];
+    if (!beat) {
+      this.closeDialog();
+      return;
+    }
+    const isLastBeat = beatIdx >= beats.length - 1;
+    const alreadySeen = (this.state.seenCutscenes || []).includes(cs.id);
+    const portraitRaw = CUTSCENE_PORTRAITS[beat.portrait] || beat.portrait || CUTSCENE_PORTRAITS.hero;
+
+    let options = [];
+    if (!isLastBeat) {
+      options = [
+        { text: '继续 ▸', cutsceneAction: 'next' },
+        { text: '跳过剧情', cutsceneAction: 'skip' }
+      ];
+    } else if (cs.choices && cs.choices.length && !alreadySeen) {
+      options = cs.choices.map((c, idx) => ({
+        text: c.text,
+        cutsceneAction: 'choice',
+        choiceIndex: idx
+      }));
+    } else {
+      options = [
+        { text: cs.triggerBoss ? '拔剑迎战 ▸' : '继续征途 ▸', cutsceneAction: 'finish' }
+      ];
+    }
+
+    this.setData({
+      dialog: {
+        open: true,
+        id: `__cutscene__:${cs.id}`,
+        name: beat.speaker || '沈砚',
+        title: `${cs.title} · ${beat.role || '江湖纪事'} (${beatIdx + 1}/${beats.length})`,
+        portrait: resolveAssetPath(portraitRaw),
+        text: beat.text,
+        options
+      }
+    });
+  },
+
+  playStoryCutscene(cutsceneId, opts = {}) {
+    const cs = STORY_CUTSCENES && STORY_CUTSCENES[cutsceneId];
+    if (!cs) {
+      if (typeof opts.onComplete === 'function') opts.onComplete();
+      return false;
+    }
+    this.state.seenCutscenes = this.state.seenCutscenes || [];
+    const alreadySeen = this.state.seenCutscenes.includes(cutsceneId);
+
+    if (!opts.force && alreadySeen) {
+      if (opts.isNpcStory && cs.repeatableHint) {
+        if (this.world) this.world.paused = true;
+        const firstBeat = (cs.beats && cs.beats[0]) || {};
+        const portraitRaw = CUTSCENE_PORTRAITS[firstBeat.portrait] || CUTSCENE_PORTRAITS.laohuang;
+        this.activeCutscene = null;
+        this.setData({
+          dialog: {
+            open: true,
+            id: `__cutscene_hint__:${cs.id}`,
+            name: firstBeat.speaker || '江湖秘闻',
+            title: `${cs.title} · 秘闻回顾`,
+            portrait: resolveAssetPath(portraitRaw),
+            text: cs.repeatableHint,
+            options: [{ text: '重温此段对话', cutsceneAction: 'replay', cutsceneId: cs.id }]
+          }
+        });
+        return true;
+      }
+      if (typeof opts.onComplete === 'function') opts.onComplete();
+      return false;
+    }
+
+    if (this.world) this.world.paused = true;
+    this.activeCutscene = {
+      cs,
+      beatIdx: 0,
+      onComplete: opts.onComplete || null,
+      isNpcStory: Boolean(opts.isNpcStory)
+    };
+    sfx.uiTick();
+    this._renderCutsceneBeat();
+    return true;
+  },
+
+  _maybeTriggerMapEntryCutscene(mapId) {
+    const csId = MAP_ENTRY_CUTSCENES[mapId];
+    if (!csId || !STORY_CUTSCENES || !STORY_CUTSCENES[csId]) return;
+    this.state.seenCutscenes = this.state.seenCutscenes || [];
+    if (this.state.seenCutscenes.includes(csId)) return;
+    setTimeout(() => {
+      if (!this.state || this.data.inBattle || this.data.activeModal || this.data.dialog.open) return;
+      if (this.state.mapId !== mapId) return;
+      this.playStoryCutscene(csId);
+    }, 460);
+  },
+
+  _revealRegionLore(regionId) {
+    const pool = WORLD_LORE_ENTRIES && WORLD_LORE_ENTRIES[regionId];
+    if (!Array.isArray(pool) || !pool.length) return;
+    this.state.seenLore = this.state.seenLore || [];
+    const unseenIdx = pool.findIndex((_, i) => !this.state.seenLore.includes(`${regionId}_${i}`));
+    if (unseenIdx === -1) return;
+    this.state.seenLore.push(`${regionId}_${unseenIdx}`);
+    const text = pool[unseenIdx];
+    setTimeout(() => {
+      this.showToast(text, 'info');
+    }, 450);
     this.scheduleSave();
   },
 
@@ -1100,6 +1278,7 @@ Page({
   openNpcDialog(npcId) {
     const npc = NPCS[npcId];
     if (!npc) return;
+    this.activeCutscene = null;
     if (this.world) this.world.paused = true;
     sfx.uiTick();
     this.advanceQuestTrigger(`talk_${npcId}`);
@@ -1118,18 +1297,66 @@ Page({
 
   closeDialog() {
     this.setData({ 'dialog.open': false });
-    if (this.world && !this.data.inBattle && !this.data.activeModal) {
+    if (this.activeCutscene) {
+      this._finishCutscene(true);
+    }
+    if (this.world && !this.data.inBattle && !this.data.activeModal && !this.activeCutscene) {
       this.world.paused = false;
     }
   },
 
   onDialogOptionTap(e) {
     const idx = Number(e.currentTarget.dataset.index);
+    const curOpts = (this.data.dialog && this.data.dialog.options) || [];
+    const tappedOpt = curOpts[idx];
+    if (tappedOpt && tappedOpt.cutsceneAction) {
+      const act = tappedOpt.cutsceneAction;
+      if (act === 'replay' && tappedOpt.cutsceneId) {
+        this.playStoryCutscene(tappedOpt.cutsceneId, { force: true, isNpcStory: true });
+        return;
+      }
+      if (!this.activeCutscene) {
+        this.closeDialog();
+        return;
+      }
+      const { cs } = this.activeCutscene;
+      const beats = cs.beats || [];
+      if (act === 'next') {
+        sfx.uiTick();
+        this.activeCutscene.beatIdx += 1;
+        this._renderCutsceneBeat();
+      } else if (act === 'skip') {
+        const alreadySeen = (this.state.seenCutscenes || []).includes(cs.id);
+        if (cs.choices && cs.choices.length && !alreadySeen) {
+          this.activeCutscene.beatIdx = beats.length - 1;
+          this._renderCutsceneBeat();
+        } else {
+          this.closeDialog();
+        }
+      } else if (act === 'choice') {
+        const choice = (cs.choices || [])[tappedOpt.choiceIndex];
+        this.state.seenCutscenes = this.state.seenCutscenes || [];
+        if (!this.state.seenCutscenes.includes(cs.id)) this.state.seenCutscenes.push(cs.id);
+        if (choice && choice.reward) this._applyCutsceneReward(choice.reward);
+        this.setData({
+          'dialog.text': (choice && choice.reply) || '你收好所得，继续前行。',
+          'dialog.options': [{ text: '踏上征途 ▸', cutsceneAction: 'finish' }]
+        });
+      } else {
+        this.closeDialog();
+      }
+      return;
+    }
+
     const npc = NPCS[this.data.dialog.id];
     if (!npc) return;
     const opt = (npc.options || [])[idx];
     if (!opt) return;
 
+    if (opt.action === 'story_branch') {
+      this.playStoryCutscene(`npc_story_${npc.id}`, { isNpcStory: true });
+      return;
+    }
     if (opt.action) {
       this.closeDialog();
       this.openModalByName(opt.action);
@@ -1203,9 +1430,19 @@ Page({
   },
 
   // ==================== 2.5D 纯泼墨回合制战斗系统 ====================
-  startBattle(worldEnemy) {
+  startBattle(worldEnemy, skipPreCutscene = false) {
     const tpl = ENEMIES[worldEnemy.enemyId || worldEnemy.id];
     if (!tpl) return;
+    if (!skipPreCutscene && tpl.isBoss) {
+      const preId = `pre_${tpl.id}`;
+      this.state.seenCutscenes = this.state.seenCutscenes || [];
+      if (STORY_CUTSCENES && STORY_CUTSCENES[preId] && !this.state.seenCutscenes.includes(preId)) {
+        this.playStoryCutscene(preId, {
+          onComplete: () => this.startBattle(worldEnemy, true)
+        });
+        return;
+      }
+    }
     if (this.world) this.world.paused = true;
     if (!this.state.seenEnemies.includes(tpl.id)) this.state.seenEnemies.push(tpl.id);
 
@@ -1736,6 +1973,18 @@ Page({
     this._closeBattle();
     this.syncHUD();
     this.scheduleSave();
+    if (en.isBoss) {
+      const postId = `post_${en.id}`;
+      if (STORY_CUTSCENES && STORY_CUTSCENES[postId] && !(s.seenCutscenes || []).includes(postId)) {
+        setTimeout(() => {
+          this.playStoryCutscene(postId, {
+            onComplete: () => {
+              if (en.isFinalBoss && !captured) this.openModalByName('ending');
+            }
+          });
+        }, 320);
+      }
+    }
   },
 
   _handleBattleDefeat() {

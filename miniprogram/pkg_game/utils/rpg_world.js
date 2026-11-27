@@ -124,22 +124,25 @@ const SPRITE_PATHS = {
 
 const DEFAULT_WALKABLE_NORM = {
   wasteland: [
-    [[0.04, 0.38], [0.96, 0.38], [0.96, 0.72], [0.04, 0.72]],
-    [[0.24, 0.24], [0.76, 0.24], [0.76, 0.86], [0.24, 0.86]],
-    [[0.44, 0.11], [0.60, 0.11], [0.60, 0.32], [0.44, 0.32]]
+    [[0.05, 0.30], [0.95, 0.30], [0.95, 0.74], [0.05, 0.74]],
+    [[0.16, 0.16], [0.88, 0.16], [0.88, 0.86], [0.16, 0.86]],
+    [[0.26, 0.10], [0.78, 0.10], [0.78, 0.92], [0.26, 0.92]]
   ],
   cave: [
-    [[0.06, 0.64], [0.72, 0.14], [0.95, 0.28], [0.46, 0.92], [0.10, 0.88]]
+    [[0.06, 0.34], [0.94, 0.34], [0.94, 0.74], [0.06, 0.74]],
+    [[0.14, 0.18], [0.88, 0.18], [0.88, 0.86], [0.14, 0.86]],
+    [[0.06, 0.56], [0.28, 0.56], [0.28, 0.88], [0.06, 0.88]],
+    [[0.68, 0.14], [0.94, 0.14], [0.94, 0.54], [0.68, 0.54]]
   ],
   ruins: [
-    [[0.04, 0.38], [0.96, 0.38], [0.96, 0.72], [0.04, 0.72]],
-    [[0.18, 0.23], [0.82, 0.23], [0.82, 0.84], [0.18, 0.84]],
-    [[0.36, 0.11], [0.74, 0.11], [0.74, 0.91], [0.36, 0.91]]
+    [[0.05, 0.30], [0.95, 0.30], [0.95, 0.74], [0.05, 0.74]],
+    [[0.15, 0.16], [0.88, 0.16], [0.88, 0.86], [0.15, 0.86]],
+    [[0.26, 0.10], [0.78, 0.10], [0.78, 0.92], [0.26, 0.92]]
   ],
   swamp: [
-    [[0.04, 0.40], [0.28, 0.32], [0.58, 0.28], [0.86, 0.26], [0.96, 0.40], [0.96, 0.70], [0.78, 0.82], [0.44, 0.82], [0.20, 0.76], [0.04, 0.68]],
-    [[0.34, 0.11], [0.52, 0.11], [0.54, 0.36], [0.32, 0.36]],
-    [[0.55, 0.72], [0.72, 0.72], [0.70, 0.91], [0.56, 0.91]]
+    [[0.05, 0.32], [0.26, 0.24], [0.58, 0.20], [0.88, 0.20], [0.95, 0.34], [0.95, 0.72], [0.84, 0.84], [0.46, 0.86], [0.18, 0.80], [0.05, 0.70]],
+    [[0.16, 0.18], [0.88, 0.18], [0.88, 0.84], [0.16, 0.84]],
+    [[0.28, 0.10], [0.76, 0.10], [0.76, 0.92], [0.28, 0.92]]
   ],
   town: [
     [[0.22, 0.46], [0.86, 0.46], [0.86, 0.80], [0.22, 0.80]]
@@ -1530,7 +1533,53 @@ class RpgWorld {
     const entry = bgPath ? this._getBgImage(bgPath) : null;
 
     if (entry && entry.loaded && !entry.error) {
-      ctx.drawImage(entry.img, 0, 0, mw, mh);
+      if (mw > 1800) {
+        const tileW = mw / 2;
+        const tileH = mh / 2;
+        // 2×2 无缝镜像拼接渲染（高清不拉伸：公路与地平线在中心线自然接续）
+        // Top-Left (0, 0): (scaleX: 1, scaleY: 1)
+        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
+
+        // Top-Right (1, 0): (scaleX: -1, scaleY: 1)
+        ctx.save();
+        ctx.translate(mw, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
+        ctx.restore();
+
+        // Bottom-Left (0, 1): (scaleX: 1, scaleY: -1)
+        ctx.save();
+        ctx.translate(0, mh);
+        ctx.scale(1, -1);
+        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
+        ctx.restore();
+
+        // Bottom-Right (1, 1): (scaleX: -1, scaleY: -1)
+        ctx.save();
+        ctx.translate(mw, mh);
+        ctx.scale(-1, -1);
+        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
+        ctx.restore();
+
+        // 中心拼接带柔和水墨薄雾过渡，消除镜像接缝感
+        const seamW = Math.max(90, Math.round(mw * 0.045));
+        const vGrad = ctx.createLinearGradient(tileW - seamW, 0, tileW + seamW, 0);
+        vGrad.addColorStop(0, 'rgba(10, 14, 18, 0)');
+        vGrad.addColorStop(0.5, 'rgba(10, 14, 18, 0.22)');
+        vGrad.addColorStop(1, 'rgba(10, 14, 18, 0)');
+        ctx.fillStyle = vGrad;
+        ctx.fillRect(tileW - seamW, 0, seamW * 2, mh);
+
+        const seamH = Math.max(70, Math.round(mh * 0.05));
+        const hGrad = ctx.createLinearGradient(0, tileH - seamH, 0, tileH + seamH);
+        hGrad.addColorStop(0, 'rgba(10, 14, 18, 0)');
+        hGrad.addColorStop(0.5, 'rgba(10, 14, 18, 0.22)');
+        hGrad.addColorStop(1, 'rgba(10, 14, 18, 0)');
+        ctx.fillStyle = hGrad;
+        ctx.fillRect(0, tileH - seamH, mw, seamH * 2);
+      } else {
+        ctx.drawImage(entry.img, 0, 0, mw, mh);
+      }
     } else {
       const pal = map.palette || {};
       const grad = ctx.createLinearGradient(0, 0, 0, mh);

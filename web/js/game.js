@@ -24,9 +24,11 @@ import {
   DAILY_TASK_TPL,
   WEEKLY_TASK_TPL,
   TEAM_TASK_TPL,
-  SIDE_QUESTS
-} from './data.js?v=13';
-import { InkWorldEngine } from './rpg_world.js?v=24';
+  SIDE_QUESTS,
+  STORY_CUTSCENES,
+  WORLD_LORE_ENTRIES
+} from './data.js?v=26';
+import { InkWorldEngine } from './rpg_world.js?v=26';
 import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';
@@ -197,6 +199,8 @@ function createInitialState() {
     defeatedBosses: [],
     openedChests: [],
     seenEnemies: [],
+    seenCutscenes: [],
+    seenLore: [],
     endingsUnlocked: [],
 
     // 统计与日常
@@ -238,6 +242,8 @@ function migrateState(raw) {
   s.defeatedBosses = Array.isArray(raw.defeatedBosses) ? raw.defeatedBosses : [];
   s.openedChests = Array.isArray(raw.openedChests) ? raw.openedChests.filter(Boolean) : [];
   s.seenEnemies = Array.isArray(raw.seenEnemies) ? raw.seenEnemies : [];
+  s.seenCutscenes = Array.isArray(raw.seenCutscenes) ? raw.seenCutscenes.filter(Boolean) : [];
+  s.seenLore = Array.isArray(raw.seenLore) ? raw.seenLore.filter(Boolean) : [];
   s.endingsUnlocked = Array.isArray(raw.endingsUnlocked) ? raw.endingsUnlocked : [];
   s.stats = { ...base.stats, ...(raw.stats || {}) };
   s.dailyDone = Array.isArray(raw.dailyDone) ? raw.dailyDone : [];
@@ -753,6 +759,7 @@ function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true, 
     if (!battle) {
       sfx.playBgm?.(getBgmTrackForMap(target.id));
     }
+    maybeTriggerMapEntryCutscene(target.id);
   }
   updateHUD();
   scheduleSave();
@@ -996,6 +1003,7 @@ function handleSalvageNode(node) {
 
   gainExp(32 + regionIdx * 12);
   showToast(`拆解「${node.name}」满载而归：${lootLabels.join('、')}！`, 'success');
+  revealRegionLore(curMap?.regionId);
 
   if (node.salvageElite && ENEMIES[node.salvageElite] && Math.random() < 0.35) {
     showToast(`警报！拆解惊动了休眠的「${ENEMIES[node.salvageElite].name}」！`, 'danger');
@@ -1132,6 +1140,9 @@ function handleLootNode(node) {
   sfx.pick(bestQuality);
   gainExp(18 + regionIdx * 8 + (isPremiumChest ? 12 : 0));
   showToast(`开启「${node.name || '宝箱'}」：${lootParts.join('、')}！`, bestQuality === 'legend' || bestQuality === 'rare' ? 'success' : 'info');
+  if (isPremiumChest || Math.random() < 0.45) {
+    revealRegionLore(curMap?.regionId);
+  }
 
   updateHUD();
   scheduleSave();
@@ -1197,14 +1208,241 @@ function handleWorldInteract(target) {
   }
 }
 
+// ==================== v26 轩辕剑 × 古龙 · 多幕剧情演出与残卷引擎 ====================
+const CUTSCENE_PORTRAITS = {
+  hero: 'assets/portrait_hero.jpg',
+  laohuang: 'assets/portrait_laohuang.jpg',
+  yinshi: 'assets/portrait_yinshi.jpg',
+  boss: 'assets/sprites/enemy_demon.png'
+};
+
+const MAP_ENTRY_CUTSCENES = {
+  town: 'entry_town',
+  wasteland: 'entry_wasteland',
+  ruins: 'entry_ruins',
+  arsenal: 'entry_arsenal',
+  swamp: 'entry_swamp',
+  vault: 'entry_vault'
+};
+
+let activeCutscene = null;
+
+function setDialogPortrait(portraitSrc, fallbackChar = '墨') {
+  const img = $('dialog-portrait-img');
+  const fallback = $('dialog-portrait-fallback');
+  if (!img || !fallback) return;
+  fallback.textContent = fallbackChar;
+  if (portraitSrc) {
+    img.classList.remove('hidden');
+    fallback.classList.add('hidden');
+    img.onerror = () => {
+      img.classList.add('hidden');
+      fallback.classList.remove('hidden');
+    };
+    img.src = portraitSrc;
+  } else {
+    img.classList.add('hidden');
+    fallback.classList.remove('hidden');
+  }
+}
+
+function applyCutsceneReward(reward) {
+  if (!reward || typeof reward !== 'object') return;
+  const stats = getHeroStats();
+  if (reward.gold) state.gold += reward.gold;
+  if (reward.reputation) state.reputation = (state.reputation || 0) + reward.reputation;
+  if (reward.radShield) state.radShield = (state.radShield || 0) + reward.radShield;
+  if (reward.hp) state.hp = Math.min(stats.maxHp, state.hp + reward.hp);
+  if (reward.energy) state.energy = Math.min(stats.maxEnergy, state.energy + reward.energy);
+  if (reward.elixir) {
+    state.elixirs[reward.elixir] = (state.elixirs[reward.elixir] || 0) + 1;
+  }
+  if (reward.exp) gainExp(reward.exp);
+  if (reward.storyId !== undefined) unlockStoryRelic(reward.storyId);
+  if (reward.clue) {
+    showToast(reward.clue, 'success');
+  }
+  sfx.pick('rare');
+  updateHUD();
+  scheduleSave();
+}
+
+function finishActiveCutscene(markSeen = true) {
+  const ctx = activeCutscene;
+  activeCutscene = null;
+  if (!ctx) return;
+  state.seenCutscenes = state.seenCutscenes || [];
+  if (markSeen && !state.seenCutscenes.includes(ctx.cs.id)) {
+    state.seenCutscenes.push(ctx.cs.id);
+    scheduleSave();
+  }
+  const cb = ctx.onComplete;
+  if (typeof cb === 'function') {
+    setTimeout(() => cb(), 30);
+  }
+}
+
+function renderActiveCutsceneBeat() {
+  if (!activeCutscene) return;
+  const { cs, beatIdx } = activeCutscene;
+  const beats = cs.beats || [];
+  const beat = beats[beatIdx] || beats[beats.length - 1];
+  if (!beat) {
+    closeDialog(true);
+    return;
+  }
+  const box = $('rpg-dialog-box');
+  const speaker = beat.speaker || '沈砚';
+  $('dialog-speaker').textContent = speaker;
+  $('dialog-title').textContent = `${cs.title} · ${beat.role || '江湖纪事'} (${beatIdx + 1}/${beats.length})`;
+  $('dialog-text').textContent = beat.text;
+  const portraitSrc = CUTSCENE_PORTRAITS[beat.portrait] || beat.portrait || CUTSCENE_PORTRAITS.hero;
+  setDialogPortrait(portraitSrc, speaker.slice(0, 1));
+
+  const optsWrap = $('dialog-options');
+  optsWrap.innerHTML = '';
+
+  const isLastBeat = beatIdx >= beats.length - 1;
+  const alreadySeen = (state.seenCutscenes || []).includes(cs.id);
+
+  if (!isLastBeat) {
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'dialog-opt-btn primary';
+    nextBtn.textContent = '继续 ▸';
+    nextBtn.addEventListener('click', () => {
+      sfx.uiTick?.();
+      if (!activeCutscene) return;
+      activeCutscene.beatIdx += 1;
+      renderActiveCutsceneBeat();
+    });
+    optsWrap.appendChild(nextBtn);
+
+    const skipBtn = document.createElement('button');
+    skipBtn.className = 'dialog-opt-btn';
+    skipBtn.textContent = '跳过剧情';
+    skipBtn.addEventListener('click', () => {
+      if (cs.choices && cs.choices.length && !alreadySeen && activeCutscene) {
+        activeCutscene.beatIdx = beats.length - 1;
+        renderActiveCutsceneBeat();
+      } else {
+        closeDialog();
+      }
+    });
+    optsWrap.appendChild(skipBtn);
+  } else if (cs.choices && cs.choices.length && !alreadySeen) {
+    cs.choices.forEach((choice, cIdx) => {
+      const btn = document.createElement('button');
+      btn.className = `dialog-opt-btn${cIdx === 0 ? ' primary' : ''}`;
+      btn.textContent = choice.text;
+      btn.addEventListener('click', () => {
+        state.seenCutscenes = state.seenCutscenes || [];
+        if (!state.seenCutscenes.includes(cs.id)) state.seenCutscenes.push(cs.id);
+        applyCutsceneReward(choice.reward);
+        $('dialog-text').textContent = choice.reply || '你收好所得，继续前行。';
+        optsWrap.innerHTML = '';
+        const doneBtn = document.createElement('button');
+        doneBtn.className = 'dialog-opt-btn primary';
+        doneBtn.textContent = '踏上征途 ▸';
+        doneBtn.addEventListener('click', () => closeDialog());
+        optsWrap.appendChild(doneBtn);
+      });
+      optsWrap.appendChild(btn);
+    });
+  } else {
+    const endBtn = document.createElement('button');
+    endBtn.className = 'dialog-opt-btn primary';
+    endBtn.textContent = cs.triggerBoss ? '拔剑迎战 ▸' : '继续征途 ▸';
+    endBtn.addEventListener('click', () => closeDialog());
+    optsWrap.appendChild(endBtn);
+  }
+
+  box?.classList.remove('hidden');
+}
+
+function playStoryCutscene(cutsceneId, opts = {}) {
+  const cs = STORY_CUTSCENES[cutsceneId];
+  if (!cs) {
+    opts.onComplete?.();
+    return false;
+  }
+  state.seenCutscenes = state.seenCutscenes || [];
+  const alreadySeen = state.seenCutscenes.includes(cutsceneId);
+
+  if (!opts.force && alreadySeen) {
+    if (opts.isNpcStory && cs.repeatableHint) {
+      if (world) world.paused = true;
+      currentDialog = { isCutscene: false, id: cutsceneId };
+      const firstBeat = cs.beats?.[0] || {};
+      $('dialog-speaker').textContent = firstBeat.speaker || '江湖秘闻';
+      $('dialog-title').textContent = `${cs.title} · 秘闻回顾`;
+      $('dialog-text').textContent = cs.repeatableHint;
+      setDialogPortrait(CUTSCENE_PORTRAITS[firstBeat.portrait] || CUTSCENE_PORTRAITS.laohuang, (firstBeat.speaker || '墨').slice(0, 1));
+      const optsWrap = $('dialog-options');
+      optsWrap.innerHTML = '';
+      const replayBtn = document.createElement('button');
+      replayBtn.className = 'dialog-opt-btn primary';
+      replayBtn.textContent = '重温此段对话';
+      replayBtn.addEventListener('click', () => playStoryCutscene(cutsceneId, { ...opts, force: true }));
+      optsWrap.appendChild(replayBtn);
+      const bye = document.createElement('button');
+      bye.className = 'dialog-opt-btn';
+      bye.textContent = '告辞';
+      bye.addEventListener('click', () => closeDialog());
+      optsWrap.appendChild(bye);
+      $('rpg-dialog-box')?.classList.remove('hidden');
+      return true;
+    }
+    opts.onComplete?.();
+    return false;
+  }
+
+  if (world) world.paused = true;
+  currentDialog = { isCutscene: true, id: cutsceneId };
+  activeCutscene = { cs, beatIdx: 0, onComplete: opts.onComplete || null, isNpcStory: Boolean(opts.isNpcStory) };
+  sfx.uiTick?.();
+  renderActiveCutsceneBeat();
+  return true;
+}
+
+function maybeTriggerMapEntryCutscene(mapId) {
+  const csId = MAP_ENTRY_CUTSCENES[mapId];
+  if (!csId || !STORY_CUTSCENES[csId]) return;
+  state.seenCutscenes = state.seenCutscenes || [];
+  if (state.seenCutscenes.includes(csId)) return;
+  setTimeout(() => {
+    if (battle || currentDialog || state.mapId !== mapId) return;
+    if (isStudioSplashActive() || isOpeningPrologueActive()) return;
+    playStoryCutscene(csId);
+  }, 460);
+}
+
+function revealRegionLore(regionId) {
+  const pool = WORLD_LORE_ENTRIES[regionId];
+  if (!Array.isArray(pool) || !pool.length) return;
+  state.seenLore = state.seenLore || [];
+  const unseenIdx = pool.findIndex((_, i) => !state.seenLore.includes(`${regionId}_${i}`));
+  if (unseenIdx === -1) return;
+  const key = `${regionId}_${unseenIdx}`;
+  state.seenLore.push(key);
+  const text = pool[unseenIdx];
+  floatNearHero('发现旧纪元残卷！', '#5eead4');
+  setTimeout(() => {
+    showToast(text, 'info');
+  }, 420);
+  scheduleSave();
+}
+
 // ==================== NPC 底部水墨对话框 ====================
 function closeDialog(silent = false) {
   const box = $('rpg-dialog-box');
-  const wasOpen = Boolean(currentDialog || (box && !box.classList.contains('hidden')));
+  const wasOpen = Boolean(currentDialog || activeCutscene || (box && !box.classList.contains('hidden')));
   currentDialog = null;
   box?.classList.add('hidden');
   if (wasOpen && !silent) sfx.uiTick?.();
-  if (world && !battle && $('modal-backdrop')?.classList.contains('hidden')) {
+  if (activeCutscene) {
+    finishActiveCutscene(true);
+  }
+  if (world && !battle && !activeCutscene && $('modal-backdrop')?.classList.contains('hidden')) {
     world.paused = false;
   }
 }
@@ -1267,6 +1505,10 @@ function handleNpcOption(npc, idx, opt) {
   if (opt.action === 'crucible') { closeDialog(); openCrucible(); return; }
   if (opt.action === 'disassemble') { closeDialog(); openDisassemble(); return; }
   if (opt.action === 'skills') { closeDialog(); openSkill(); return; }
+  if (opt.action === 'story_branch') {
+    playStoryCutscene(`npc_story_${npc.id}`, { isNpcStory: true });
+    return;
+  }
 
   const id = npc.id;
   if (id === 'laohuang') {
@@ -2222,10 +2464,20 @@ function startBattleAmbient() {
   battleAmbientRaf = requestAnimationFrame(tick);
 }
 
-function startBattle(worldEnemy) {
+function startBattle(worldEnemy, skipPreCutscene = false) {
   if (battle) return;
   const tpl = worldEnemy.data || ENEMIES[worldEnemy.enemyId] || ENEMIES.rat;
-  closeDialog();
+  if (!skipPreCutscene && tpl.isBoss) {
+    const preId = `pre_${tpl.id}`;
+    state.seenCutscenes = state.seenCutscenes || [];
+    if (STORY_CUTSCENES[preId] && !state.seenCutscenes.includes(preId)) {
+      closeDialog(true);
+      closeModal();
+      playStoryCutscene(preId, { onComplete: () => startBattle(worldEnemy, true) });
+      return;
+    }
+  }
+  closeDialog(true);
   closeModal();
   if (world) world.paused = true;
 
@@ -2509,9 +2761,16 @@ function handleBattleVictory(captured = false) {
   gainExp(expGain);
 
   const isFinal = Boolean(tpl.isFinalBoss && !captured);
+  const postCutsceneId = tpl.isBoss ? `post_${tpl.id}` : null;
   setTimeout(() => {
     closeBattle();
-    if (isFinal) {
+    if (postCutsceneId && STORY_CUTSCENES[postCutsceneId] && !(state.seenCutscenes || []).includes(postCutsceneId)) {
+      playStoryCutscene(postCutsceneId, {
+        onComplete: () => {
+          if (isFinal) openEndingModal();
+        }
+      });
+    } else if (isFinal) {
       openEndingModal();
     }
   }, 1100);
@@ -5438,6 +5697,7 @@ function finishOpeningPrologue() {
     sfx.playBgm?.(getBgmTrackForMap(curMap.id));
     showSceneTitleBanner(curMap.name, region.name);
     showToast(`抵达「${curMap.name}」`, 'info');
+    maybeTriggerMapEntryCutscene(curMap.id);
   }
 }
 
@@ -5698,6 +5958,7 @@ function init() {
     }
     showSceneTitleBanner(curMap.name, region.name);
     showToast(`抵达「${curMap.name}」`, 'info');
+    maybeTriggerMapEntryCutscene(curMap.id);
   };
 
   // 开屏动画 -> 序章 -> 正式入镇严格串行衔接
