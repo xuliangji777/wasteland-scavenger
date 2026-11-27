@@ -26,7 +26,7 @@ import {
   TEAM_TASK_TPL,
   SIDE_QUESTS
 } from './data.js?v=13';
-import { InkWorldEngine } from './rpg_world.js?v=15';
+import { InkWorldEngine } from './rpg_world.js?v=22';
 import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';

@@ -197,10 +197,9 @@ export class InkWorldEngine {
     // 切图墨晕转场 (0..1)
     this._fadeAlpha = 0;
 
-    // 背景图与透明精灵图缓存
+    // 背景图与透明精灵图缓存（首屏仅预加载必需核心精灵，其余按需懒加载，避免移动端首屏抢占带宽）
     this._bgCache = new Map();
     this._spriteCache = new Map();
-    this._preloadBackgrounds();
     this._preloadSprites();
 
     // 主角状态（接地坐标 x, y）
@@ -448,15 +447,23 @@ export class InkWorldEngine {
   bindDpadButton(el, dir) {
     if (!el || !(dir in this.keys)) return;
     el.style.touchAction = 'none';
+    const dpad = el.closest?.('.dpad-cross');
+    const syncDpadActive = () => {
+      if (!dpad) return;
+      const anyPressed = this.keys.up || this.keys.down || this.keys.left || this.keys.right;
+      dpad.classList.toggle('is-active', anyPressed);
+    };
     const release = () => {
       this.setKey(dir, false);
       el.classList.remove('active');
+      syncDpadActive();
     };
     el.addEventListener('pointerdown', (e) => {
       if (e.cancelable) e.preventDefault();
       el.setPointerCapture?.(e.pointerId);
       el.classList.add('active');
       this.setKey(dir, true);
+      syncDpadActive();
     }, { passive: false });
     el.addEventListener('pointerup', release);
     el.addEventListener('pointercancel', release);
@@ -516,16 +523,18 @@ export class InkWorldEngine {
   // ==================== 资源与初始化辅助 ====================
 
   _preloadBackgrounds() {
-    for (const [key, path] of Object.entries(ASSETS)) {
-      if (key.startsWith('bg_')) {
-        this._getBgImage(path);
-      }
+    if (this.map?.bgAsset) {
+      const bgPath = resolveBgPath(this.map.bgAsset);
+      if (bgPath) this._getBgImage(bgPath);
     }
   }
 
   _preloadSprites() {
-    for (const [key, path] of Object.entries(SPRITE_PATHS)) {
-      this._getSprite(key, path);
+    const essentialKeys = ['hero', 'hero_walk', 'npc_merchant', 'shrine'];
+    for (const key of essentialKeys) {
+      if (SPRITE_PATHS[key]) {
+        this._getSprite(key, SPRITE_PATHS[key]);
+      }
     }
   }
 
@@ -535,9 +544,20 @@ export class InkWorldEngine {
     let entry = this._spriteCache.get(key);
     if (!entry) {
       const img = new Image();
-      entry = { img, loaded: false, error: false };
-      img.onload = () => { entry.loaded = true; };
-      img.onerror = () => { entry.error = true; };
+      entry = { img, loaded: false, error: false, retried: false };
+      img.onload = () => {
+        entry.loaded = true;
+        entry.error = false;
+      };
+      img.onerror = () => {
+        if (!entry.retried) {
+          entry.retried = true;
+          const sep = path.includes('?') ? '&' : '?';
+          img.src = `${path}${sep}retry=1`;
+          return;
+        }
+        entry.error = true;
+      };
       img.src = path;
       this._spriteCache.set(key, entry);
     }
@@ -576,9 +596,20 @@ export class InkWorldEngine {
     let entry = this._bgCache.get(path);
     if (!entry) {
       const img = new Image();
-      entry = { img, loaded: false, error: false };
-      img.onload = () => { entry.loaded = true; };
-      img.onerror = () => { entry.error = true; };
+      entry = { img, loaded: false, error: false, retried: false };
+      img.onload = () => {
+        entry.loaded = true;
+        entry.error = false;
+      };
+      img.onerror = () => {
+        if (!entry.retried) {
+          entry.retried = true;
+          const sep = path.includes('?') ? '&' : '?';
+          img.src = `${path}${sep}retry=1`;
+          return;
+        }
+        entry.error = true;
+      };
       img.src = path;
       this._bgCache.set(path, entry);
     }
@@ -644,6 +675,7 @@ export class InkWorldEngine {
     this.keys.down = false;
     this.keys.left = false;
     this.keys.right = false;
+    document.querySelector('.dpad-cross')?.classList.remove('is-active');
   }
 
   _handleKeyDown(e) {

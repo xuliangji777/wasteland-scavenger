@@ -1162,27 +1162,38 @@ html, body {
   z-index: 16;
 }
 
-/* 四向触控十字键（桌面克制半透，移动端拇指友好） */
+/* 四向触控十字键（避开左侧挖孔摄像头、闲置半透、触控高亮、拇指友好大尺寸） */
 .dpad-cross {
+  position: fixed;
+  left: max(56px, calc(env(safe-area-inset-left, 0px) + 48px));
+  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  z-index: 17;
   display: grid;
-  grid-template-columns: repeat(3, 36px);
-  grid-template-rows: repeat(3, 36px);
+  grid-template-columns: repeat(3, 42px);
+  grid-template-rows: repeat(3, 42px);
   gap: 3px;
   pointer-events: auto;
-  opacity: 0.52;
-  transition: opacity 0.2s ease;
+  opacity: 0.36;
+  transition: opacity 0.18s ease;
+  transform-origin: bottom left;
+  transform: scale(clamp(0.86, calc(var(--ui-scale, 1) * 1.45), 1.15));
+  will-change: transform, opacity;
 }
 .dpad-cross:hover,
-.dpad-cross:active { opacity: 0.96; }
+.dpad-cross:active,
+.dpad-cross:focus-within,
+.dpad-cross.is-active {
+  opacity: 0.92;
+}
 
 .dpad-btn {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(18, 15, 13, 0.72) 0%, rgba(14, 12, 10, 0.36) 66%, transparent 100%);
+  background: radial-gradient(circle, rgba(18, 15, 13, 0.76) 0%, rgba(14, 12, 10, 0.42) 66%, transparent 100%);
   border: none;
   color: var(--paper-light);
-  font-size: 13px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1192,8 +1203,8 @@ html, body {
   transition: background 0.14s, transform 0.1s;
 }
 .dpad-btn .dpad-ico {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.95));
   transition: filter 0.14s ease, transform 0.14s ease;
@@ -1205,8 +1216,9 @@ html, body {
   filter: drop-shadow(0 0 6px rgba(94, 234, 212, 0.75));
   transform: scale(1.1);
 }
-.dpad-btn:active {
-  background: radial-gradient(circle, rgba(212, 162, 74, 0.44) 0%, transparent 74%);
+.dpad-btn:active,
+.dpad-btn.active {
+  background: radial-gradient(circle, rgba(212, 162, 74, 0.48) 0%, transparent 74%);
   transform: scale(0.92);
 }
 
@@ -1231,6 +1243,7 @@ html, body {
 
 /* 右下角主交互群（无框水墨书法触发器） */
 .action-group {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -4453,11 +4466,11 @@ html, body {
     bottom: calc(68px + env(safe-area-inset-bottom));
   }
   .dpad-cross {
-    grid-template-columns: repeat(3, 46px);
-    grid-template-rows: repeat(3, 46px);
-    opacity: 0.88;
+    bottom: max(76px, calc(env(safe-area-inset-bottom, 0px) + 72px));
+    grid-template-columns: repeat(3, 44px);
+    grid-template-rows: repeat(3, 44px);
   }
-  .dpad-btn { width: 46px; height: 46px; font-size: 15px; }
+  .dpad-btn { width: 44px; height: 44px; font-size: 15px; }
   .interact-btn { min-height: 46px; height: 46px; padding: 0 14px; font-size: 13px; }
   .ink-action-btn { min-height: 44px; height: 44px; padding: 0 10px; font-size: 11.5px; }
 
@@ -4626,7 +4639,12 @@ html, body {
     right: calc(10px + env(safe-area-inset-right));
     bottom: calc(8px + env(safe-area-inset-bottom));
   }
-  .dpad-cross { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); opacity: 0.85; }
+  .dpad-cross {
+    left: max(56px, calc(env(safe-area-inset-left, 0px) + 48px));
+    bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+    grid-template-columns: repeat(3, 44px);
+    grid-template-rows: repeat(3, 44px);
+  }
   .dpad-btn { width: 44px; height: 44px; font-size: 14px; }
   .interact-btn,
   #btn-interact {
@@ -6552,8 +6570,8 @@ html, body {
 .dpad-cross,
 .dpad-wrap {
   transform-origin: bottom left;
-  transform: scale(var(--ui-scale, 1));
-  will-change: transform;
+  transform: scale(clamp(0.86, calc(var(--ui-scale, 1) * 1.45), 1.15));
+  will-change: transform, opacity;
 }
 
 .stage-controls .action-group {
@@ -6636,13 +6654,14 @@ html[data-density="compact"] .stage-controls {
   bottom: calc(8px + env(safe-area-inset-bottom));
 }
 html[data-density="compact"] .dpad-cross {
-  grid-template-columns: repeat(3, 46px);
-  grid-template-rows: repeat(3, 46px);
-  opacity: 0.86;
+  left: max(56px, calc(env(safe-area-inset-left, 0px) + 48px));
+  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(3, 44px);
 }
 html[data-density="compact"] .dpad-btn {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
 }
 html[data-density="compact"] .ink-dock {
   left: 50%;

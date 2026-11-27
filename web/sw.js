@@ -1,50 +1,19 @@
-const CACHE_NAME = 'moshitu-rpg-v21';
-const ASSETS = [
+const CACHE_NAME = 'moshitu-rpg-v22';
+const SHELL_ASSETS = [
   './',
   './index.html',
+  './manifest.json',
   './css/style.css',
+  './js/game.js',
+  './js/rpg_world.js',
   './js/data.js',
   './js/audio.js',
   './js/fx.js',
-  './js/storage.js',
-  './js/rpg_world.js',
-  './js/game.js',
-  './manifest.json',
-  './icon.svg',
-  './assets/app_icon.png',
-  './assets/icons_items.png',
-  './assets/icons_gear.png',
-  './assets/icons_skills.png',
-  './assets/bg_town.jpg',
-  './assets/bg_wasteland.jpg',
-  './assets/bg_ruins.jpg',
-  './assets/bg_swamp.jpg',
-  './assets/bg_interior.jpg',
-  './assets/bg_cave.jpg',
-  './assets/bg_battle.jpg',
-  './assets/bg_crucible.jpg',
-  './assets/bg_worldmap.jpg',
-  './assets/bg_armory.jpg',
-  './assets/portrait_hero.jpg',
-  './assets/portrait_laohuang.jpg',
-  './assets/portrait_yinshi.jpg',
-  './assets/sprites/wuxing_ink_wheel.png',
-  './assets/sprites/capture_ink_vortex.png',
-  './assets/sprites/hero.png',
-  './assets/sprites/hero_walk.png',
-  './assets/sprites/hero_battle.png',
-  './assets/sprites/crucible_vessel.png',
-  './assets/sprites/npc_merchant.png',
-  './assets/sprites/npc_hermit.png',
-  './assets/sprites/shrine.png',
-  './assets/sprites/enemy_beast.png',
-  './assets/sprites/enemy_mech.png',
-  './assets/sprites/enemy_demon.png',
-  './assets/sprites/chest.png'
+  './js/storage.js'
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(SHELL_ASSETS)));
   self.skipWaiting();
 });
 
@@ -58,7 +27,47 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  // Lazy runtime cache-first for heavy media under assets/ so initial load is never starved
+  if (url.pathname.includes('/assets/')) {
+    const isRetry = url.searchParams.has('retry');
+    e.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        if (!isRetry) {
+          const cached = await cache.match(req, { ignoreSearch: true });
+          if (cached) return cached;
+        }
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) {
+            cache.put(req, res.clone());
+          }
+          return res;
+        } catch (err) {
+          const fallback = await cache.match(req, { ignoreSearch: true });
+          if (fallback) return fallback;
+          throw err;
+        }
+      })
+    );
+    return;
+  }
+
+  // Network-first for lightweight HTML/CSS/JS shell, falling back to cache offline
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request, { ignoreSearch: true }))
+    fetch(req)
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req, { ignoreSearch: true }))
   );
 });
