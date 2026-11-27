@@ -236,6 +236,7 @@ export class InkWorldEngine {
     this._walkablePolys = [];
     this._activePortals = [];
     this._activeNpc = null;
+    this._openedChests = new Set();
     this.lootNodes = [];
     this.enemies = [];
     this.savePoint = null;
@@ -335,13 +336,20 @@ export class InkWorldEngine {
       this._activeNpc = null;
     }
 
+    // 同步已开启宝箱记录（一次性永久发现，绝不复生）
+    if (opts.openedChests !== undefined) {
+      this._openedChests = opts.openedChests instanceof Set
+        ? new Set(opts.openedChests)
+        : new Set(Array.isArray(opts.openedChests) ? opts.openedChests : []);
+    }
+
     // 搜刮点与残骸（自动吸附到可行走地面，且避开主角出生点）
     const rawLoot = Array.isArray(opts.lootNodes)
       ? opts.lootNodes
       : (map.lootZones || []).map((z) => ({
           ...z,
-          collected: false,
-          respawnAt: 0
+          opened: false,
+          collected: false
         }));
     this.lootNodes = rawLoot.map((node) => {
       const pt = this._snapToWalkable(node.x, node.y, 18);
@@ -352,6 +360,9 @@ export class InkWorldEngine {
         node.x = nudged.x;
         node.y = nudged.y;
       }
+      const isOpened = this._isNodeOpened(node, map.id);
+      node.opened = isOpened;
+      node.collected = isOpened;
       return node;
     });
 
@@ -407,6 +418,33 @@ export class InkWorldEngine {
     this._snapCamera();
     this.seedWeatherParticles();
     this.detectNearest();
+  }
+
+  /** 同步已永久开启的宝箱列表（支持 Set 或 Array） */
+  setOpenedChests(openedChests) {
+    this._openedChests = openedChests instanceof Set
+      ? new Set(openedChests)
+      : new Set(Array.isArray(openedChests) ? openedChests : []);
+    const mapId = this.map?.id;
+    for (const node of this.lootNodes) {
+      if (this._isNodeOpened(node, mapId)) {
+        node.opened = true;
+        node.collected = true;
+      }
+    }
+    this.detectNearest();
+  }
+
+  _getChestKey(node, mapId = this.map?.id) {
+    const idPart = node?.id || `${Math.round(node?.x || 0)}_${Math.round(node?.y || 0)}`;
+    return `${mapId || 'map'}:${idPart}`;
+  }
+
+  _isNodeOpened(node, mapId = this.map?.id) {
+    if (!node) return false;
+    if (node.opened || node.collected || (node.cooldown && node.cooldown > 0)) return true;
+    const key = this._getChestKey(node, mapId);
+    return this._openedChests.has(key) || (Boolean(node.id) && this._openedChests.has(node.id));
   }
 
   /** 切换当前地图天气 */
@@ -786,7 +824,7 @@ export class InkWorldEngine {
         return true;
       }
       for (const node of this.lootNodes) {
-        if (node.collected) continue;
+        if (this._isNodeOpened(node)) continue;
         if (dist(x, y, node.x, node.y) < radius + 20) return true;
       }
     }
@@ -1343,9 +1381,9 @@ export class InkWorldEngine {
       }
     }
 
-    // 4. 搜刮点与残骸
+    // 4. 搜刮点与残骸（已永久开启的宝箱绝不再高亮交互）
     for (const node of this.lootNodes) {
-      if (node.collected) continue;
+      if (this._isNodeOpened(node)) continue;
       const d = dist(hx, hy, node.x, node.y);
       if (d < bestDist) {
         bestDist = d;
@@ -1725,9 +1763,8 @@ export class InkWorldEngine {
       });
     }
 
-    // 4. 搜刮点与废弃重炮/机甲残骸
+    // 4. 搜刮点与废弃重炮/机甲残骸（已开启宝箱保留淡化残影，清晰提示已搜空）
     for (const node of this.lootNodes) {
-      if (node.collected) continue;
       list.push({
         sortY: node.y,
         draw: (ctx) => this._drawLootNode(ctx, node)
@@ -2018,18 +2055,43 @@ export class InkWorldEngine {
     const t = this._elapsed;
     const type = node.type || 'crate';
     const isHeavy = type === 'abandoned_cannon' || type === 'mech_wreck';
+    const isOpened = this._isNodeOpened(node);
     const qColor = QUALITY[node.item?.quality]?.color
       || (isHeavy ? '#e88b33'
         : type === 'vault_box' || type === 'relic_spot' ? '#d49a3a'
           : type === 'mushroom' ? '#6fb98f'
             : '#c8b48a');
     const pulse = 0.55 + 0.45 * Math.sin(t * 3.4 + node.x * 0.05);
-    const bob = Math.sin(t * 2.6 + node.x * 0.03) * 1.5;
+    const bob = isOpened ? 0 : Math.sin(t * 2.6 + node.x * 0.03) * 1.5;
     const sprite = this._getSprite('chest');
     const drawH = isHeavy ? 66 : 54;
 
     ctx.save();
     ctx.translate(node.x, node.y);
+
+    if (isOpened) {
+      // 已永久开启的宝箱：淡化残影（opacity 0.22），无光环无标签，清晰表明已搜空
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = 'rgba(12, 10, 8, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(0, 3, isHeavy ? 28 : 20, isHeavy ? 8 : 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+        const drawW = (sprite.img.naturalWidth / sprite.img.naturalHeight) * drawH;
+        ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 6, drawW, drawH);
+      } else {
+        ctx.fillStyle = '#3b2e22';
+        ctx.strokeStyle = '#6c6257';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(-16, -24, 32, 22, 4);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
 
     // 接地阴影
     ctx.fillStyle = 'rgba(12, 10, 8, 0.46)';
@@ -2940,9 +3002,9 @@ export class InkWorldEngine {
       ctx.fill();
     }
 
-    // 搜刮点（玉绿/重炮橙）
+    // 搜刮点（玉绿/重炮橙，已开启宝箱不再显示）
     for (const node of this.lootNodes) {
-      if (node.collected) continue;
+      if (this._isNodeOpened(node)) continue;
       const isHeavy = node.type === 'abandoned_cannon' || node.type === 'mech_wreck';
       ctx.fillStyle = isHeavy ? '#f59e0b' : '#6fb98f';
       ctx.beginPath();

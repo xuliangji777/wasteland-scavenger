@@ -260,6 +260,7 @@ class RpgWorld {
     this._walkablePolys = [];
     this._activePortals = [];
     this._activeNpc = null;
+    this._openedChests = new Set();
     this.lootNodes = [];
     this.enemies = [];
     this.savePoint = null;
@@ -335,12 +336,18 @@ class RpgWorld {
       this._activeNpc = null;
     }
 
+    if (options.openedChests !== undefined) {
+      this._openedChests = options.openedChests instanceof Set
+        ? new Set(options.openedChests)
+        : new Set(Array.isArray(options.openedChests) ? options.openedChests : []);
+    }
+
     const rawLoot = Array.isArray(options.lootNodes)
       ? options.lootNodes
       : (map.lootZones || []).map((z) => ({
           ...z,
-          collected: false,
-          respawnAt: 0
+          opened: false,
+          collected: false
         }));
 
     this.lootNodes = rawLoot.map((node) => {
@@ -352,6 +359,9 @@ class RpgWorld {
         node.x = nudged.x;
         node.y = nudged.y;
       }
+      const isOpened = this._isNodeOpened(node, map.id);
+      node.opened = isOpened;
+      node.collected = isOpened;
       return node;
     });
 
@@ -405,6 +415,33 @@ class RpgWorld {
     this._snapCamera();
     this.seedWeatherParticles();
     this.detectNearest();
+  }
+
+  /** 同步已永久开启的宝箱列表（支持 Set 或 Array） */
+  setOpenedChests(openedChests) {
+    this._openedChests = openedChests instanceof Set
+      ? new Set(openedChests)
+      : new Set(Array.isArray(openedChests) ? openedChests : []);
+    const mapId = this.map && this.map.id;
+    for (const node of this.lootNodes) {
+      if (this._isNodeOpened(node, mapId)) {
+        node.opened = true;
+        node.collected = true;
+      }
+    }
+    this.detectNearest();
+  }
+
+  _getChestKey(node, mapId = this.map && this.map.id) {
+    const idPart = (node && node.id) || `${Math.round((node && node.x) || 0)}_${Math.round((node && node.y) || 0)}`;
+    return `${mapId || 'map'}:${idPart}`;
+  }
+
+  _isNodeOpened(node, mapId = this.map && this.map.id) {
+    if (!node) return false;
+    if (node.opened || node.collected || (node.cooldown && node.cooldown > 0)) return true;
+    const key = this._getChestKey(node, mapId);
+    return this._openedChests.has(key) || (Boolean(node.id) && this._openedChests.has(node.id));
   }
 
   /** 设置移动方向向量（供虚拟十字键/摇杆调用） */
@@ -747,7 +784,7 @@ class RpgWorld {
         return true;
       }
       for (const node of this.lootNodes) {
-        if (node.collected) continue;
+        if (this._isNodeOpened(node)) continue;
         if (dist(x, y, node.x, node.y) < radius + 20) return true;
       }
     }
@@ -1294,7 +1331,7 @@ class RpgWorld {
     }
 
     for (const node of this.lootNodes) {
-      if (node.collected) continue;
+      if (this._isNodeOpened(node)) continue;
       const d = dist(hx, hy, node.x, node.y);
       if (d < bestDist) {
         bestDist = d;
@@ -1620,7 +1657,6 @@ class RpgWorld {
     }
 
     for (const node of this.lootNodes) {
-      if (node.collected) continue;
       list.push({ sortY: node.y, draw: (ctx) => this._drawLootNode(ctx, node) });
     }
 
@@ -1846,6 +1882,7 @@ class RpgWorld {
     const t = this._elapsed;
     const type = node.type || 'crate';
     const isHeavy = type === 'abandoned_cannon' || type === 'mech_wreck';
+    const isOpened = this._isNodeOpened(node);
     const qObj = node.item && node.item.quality ? QUALITY[node.item.quality] : null;
     const qColor = (qObj && qObj.color)
       || (isHeavy ? '#e88b33'
@@ -1853,12 +1890,35 @@ class RpgWorld {
           : type === 'mushroom' ? '#6fb98f'
             : '#c8b48a');
     const pulse = 0.55 + 0.45 * Math.sin(t * 3.4 + node.x * 0.05);
-    const bob = Math.sin(t * 2.6 + node.x * 0.03) * 1.5;
+    const bob = isOpened ? 0 : Math.sin(t * 2.6 + node.x * 0.03) * 1.5;
     const sprite = this._getSprite('chest');
     const drawH = isHeavy ? 66 : 54;
 
     ctx.save();
     ctx.translate(node.x, node.y);
+
+    if (isOpened) {
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = 'rgba(12, 10, 8, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(0, 3, isHeavy ? 28 : 20, isHeavy ? 8 : 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const shOpened = sprite && sprite.loaded && !sprite.error ? imgHeight(sprite.img) : 0;
+      if (shOpened > 0) {
+        const drawW = (imgWidth(sprite.img) / shOpened) * drawH;
+        ctx.drawImage(sprite.img, -drawW * 0.5, -drawH + 6, drawW, drawH);
+      } else {
+        ctx.fillStyle = '#3b2e22';
+        ctx.strokeStyle = '#6c6257';
+        ctx.lineWidth = 1.5;
+        drawRoundRect(ctx, -16, -24, 32, 22, 4);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
 
     ctx.fillStyle = 'rgba(12, 10, 8, 0.46)';
     ctx.beginPath();
@@ -2480,7 +2540,7 @@ class RpgWorld {
     }
 
     for (const node of this.lootNodes) {
-      if (node.collected) continue;
+      if (this._isNodeOpened(node)) continue;
       const isHeavy = node.type === 'abandoned_cannon' || node.type === 'mech_wreck';
       ctx.fillStyle = isHeavy ? '#f59e0b' : '#6fb98f';
       ctx.beginPath();

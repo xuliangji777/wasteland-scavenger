@@ -26,7 +26,7 @@ import {
   TEAM_TASK_TPL,
   SIDE_QUESTS
 } from './data.js?v=13';
-import { InkWorldEngine } from './rpg_world.js?v=23';
+import { InkWorldEngine } from './rpg_world.js?v=24';
 import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';
@@ -195,6 +195,7 @@ function createInitialState() {
     stories: [],
     collections: [],
     defeatedBosses: [],
+    openedChests: [],
     seenEnemies: [],
     endingsUnlocked: [],
 
@@ -235,6 +236,7 @@ function migrateState(raw) {
   s.stories = Array.isArray(raw.stories) ? raw.stories : [];
   s.collections = Array.isArray(raw.collections) ? raw.collections : [];
   s.defeatedBosses = Array.isArray(raw.defeatedBosses) ? raw.defeatedBosses : [];
+  s.openedChests = Array.isArray(raw.openedChests) ? raw.openedChests.filter(Boolean) : [];
   s.seenEnemies = Array.isArray(raw.seenEnemies) ? raw.seenEnemies : [];
   s.endingsUnlocked = Array.isArray(raw.endingsUnlocked) ? raw.endingsUnlocked : [];
   s.stats = { ...base.stats, ...(raw.stats || {}) };
@@ -720,10 +722,12 @@ function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true, 
   }
   const wid = target.sceneType === 'interior' ? 0 : (state.regionWeathers[region.id] ?? 0);
 
+  state.openedChests = state.openedChests || [];
   world.loadMap(target, {
     weatherId: wid,
     spawnX: sx,
     spawnY: sy,
+    openedChests: state.openedChests,
     guardian: state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null,
     heroWeaponType: state.equipped.weapon?.weaponType || 'blade'
   });
@@ -803,21 +807,18 @@ function refreshCurrentMapLoot() {
   state.regionWeathers[curMap.regionId] = nextW;
   world.setWeather(nextW);
 
-  // 刷新所有搜刮点与敌人
-  for (const node of world.lootNodes) {
-    node.collected = false;
-    node.respawnAt = 0;
-  }
+  // 刷新游荡异兽（已永久开启的宝箱绝不复生）
   for (const en of world.enemies) {
-    if (!en.alive) {
+    if (!en.alive && !en.data?.isBoss) {
       en.alive = true;
       en.hp = en.maxHp;
       en.x = en.homeX;
       en.y = en.homeY;
+      en.respawnTimer = 0;
     }
   }
   sfx.pick('fine');
-  showToast(`已搜寻新迹！第 ${state.day} 天，天气转为「${WEATHERS[nextW].name}」，区域物资已刷新！`, 'success');
+  showToast(`已搜寻新迹！第 ${state.day} 天，天气转为「${WEATHERS[nextW].name}」，区域游荡异兽已重新出没！`, 'success');
   updateHUD();
   scheduleSave();
 }
@@ -849,35 +850,152 @@ function rollQuality(bonusMult = 1) {
   return 'common';
 }
 
+const REGION_CHEST_ITEMS = [
+  [4, 5, 13, 14, 20, 21, 22, 23],     // 0: 墨石镇域
+  [5, 7, 12, 14, 15, 16, 22, 23],     // 1: 铁锈废都域
+  [6, 7, 8, 9, 18, 22, 23, 24],       // 2: 赤焰兵工域
+  [6, 8, 10, 17, 18, 22, 23, 24],     // 3: 青瘴毒泽域
+  [8, 9, 10, 11, 19, 23, 24]          // 4: 天枢核心域
+];
+
+const REGION_MONSTER_DROPS = [
+  [2, 3, 4, 13, 20, 21, 22],          // 0: 墨石镇域
+  [3, 4, 5, 12, 14, 20, 22],          // 1: 铁锈废都域
+  [5, 6, 7, 8, 18, 21, 22, 23],       // 2: 赤焰兵工域
+  [5, 7, 10, 17, 22, 23, 24],         // 3: 青瘴毒泽域
+  [6, 8, 9, 10, 11, 19, 23, 24]       // 4: 天枢核心域
+];
+
+const REGION_EQUIP_POOLS = [
+  ['wpn_inkblade', 'wpn_flaregun', 'armor_ironwire', 'mech_steam_core'],
+  ['wpn_qingcheng', 'wpn_shotgun', 'wpn_sniper', 'armor_ironwire', 'mech_steam_core'],
+  ['wpn_gatling', 'wpn_artillery', 'wpn_pulsesword', 'mech_crimson_frame', 'armor_exo'],
+  ['wpn_plasma_rifle', 'armor_exo', 'relic_fox_orb', 'mech_crimson_frame', 'wpn_pulsesword'],
+  ['wpn_railgun', 'wpn_xuanyuan', 'mech_bit_array', 'mech_tianshu_exo', 'relic_thunder_seal', 'relic_tianshu']
+];
+
+const BOSS_RARE_MATS = [10, 11, 18, 19]; // 辐射稳定核、战前黑匣子、军工伺服机、避难所芯片
+
+function getRegionTierIndex(mapOrRegionId) {
+  const rid = typeof mapOrRegionId === 'string' ? mapOrRegionId : mapOrRegionId?.regionId;
+  const idx = REGIONS.findIndex((r) => r.id === rid);
+  return idx >= 0 ? idx : 0;
+}
+
+function getChestKey(mapId, node) {
+  const idPart = node?.id || `${Math.round(node?.x || 0)}_${Math.round(node?.y || 0)}`;
+  return `${mapId || 'map'}:${idPart}`;
+}
+
+function rollChestEquipQuality(regionIdx, isPremium, rareBonus = 1) {
+  const eagleBonus = 1 + (state.skills[1] || 0) * 0.12 + (state.skills[5] || 0) * 0.05;
+  const mult = rareBonus * eagleBonus * (isPremium ? 1.35 : 1);
+  const r = Math.random();
+  const legendChance = Math.min(0.55, (0.04 + regionIdx * 0.08 + (isPremium ? 0.08 : 0)) * mult);
+  const rareChance = Math.min(0.65, (0.30 + regionIdx * 0.10 + (isPremium ? 0.15 : 0)) * Math.sqrt(mult));
+  if (r < legendChance) return 'legend';
+  if (r < legendChance + rareChance) return 'rare';
+  return 'fine';
+}
+
+function rollMonsterEquipQuality(regionIdx) {
+  const r = Math.random();
+  const rareChance = 0.08 + regionIdx * 0.08;
+  const fineChance = 0.36 + regionIdx * 0.08;
+  if (r < rareChance) return 'rare';
+  if (r < rareChance + fineChance) return 'fine';
+  return 'common';
+}
+
+function rollBossTierEquipment(baseId, quality, addThirdAffix = false) {
+  const eq = rollEquipment(baseId, quality);
+  if (!eq) return null;
+  if (addThirdAffix && Array.isArray(eq.affixes) && eq.affixes.length < 3 && AFFIXES) {
+    const existingIds = new Set(eq.affixes.map((a) => a.id));
+    const extraPool = [...(AFFIXES.prefixes || []), ...(AFFIXES.suffixes || [])].filter((a) => !existingIds.has(a.id));
+    if (extraPool.length) {
+      const extra = extraPool[Math.floor(Math.random() * extraPool.length)];
+      eq.affixes.push(extra);
+      for (const [k, v] of Object.entries(extra.stat || {})) {
+        eq[k] = (eq[k] || 0) + v;
+      }
+    }
+  }
+  return eq;
+}
+
+function grantItemToBagOrGold(itemId, quality, stats) {
+  const item = ITEMS[itemId];
+  if (!item) return null;
+  if (state.bag.length >= stats.bagMax) {
+    const autoGold = Math.max(15, Math.round(item.baseValue * (QUALITY[quality]?.multiplier || 1) * 0.75));
+    state.gold += autoGold;
+    return { item, quality, soldGold: autoGold, label: `${item.name}(折+${autoGold}币)` };
+  }
+  state.bag.push({
+    uid: `it_${Date.now()}_${Math.floor(Math.random() * 99999)}`,
+    itemId: item.id,
+    quality
+  });
+  return { item, quality, soldGold: 0, label: `${QUALITY[quality].name}·${item.name}` };
+}
+
 function handleSalvageNode(node) {
   const isHeavy = node.type === 'abandoned_cannon' || node.type === 'mech_wreck';
   if (!isHeavy) return false;
+
+  const curMap = world.map;
+  state.openedChests = state.openedChests || [];
+  const chestKey = getChestKey(curMap?.id, node);
+  if (node.opened || node.collected || state.openedChests.includes(chestKey)) return true;
 
   if (state.energy < 10) {
     showToast('内息不足 10 点，无法强行拆解重型军工残骸！', 'warn');
     return true;
   }
   state.energy -= 10;
+  node.opened = true;
   node.collected = true;
-  setTimeout(() => { node.collected = false; }, (node.respawnSec || 45) * 1000);
+  state.openedChests.push(chestKey);
+  world.setOpenedChests?.(state.openedChests);
 
   state.stats.salvageHeavy = (state.stats.salvageHeavy || 0) + 1;
   state.stats.pick = (state.stats.pick || 0) + 1;
 
-  // 35% 概率惊动精英守卫，但仍先给丰厚战利品
-  const pool = Array.isArray(node.equipPool) && node.equipPool.length ? node.equipPool : ['wpn_flaregun', 'mech_steam_core'];
+  const regionIdx = getRegionTierIndex(curMap);
+  const stats = getHeroStats();
+  const baseGold = 45 + regionIdx * 65 + (state.level || 1) * 12;
+  const bonusGold = Math.round(baseGold * (1 + Math.random() * 0.5) * 1.5);
+  state.gold += bonusGold;
+
+  const lootLabels = [`+${bonusGold} 币`];
+
+  // 1-2 件高价值区域军工/科技素材
+  const itemPool = REGION_CHEST_ITEMS[regionIdx] || REGION_CHEST_ITEMS[0];
+  const itemCount = 2;
+  for (let i = 0; i < itemCount; i++) {
+    const pickId = itemPool[Math.floor(Math.random() * itemPool.length)];
+    const iq = rollQuality(1.5);
+    const res = grantItemToBagOrGold(pickId, iq === 'common' ? 'fine' : iq, stats);
+    if (res) lootLabels.push(res.label);
+  }
+
+  // 100% 必出高品质暗黑词缀装备
+  const pool = Array.isArray(node.equipPool) && node.equipPool.length
+    ? node.equipPool
+    : (REGION_EQUIP_POOLS[regionIdx] || REGION_EQUIP_POOLS[0]);
   const baseId = pool[Math.floor(Math.random() * pool.length)];
-  const q = rollQuality(2.0);
-  const eq = rollEquipment(baseId, q === 'common' ? 'fine' : q);
+  const eqQuality = rollChestEquipQuality(regionIdx, true, 1.4);
+  const eq = rollEquipment(baseId, eqQuality);
   if (eq) {
     addEquipmentToBag(eq);
     sfx.pick(eq.quality);
-    showToast(`拆解「${node.name}」成功！获得【${QUALITY[eq.quality].name}】${eq.name}！`, 'success');
+    lootLabels.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
     floatNearHero(`+${eq.name}`, QUALITY[eq.quality].color);
   }
-  const bonusGold = 80 + Math.floor(Math.random() * 120);
-  state.gold += bonusGold;
-  gainExp(28);
+
+  gainExp(32 + regionIdx * 12);
+  showToast(`拆解「${node.name}」满载而归：${lootLabels.join('、')}！`, 'success');
 
   if (node.salvageElite && ENEMIES[node.salvageElite] && Math.random() < 0.35) {
     showToast(`警报！拆解惊动了休眠的「${ENEMIES[node.salvageElite].name}」！`, 'danger');
@@ -892,13 +1010,22 @@ function handleSalvageNode(node) {
 }
 
 function handleLootNode(node) {
-  if (!node || node.collected) return;
+  if (!node || node.opened || node.collected) return;
   if (node.type === 'abandoned_cannon' || node.type === 'mech_wreck') {
     handleSalvageNode(node);
     return;
   }
 
   const curMap = world.map;
+  state.openedChests = state.openedChests || [];
+  const chestKey = getChestKey(curMap?.id, node);
+  if (state.openedChests.includes(chestKey)) {
+    node.opened = true;
+    node.collected = true;
+    world.setOpenedChests?.(state.openedChests);
+    return;
+  }
+
   const stats = getHeroStats();
   const wid = state.regionWeathers[curMap.regionId] ?? 0;
   const weather = WEATHERS[wid] || WEATHERS[0];
@@ -911,8 +1038,12 @@ function handleLootNode(node) {
 
   state.energy -= baseCost;
   state.food = Math.max(0, state.food - 2);
+
+  // 一次性永久开启，绝不复生
+  node.opened = true;
   node.collected = true;
-  setTimeout(() => { node.collected = false; }, (node.respawnSec || 22) * 1000);
+  state.openedChests.push(chestKey);
+  world.setOpenedChests?.(state.openedChests);
 
   state.stats.pick = (state.stats.pick || 0) + 1;
   if (curMap.hasWarn) {
@@ -929,78 +1060,78 @@ function handleLootNode(node) {
   if (curMap.id === 'arsenal') advanceQuestTrigger('loot_arsenal');
   if (curMap.id === 'vault') advanceQuestTrigger('loot_vault');
 
-  // 若节点自带装备池（如古剑石台、狐仙供奉玉匣、雷公神龛玉匣），45% 概率出暗黑词缀装备
-  if (Array.isArray(node.equipPool) && node.equipPool.length && Math.random() < 0.45) {
-    const baseId = node.equipPool[Math.floor(Math.random() * node.equipPool.length)];
-    const eq = rollEquipment(baseId, rollQuality(1.6 * weather.rareBonus));
+  const regionIdx = getRegionTierIndex(curMap);
+  const isPremiumChest = node.type === 'vault_box' || node.type === 'relic_spot' || curMap.sceneType === 'cave';
+
+  // 1. 丰厚区域阶梯废土币（地窟/秘匣额外 +50%）
+  const baseGold = 45 + regionIdx * 65 + (state.level || 1) * 12;
+  const goldGain = Math.round(baseGold * (1 + Math.random() * 0.5) * (isPremiumChest ? 1.5 : 1));
+  state.gold += goldGain;
+
+  const lootParts = [`+${goldGain} 币`];
+  let bestQuality = 'fine';
+
+  // 2. 剧情信物 / 古董发现判定（保留主线与古董图鉴推进）
+  const mapRoll = rollItemFromMap(curMap);
+  if (mapRoll?.isStory && !state.stories.includes(mapRoll.storyId)) {
+    unlockStoryRelic(mapRoll.storyId);
+    lootParts.push(`信物·${mapRoll.name}`);
+    bestQuality = 'legend';
+  } else if (mapRoll?.isCollection) {
+    const isNew = unlockCollection(mapRoll.colId);
+    if (isNew) {
+      lootParts.push(`古董·${mapRoll.name}`);
+      bestQuality = 'rare';
+    } else {
+      const dupBonus = 160 + regionIdx * 40;
+      state.gold += dupBonus;
+      lootParts.push(`古董折现+${dupBonus}币`);
+    }
+  }
+
+  // 3. 1–2 件区域高价值物资 / 科技件 / 灵药（优先科技/特产/补给/稀有）
+  const itemPool = REGION_CHEST_ITEMS[regionIdx] || REGION_CHEST_ITEMS[0];
+  const itemCount = isPremiumChest ? 2 : (Math.random() < 0.55 ? 2 : 1);
+  for (let i = 0; i < itemCount; i++) {
+    const pickId = itemPool[Math.floor(Math.random() * itemPool.length)];
+    const iq = rollQuality(weather.rareBonus * (isPremiumChest ? 1.45 : 1.15));
+    const finalQ = isPremiumChest && iq === 'common' ? 'fine' : iq;
+    const res = grantItemToBagOrGold(pickId, finalQ, stats);
+    if (res) {
+      lootParts.push(res.label);
+      if (finalQ === 'legend' || (finalQ === 'rare' && bestQuality !== 'legend')) bestQuality = finalQ;
+    }
+  }
+
+  // 地窟/秘匣 30% 额外赠稀世丹药
+  if (isPremiumChest && Math.random() < 0.30) {
+    const elixirId = regionIdx >= 2 ? 'elixir_jiuzhuan' : 'elixir_ration';
+    state.elixirs[elixirId] = (state.elixirs[elixirId] || 0) + 1;
+    lootParts.push(`丹药·${ELIXIRS[elixirId]?.name || '九转青瘴丹'}`);
+  }
+
+  // 4. 品质词缀装备：地窟/秘匣 100% 必出，野外宝箱 55% 概率出
+  const equipChance = isPremiumChest ? 1.0 : 0.55;
+  if (Math.random() < equipChance) {
+    const eqPool = Array.isArray(node.equipPool) && node.equipPool.length
+      ? node.equipPool
+      : (REGION_EQUIP_POOLS[regionIdx] || REGION_EQUIP_POOLS[0]);
+    const baseId = eqPool[Math.floor(Math.random() * eqPool.length)];
+    const eqQuality = rollChestEquipQuality(regionIdx, isPremiumChest, weather.rareBonus);
+    const eq = rollEquipment(baseId, eqQuality);
     if (eq) {
       addEquipmentToBag(eq);
-      sfx.pick(eq.quality);
-      showToast(`在「${node.name}」发现神兵：【${QUALITY[eq.quality].name}】${eq.name}！`, 'success');
+      lootParts.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
+      bestQuality = eq.quality;
       floatNearHero(`+${eq.name}`, QUALITY[eq.quality].color);
-      gainExp(20);
-      updateHUD();
-      scheduleSave();
-      return;
     }
-  }
-
-  const item = rollItemFromMap(curMap);
-  const quality = rollQuality(weather.rareBonus);
-
-  if (item.isStory) {
-    unlockStoryRelic(item.storyId);
-    sfx.pick('legend');
-    floatNearHero(`信物 · ${item.name}`, '#f3ce7a');
-    gainExp(25);
-  } else if (item.isCollection) {
-    const isNew = unlockCollection(item.colId);
-    if (!isNew) {
-      const bonus = 180;
-      state.gold += bonus;
-      showToast(`重复发现古董「${item.name}」，折算废土币 +${bonus}！`, 'info');
-      sfx.coin();
-    } else {
-      floatNearHero(`古董 · ${item.name}`, '#f3ce7a');
-    }
-    gainExp(18);
   } else {
-    if (state.bag.length >= stats.bagMax) {
-      const autoGold = Math.round(item.baseValue * (QUALITY[quality]?.multiplier || 1) * 0.7);
-      state.gold += autoGold;
-      showToast(`行囊已满！「${item.name}」就地折卖 +${autoGold} 币`, 'warn');
-      sfx.coin();
-    } else {
-      state.bag.push({
-        uid: `it_${Date.now()}_${Math.floor(Math.random() * 9999)}`,
-        itemId: item.id,
-        quality
-      });
-      sfx.pick(quality);
-      showToast(`搜得【${QUALITY[quality].name}】${item.name}`, quality === 'legend' || quality === 'rare' ? 'success' : 'info');
-      floatNearHero(`+${item.name}`, QUALITY[quality].color);
-    }
-    gainExp(10);
+    floatNearHero(`+${goldGain} 币`, '#f3ce7a');
   }
 
-  // 12% 额外掉落暗黑词缀装备
-  if (Math.random() < 0.12) {
-    const tierPool = curMap.regionId === 'reg_vault'
-      ? ['wpn_railgun', 'wpn_xuanyuan', 'mech_tianshu_exo', 'relic_thunder_seal']
-      : curMap.regionId === 'reg_swamp'
-        ? ['relic_fox_orb', 'armor_exo', 'wpn_plasma_rifle']
-        : curMap.regionId === 'reg_arsenal'
-          ? ['wpn_gatling', 'wpn_artillery', 'mech_crimson_frame', 'wpn_pulsesword']
-          : curMap.regionId === 'reg_ruins'
-            ? ['wpn_shotgun', 'wpn_sniper', 'wpn_qingcheng', 'armor_ironwire']
-            : ['wpn_inkblade', 'wpn_flaregun', 'armor_ironwire', 'mech_steam_core'];
-    const pickId = tierPool[Math.floor(Math.random() * tierPool.length)];
-    const bonusEq = rollEquipment(pickId, rollQuality(1.1));
-    if (bonusEq) {
-      addEquipmentToBag(bonusEq);
-      showToast(`意外发现异纹神兵：【${QUALITY[bonusEq.quality].name}】${bonusEq.name}！`, 'success');
-    }
-  }
+  sfx.pick(bestQuality);
+  gainExp(18 + regionIdx * 8 + (isPremiumChest ? 12 : 0));
+  showToast(`开启「${node.name || '宝箱'}」：${lootParts.join('、')}！`, bestQuality === 'legend' || bestQuality === 'rare' ? 'success' : 'info');
 
   updateHUD();
   scheduleSave();
@@ -2264,8 +2395,12 @@ function handleBattleVictory(captured = false) {
   const wEn = battle.worldEnemy;
   if (wEn) {
     wEn.alive = false;
-    wEn.respawnTimer = tpl.isBoss ? 120 : 35;
+    wEn.respawnTimer = tpl.isBoss ? 120 : 45;
   }
+
+  const curMap = world?.map || MAPS_BY_ID[state.mapId] || MAPS_BY_ID.town;
+  const regionIdx = getRegionTierIndex(curMap);
+  const stats = getHeroStats();
 
   const expGain = captured ? Math.round(tpl.exp * 0.65) : tpl.exp;
   const goldGain = captured ? Math.round(tpl.gold * 0.65) : tpl.gold;
@@ -2275,7 +2410,7 @@ function handleBattleVictory(captured = false) {
     state.stats.defeatHeavy = (state.stats.defeatHeavy || 0) + 1;
   }
 
-  let extraMsg = '';
+  const dropList = [];
   if (tpl.isBoss) {
     if (!state.defeatedBosses.includes(tpl.id)) state.defeatedBosses.push(tpl.id);
     if (tpl.dropSpiritId) {
@@ -2286,28 +2421,72 @@ function handleBattleVictory(captured = false) {
     }
     advanceQuestTrigger(`defeat_${tpl.id}`);
 
-    // Boss 必掉一件高阶暗黑词缀装备
+    // 1. Boss 100% 必掉高阶暗黑词缀装备（2–3 强力词缀）
     const bossPool = {
-      boss_ratking: ['wpn_inkblade', 'armor_ironwire'],
-      boss_duangang: ['wpn_shotgun', 'wpn_qingcheng'],
+      boss_ratking: ['wpn_inkblade', 'armor_ironwire', 'mech_steam_core'],
+      boss_duangang: ['wpn_shotgun', 'wpn_qingcheng', 'wpn_sniper'],
       boss_zhurong: ['wpn_gatling', 'mech_crimson_frame', 'wpn_pulsesword'],
       boss_lotus_bane: ['relic_fox_orb', 'armor_exo', 'wpn_plasma_rifle'],
       boss_tianshu: ['wpn_xuanyuan', 'mech_tianshu_exo', 'relic_tianshu']
-    }[tpl.id] || ['wpn_qingcheng'];
-    const eq = rollEquipment(bossPool[Math.floor(Math.random() * bossPool.length)], tpl.isFinalBoss ? 'legend' : 'rare');
+    }[tpl.id] || (REGION_EQUIP_POOLS[regionIdx] || ['wpn_qingcheng']);
+
+    const isMidLateBoss = ['boss_zhurong', 'boss_lotus_bane', 'boss_tianshu'].includes(tpl.id);
+    const bossQuality = tpl.isFinalBoss
+      ? 'legend'
+      : tpl.id === 'boss_lotus_bane'
+        ? (Math.random() < 0.7 ? 'legend' : 'rare')
+        : tpl.id === 'boss_zhurong'
+          ? (Math.random() < 0.5 ? 'legend' : 'rare')
+          : 'rare';
+    const eq = rollBossTierEquipment(
+      bossPool[Math.floor(Math.random() * bossPool.length)],
+      bossQuality,
+      bossQuality === 'legend' || isMidLateBoss
+    );
     if (eq) {
       addEquipmentToBag(eq);
-      extraMsg = ` 掉落【${QUALITY[eq.quality].name}】${eq.name}！`;
+      dropList.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
     }
-  } else if (!captured && Math.random() < 0.25) {
-    const eqKeys = Object.keys(EQUIPMENT);
-    const pick = eqKeys[Math.floor(Math.random() * eqKeys.length)];
-    const eq = rollEquipment(pick, rollQuality(1.1));
-    if (eq) {
-      addEquipmentToBag(eq);
-      extraMsg = ` 掉落【${QUALITY[eq.quality].name}】${eq.name}！`;
+
+    // 2. Boss 100% 必掉 1–2 件稀有锻造材料 / 稀世丹药
+    const rareMatId = BOSS_RARE_MATS[Math.floor(Math.random() * BOSS_RARE_MATS.length)];
+    const matRes = grantItemToBagOrGold(rareMatId, 'rare', stats);
+    if (matRes) dropList.push(matRes.label);
+
+    if (Math.random() < 0.65) {
+      state.elixirs.elixir_jiuzhuan = (state.elixirs.elixir_jiuzhuan || 0) + 1;
+      dropList.push(`稀世丹药·${ELIXIRS.elixir_jiuzhuan?.name || '九转青瘴丹'}`);
+    } else {
+      const rareMatId2 = BOSS_RARE_MATS[Math.floor(Math.random() * BOSS_RARE_MATS.length)];
+      const matRes2 = grantItemToBagOrGold(rareMatId2, 'rare', stats);
+      if (matRes2) dropList.push(matRes2.label);
+    }
+  } else {
+    // 普通怪物：~65% 概率掉落 1–2 件区域废土材料/科技件/草药/补给
+    if (Math.random() < 0.65) {
+      const mPool = REGION_MONSTER_DROPS[regionIdx] || REGION_MONSTER_DROPS[0];
+      const count = Math.random() < 0.42 ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        const itemId = mPool[Math.floor(Math.random() * mPool.length)];
+        const iq = rollQuality(0.95);
+        const res = grantItemToBagOrGold(itemId, iq, stats);
+        if (res) dropList.push(res.label);
+      }
+    }
+
+    // 普通怪物：~30% 概率掉落匹配当前区域的暗黑词缀装备
+    if (!captured && Math.random() < 0.30) {
+      const eqPool = REGION_EQUIP_POOLS[regionIdx] || REGION_EQUIP_POOLS[0];
+      const pick = eqPool[Math.floor(Math.random() * eqPool.length)];
+      const eq = rollEquipment(pick, rollMonsterEquipQuality(regionIdx));
+      if (eq) {
+        addEquipmentToBag(eq);
+        dropList.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
+      }
     }
   }
+
+  const extraMsg = dropList.length ? ` 战利品：${dropList.join('、')}！` : '';
 
   const enemyVisual = $('bat-enemy-visual');
   if (enemyVisual) {
@@ -2322,6 +2501,11 @@ function handleBattleVictory(captured = false) {
 
   setTimeout(() => sfx.ending(), 200);
   logBattle((captured ? `收妖成功！${tpl.spiritName}已入天工墨壶！` : (tpl.defeatLine || `击败「${tpl.name}」！`)) + ` 获 +${expGain} 经验、+${goldGain} 币！${extraMsg}`);
+  if (tpl.isBoss && dropList.length) {
+    showToast(`首领战利品：+${goldGain} 币、${dropList.join('、')}！`, 'success');
+  } else if (dropList.length) {
+    showToast(`战利品：${dropList.join('、')}`, 'info');
+  }
   gainExp(expGain);
 
   const isFinal = Boolean(tpl.isFinalBoss && !captured);
