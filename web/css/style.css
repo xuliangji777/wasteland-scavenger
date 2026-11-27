@@ -6678,3 +6678,111 @@ html[data-density="compact"] #modal-box.modal-armory-full {
   max-height: 100dvh;
   border: none;
 }
+
+/* ==================== 移动端竖屏横置提示（微信 / 手机浏览器） ==================== */
+.rotate-hint {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9980;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding:
+    calc(28px + env(safe-area-inset-top))
+    calc(24px + env(safe-area-inset-right))
+    calc(28px + env(safe-area-inset-bottom))
+    calc(24px + env(safe-area-inset-left));
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(200, 155, 60, 0.12) 0%, rgba(12, 11, 10, 0.94) 58%, rgba(6, 7, 9, 0.98) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  text-align: center;
+  color: var(--paper-light);
+}
+
+.rotate-hint.dismissed {
+  display: none !important;
+}
+
+.rotate-hint-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 300px;
+}
+
+.rotate-hint-icon {
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 6px 20px rgba(212, 162, 74, 0.32));
+  animation: rotatePhoneHint 2.6s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
+}
+
+.rotate-hint-title {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  padding-left: 0.22em;
+  color: var(--bronze-bright);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9), 0 0 18px rgba(200, 155, 60, 0.28);
+}
+
+.rotate-hint-rule {
+  width: 96px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--bronze-gold) 50%, transparent);
+  opacity: 0.78;
+}
+
+.rotate-hint-desc {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--paper-warm);
+  letter-spacing: 0.06em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.btn-dismiss-rotate {
+  margin-top: 8px;
+  min-height: 40px;
+  padding: 0 22px;
+  border: none;
+  border-bottom: 1px solid rgba(212, 162, 74, 0.42);
+  border-radius: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(20, 17, 14, 0.56) 22%, rgba(20, 17, 14, 0.56) 78%, transparent 100%);
+  color: var(--paper-muted);
+  font-family: var(--font-serif);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  padding-left: calc(22px + 2.5px);
+  text-shadow: 0 2px 8px #000;
+  cursor: pointer;
+  transition: color 0.16s, border-color 0.16s, transform 0.14s;
+}
+
+.btn-dismiss-rotate:hover,
+.btn-dismiss-rotate:active {
+  color: var(--bronze-bright);
+  border-bottom-color: var(--bronze-bright);
+  transform: translateY(-1px);
+}
+
+@keyframes rotatePhoneHint {
+  0%, 18% { transform: rotate(0deg); }
+  50%, 72% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .rotate-hint:not(.dismissed) {
+    display: flex;
+  }
+}

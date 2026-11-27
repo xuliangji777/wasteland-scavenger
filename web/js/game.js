@@ -5455,6 +5455,33 @@ function init() {
     finishOpeningPrologue();
   });
 
+  // 移动端竖屏横置提示关闭按钮（允许用户自由选择继续竖屏游玩）
+  $('btn-dismiss-rotate')?.addEventListener('click', () => {
+    const hint = $('rotate-hint');
+    if (hint) {
+      hint.classList.add('dismissed');
+      hint.setAttribute('aria-hidden', 'true');
+    }
+    sfx.uiTick?.();
+  });
+
+  // 微信内置浏览器 Web Audio 自动解锁（iOS / Android WeixinJSBridgeReady）
+  const unlockWeChatAudio = () => {
+    try {
+      sfx.ensureAudio?.();
+      sfx.ensureCtx?.();
+      sfx._handleUserGesture?.();
+    } catch (_) {}
+  };
+  document.addEventListener('WeixinJSBridgeReady', unlockWeChatAudio, false);
+  if (typeof window.WeixinJSBridge !== 'undefined' && typeof window.WeixinJSBridge.invoke === 'function') {
+    try {
+      window.WeixinJSBridge.invoke('getNetworkType', {}, unlockWeChatAudio);
+    } catch (_) {
+      unlockWeChatAudio();
+    }
+  }
+
   // 注册 Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

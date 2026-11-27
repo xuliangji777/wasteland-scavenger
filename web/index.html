@@ -6,11 +6,17 @@
   <meta name="theme-color" content="#15120f" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="description" content="老年饼工作室出品 · 废土未来 × 国风墨甲 2.5D 水墨RPG，收妖炼器、闯荡五域！" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="墨土拾荒录 · 轩辕废土水墨RPG" />
+  <meta property="og:description" content="老年饼工作室出品 · 废土未来 × 国风墨甲 2.5D 水墨RPG，收妖炼器、闯荡五域！" />
+  <meta property="og:image" content="https://xuliangji777.github.io/wasteland-scavenger/assets/app_icon.png" />
+  <meta property="og:url" content="https://xuliangji777.github.io/wasteland-scavenger/" />
   <title>墨土拾荒录 · 轩辕废土水墨RPG</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="assets/app_icon.png" />
   <link rel="apple-touch-icon" href="assets/app_icon.png" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <link rel="stylesheet" href="css/style.css?v=21" />
 </head>
 <body>
   <!-- ==================== 老年饼工作室 · 水墨开屏动画 ==================== -->
@@ -139,6 +145,26 @@
       <div class="prologue-card-ornament bottom" aria-hidden="true"></div>
     </div>
   </section>
+
+  <!-- ==================== 移动端竖屏横置提示（仅窄屏竖屏显示，可一键关闭） ==================== -->
+  <div id="rotate-hint" class="rotate-hint" aria-hidden="true">
+    <div class="rotate-hint-inner">
+      <div class="rotate-hint-icon" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="60" height="60" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="19" y="8" width="26" height="48" rx="5" stroke="#e5bb5c" stroke-width="2.2" fill="rgba(212, 162, 74, 0.1)" />
+          <line x1="27" y1="13" x2="37" y2="13" stroke="#5eead4" stroke-width="1.6" stroke-linecap="round" />
+          <circle cx="32" cy="49.5" r="2" fill="#e5bb5c" />
+          <path d="M12 24A22 22 0 0 1 20 12" stroke="#5eead4" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="3 2.4" />
+          <path d="M52 40A22 22 0 0 1 44 52" stroke="#5eead4" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="3 2.4" />
+          <path d="M10.5 20.5L12 25L16.5 23.5" stroke="#5eead4" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="rotate-hint-title">横屏执剑 · 墨土全境</div>
+      <div class="rotate-hint-rule" aria-hidden="true"></div>
+      <p class="rotate-hint-desc">横置手机可解锁完整 1080P 水墨宽屏视界与五行罗盘战阵</p>
+      <button id="btn-dismiss-rotate" class="btn-dismiss-rotate" type="button">继续竖屏</button>
+    </div>
+  </div>
 
   <!-- 浮动提示层（避开顶部 HUD 状态栏） -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -677,6 +703,6 @@
       }
     })();
   </script>
-  <script type="module" src="js/game.js?v=20"></script>
+  <script type="module" src="js/game.js?v=21"></script>
 </body>
 </html>
