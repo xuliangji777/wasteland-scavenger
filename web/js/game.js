@@ -27,8 +27,8 @@ import {
   SIDE_QUESTS,
   STORY_CUTSCENES,
   WORLD_LORE_ENTRIES
-} from './data.js?v=26';
-import { InkWorldEngine } from './rpg_world.js?v=26';
+} from './data.js?v=27';
+import { InkWorldEngine } from './rpg_world.js?v=27';
 import { sfx } from './audio.js?v=6';
 import { spawnFloatText } from './fx.js';
 import { storage } from './storage.js?v=4';

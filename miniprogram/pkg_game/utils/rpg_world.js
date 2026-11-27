@@ -124,28 +124,25 @@ const SPRITE_PATHS = {
 
 const DEFAULT_WALKABLE_NORM = {
   wasteland: [
-    [[0.05, 0.30], [0.95, 0.30], [0.95, 0.74], [0.05, 0.74]],
-    [[0.16, 0.16], [0.88, 0.16], [0.88, 0.86], [0.16, 0.86]],
-    [[0.26, 0.10], [0.78, 0.10], [0.78, 0.92], [0.26, 0.92]]
+    [[0.02, 0.46], [0.18, 0.42], [0.34, 0.34], [0.50, 0.44], [0.50, 0.66], [0.34, 0.74], [0.18, 0.66], [0.02, 0.64]],
+    [[0.50, 0.44], [0.66, 0.34], [0.82, 0.42], [0.98, 0.46], [0.98, 0.64], [0.82, 0.66], [0.66, 0.74], [0.50, 0.66]],
+    [[0.45, 0.44], [0.55, 0.44], [0.55, 0.66], [0.45, 0.66]]
   ],
   cave: [
-    [[0.06, 0.34], [0.94, 0.34], [0.94, 0.74], [0.06, 0.74]],
-    [[0.14, 0.18], [0.88, 0.18], [0.88, 0.86], [0.14, 0.86]],
-    [[0.06, 0.56], [0.28, 0.56], [0.28, 0.88], [0.06, 0.88]],
-    [[0.68, 0.14], [0.94, 0.14], [0.94, 0.54], [0.68, 0.54]]
+    [[0.07, 0.67], [0.73, 0.16], [0.93, 0.28], [0.44, 0.89], [0.11, 0.85]]
   ],
   ruins: [
-    [[0.05, 0.30], [0.95, 0.30], [0.95, 0.74], [0.05, 0.74]],
-    [[0.15, 0.16], [0.88, 0.16], [0.88, 0.86], [0.15, 0.86]],
-    [[0.26, 0.10], [0.78, 0.10], [0.78, 0.92], [0.26, 0.92]]
+    [[0.02, 0.44], [0.22, 0.38], [0.38, 0.40], [0.50, 0.45], [0.50, 0.72], [0.36, 0.78], [0.16, 0.72], [0.02, 0.68]],
+    [[0.50, 0.45], [0.62, 0.40], [0.78, 0.38], [0.98, 0.44], [0.98, 0.68], [0.84, 0.72], [0.64, 0.78], [0.50, 0.72]],
+    [[0.45, 0.45], [0.55, 0.45], [0.55, 0.72], [0.45, 0.72]]
   ],
   swamp: [
-    [[0.05, 0.32], [0.26, 0.24], [0.58, 0.20], [0.88, 0.20], [0.95, 0.34], [0.95, 0.72], [0.84, 0.84], [0.46, 0.86], [0.18, 0.80], [0.05, 0.70]],
-    [[0.16, 0.18], [0.88, 0.18], [0.88, 0.84], [0.16, 0.84]],
-    [[0.28, 0.10], [0.76, 0.10], [0.76, 0.92], [0.28, 0.92]]
+    [[0.02, 0.46], [0.25, 0.38], [0.50, 0.44], [0.50, 0.74], [0.25, 0.78], [0.02, 0.70]],
+    [[0.50, 0.44], [0.75, 0.38], [0.98, 0.46], [0.98, 0.70], [0.75, 0.78], [0.50, 0.74]],
+    [[0.45, 0.44], [0.55, 0.44], [0.55, 0.74], [0.45, 0.74]]
   ],
   town: [
-    [[0.22, 0.46], [0.86, 0.46], [0.86, 0.80], [0.22, 0.80]]
+    [[0.22, 0.48], [0.86, 0.48], [0.86, 0.82], [0.22, 0.82]]
   ],
   interior: [
     [[0.08, 0.41], [0.92, 0.41], [0.92, 0.95], [0.08, 0.95]]
@@ -1533,51 +1530,31 @@ class RpgWorld {
     const entry = bgPath ? this._getBgImage(bgPath) : null;
 
     if (entry && entry.loaded && !entry.error) {
-      if (mw > 1800) {
+      const isCave = map.sceneType === 'cave' || String(map.bgAsset || '').includes('bg_cave');
+      const isWide2x1 = !isCave && mw >= 2400;
+      if (isWide2x1) {
         const tileW = mw / 2;
-        const tileH = mh / 2;
-        // 2×2 无缝镜像拼接渲染（高清不拉伸：公路与地平线在中心线自然接续）
-        // Top-Left (0, 0): (scaleX: 1, scaleY: 1)
-        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
+        // 2×1 纯横向镜像拼接（绝不垂直翻转，保持 100% 真实 2.5D 重力与建筑透视）
+        // Col 0 (Left): normal
+        ctx.drawImage(entry.img, 0, 0, tileW, mh);
 
-        // Top-Right (1, 0): (scaleX: -1, scaleY: 1)
+        // Col 1 (Right): horizontal mirror only (scaleX: -1, scaleY: 1)
         ctx.save();
         ctx.translate(mw, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
+        ctx.drawImage(entry.img, 0, 0, tileW, mh);
         ctx.restore();
 
-        // Bottom-Left (0, 1): (scaleX: 1, scaleY: -1)
-        ctx.save();
-        ctx.translate(0, mh);
-        ctx.scale(1, -1);
-        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
-        ctx.restore();
-
-        // Bottom-Right (1, 1): (scaleX: -1, scaleY: -1)
-        ctx.save();
-        ctx.translate(mw, mh);
-        ctx.scale(-1, -1);
-        ctx.drawImage(entry.img, 0, 0, tileW, tileH);
-        ctx.restore();
-
-        // 中心拼接带柔和水墨薄雾过渡，消除镜像接缝感
-        const seamW = Math.max(90, Math.round(mw * 0.045));
+        // 中央垂直水墨薄雾过渡带，柔和消除左右拼接接缝
+        const seamW = Math.max(90, Math.round(mw * 0.04));
         const vGrad = ctx.createLinearGradient(tileW - seamW, 0, tileW + seamW, 0);
         vGrad.addColorStop(0, 'rgba(10, 14, 18, 0)');
         vGrad.addColorStop(0.5, 'rgba(10, 14, 18, 0.22)');
         vGrad.addColorStop(1, 'rgba(10, 14, 18, 0)');
         ctx.fillStyle = vGrad;
         ctx.fillRect(tileW - seamW, 0, seamW * 2, mh);
-
-        const seamH = Math.max(70, Math.round(mh * 0.05));
-        const hGrad = ctx.createLinearGradient(0, tileH - seamH, 0, tileH + seamH);
-        hGrad.addColorStop(0, 'rgba(10, 14, 18, 0)');
-        hGrad.addColorStop(0.5, 'rgba(10, 14, 18, 0.22)');
-        hGrad.addColorStop(1, 'rgba(10, 14, 18, 0)');
-        ctx.fillStyle = hGrad;
-        ctx.fillRect(0, tileH - seamH, mw, seamH * 2);
       } else {
+        // 1×1 原生整图绘制（cave 2240×1400、主城 1600×1000、室内 1000×700，零镜像畸变）
         ctx.drawImage(entry.img, 0, 0, mw, mh);
       }
     } else {
