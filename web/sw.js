@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moshitu-rpg-v31';
+const CACHE_NAME = 'moshitu-rpg-v32';
 const SHELL_ASSETS = [
   './',
   './index.html',

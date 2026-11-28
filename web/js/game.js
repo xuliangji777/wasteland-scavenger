@@ -30,11 +30,11 @@ import {
   SIDE_QUESTS,
   STORY_CUTSCENES,
   WORLD_LORE_ENTRIES
-} from './data.js?v=31';
-import { InkWorldEngine } from './rpg_world.js?v=31';
-import { sfx } from './audio.js?v=31';
-import { spawnFloatText } from './fx.js?v=31';
-import { storage } from './storage.js?v=31';
+} from './data.js?v=32';
+import { InkWorldEngine } from './rpg_world.js?v=32';
+import { sfx } from './audio.js?v=32';
+import { spawnFloatText } from './fx.js?v=32';
+import { storage } from './storage.js?v=32';
 
 // ==================== 常量与辅助 ====================
 const SLOT_NAMES = {
@@ -93,7 +93,7 @@ const PROLOGUE_SLIDES = [
   {
     chapter: '序章 · 四',
     title: '故人未归',
-    text: '大停电那夜，挚友阿哲留下一块停在 21:47 的旧表，从此音讯杳然。风已起，壶已鸣。你推开墨石镇的残门——有些约定不必言明，活着的人，总要去废土深处讨一个回音。'
+    text: '二十年前 21:47 灾变夜，你与挚友阿哲各留下一块停摆的 21:47 纪念旧表，相约守望余生。三个月前，阿哲独身出镇护送一份天枢密报，从此音讯全无。风已起，壶已鸣，你拔出墨甲佩剑推开墨石镇残门——活着的人，总要去废土深处把故人找回来。'
   }
 ];
 
@@ -467,10 +467,10 @@ function getEquipSellPrice(eq) {
 }
 
 function getEndingProgressPct() {
-  const totalSteps = MAIN_QUESTS.reduce((acc, q) => acc + q.steps.length, 0);
+  const totalSteps = Math.max(1, MAIN_QUESTS.reduce((acc, q) => acc + (q.steps?.length || 0), 0));
   const stepScore = (state.completedSteps.length / totalSteps) * 65;
-  const colScore = (state.collections.length / COLLECTIONS.length) * 20;
-  const storyScore = (state.stories.length / STORY_CHAPTERS.length) * 15;
+  const colScore = (state.collections.length / Math.max(1, COLLECTIONS.length)) * 20;
+  const storyScore = (state.stories.length / Math.max(1, STORY_CHAPTERS.length)) * 15;
   return Math.min(100, Math.round(stepScore + colScore + storyScore));
 }
 
@@ -481,7 +481,7 @@ function getSaveMeta() {
     mapName: curMap.name,
     lv: state.level,
     gold: state.gold,
-    act: Math.min(5, state.completedActs.length + 1),
+    act: Math.min(MAIN_QUESTS.length || 6, state.completedActs.length + 1),
     savedAt: Date.now()
   };
 }
@@ -894,6 +894,7 @@ function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true, 
   syncHeroVisuals();
 
   if (target.id === 'cave_metro') advanceQuestTrigger('enter_cave_metro');
+  if (target.id === 'sky_citadel') advanceQuestTrigger('enter_sky_citadel');
   if (target.isSafe) state.warn = Math.max(0, state.warn - 30);
 
   const hint = $('stage-hint-text');
@@ -1671,6 +1672,7 @@ function openNpcDialog(npcId) {
   sfx.uiTick?.();
 
   advanceQuestTrigger(`talk_${npcId}`);
+  if (npcId === 'npc_archon') advanceQuestTrigger('talk_archon');
 
   const box = $('rpg-dialog-box');
   const img = $('dialog-portrait-img');
@@ -1741,7 +1743,7 @@ function handleNpcOption(npc, idx, opt) {
       return;
     } else if (idx === 2) {
       revealRegionLore('reg_citadel');
-      $('dialog-text').textContent = '“裁决主神·太一盘踞在东境裁决殿深处，拥有极高护甲与周期性量子裁决炮。务必装备【穿甲】、【斩妖/首领增伤】与【不屈】词缀神兵，并备好『非攻护体符』与『雷枢破甲符』，先破其盾再斩核心！西廊四座白玉京秘库亦藏有绝世太虚神装。”';
+      $('dialog-text').textContent = '“二十年前 21:47 大灾变，公输氏携白玉京升空独善其身，却被裁决主神·太一反锁穹顶；墨家传人则留守地面践行兼爱非攻。如今太一盘踞东境裁决殿深处，护甲极高且有周期性量子裁决炮，务必装备【穿甲】、【斩妖/首领增伤】与【不屈】词缀神兵，并备好『非攻护体符』与『雷枢破甲符』，先破其盾再斩核心！西廊四座白玉京秘库亦藏有绝世太虚神装。”';
       updateHUD();
       scheduleSave();
       return;
@@ -3034,6 +3036,9 @@ function handleBattleVictory(captured = false) {
       dropList.push(`古董·${bossAntique.name}`);
     }
     advanceQuestTrigger(`defeat_${tpl.id}`);
+    if (tpl.id === 'boss_archon_mech') {
+      advanceQuestTrigger('trigger_sky_ending');
+    }
 
     // 1. Boss 100% 必掉高阶暗黑词缀装备（2–3 强力词缀）
     const bossPool = {
@@ -3139,17 +3144,23 @@ function handleBattleVictory(captured = false) {
   gainExp(expGain);
 
   const isFinal = Boolean(tpl.isFinalBoss && !captured);
+  const isSkyFinal = Boolean(tpl.id === 'boss_archon_mech' && !captured);
   const postCutsceneId = tpl.isBoss ? `post_${tpl.id}` : null;
   setTimeout(() => {
     closeBattle();
+    const finishAfterBattle = () => {
+      if (isSkyFinal) {
+        openEndingModal('sky_reunion');
+      } else if (isFinal) {
+        openEndingModal();
+      }
+    };
     if (postCutsceneId && STORY_CUTSCENES[postCutsceneId] && !(state.seenCutscenes || []).includes(postCutsceneId)) {
       playStoryCutscene(postCutsceneId, {
-        onComplete: () => {
-          if (isFinal) openEndingModal();
-        }
+        onComplete: finishAfterBattle
       });
-    } else if (isFinal) {
-      openEndingModal();
+    } else if (isSkyFinal || isFinal) {
+      finishAfterBattle();
     }
   }, 1100);
 }
@@ -5469,7 +5480,7 @@ function openSkill() {
 function openQuests() {
   const tabsHtml = `
     <div class="modal-tabs">
-      <button class="modal-tab-btn${questTab === 'main' ? ' active' : ''}" data-qtab="main">五幕主线</button>
+      <button class="modal-tab-btn${questTab === 'main' ? ' active' : ''}" data-qtab="main">六幕主线</button>
       <button class="modal-tab-btn${questTab === 'side' ? ' active' : ''}" data-qtab="side">八大支线</button>
       <button class="modal-tab-btn${questTab === 'daily' ? ' active' : ''}" data-qtab="daily">悬赏与周常</button>
     </div>
@@ -5549,7 +5560,7 @@ function openQuests() {
     `;
   }
 
-  openModal('五幕主线 · 支线悬赏录', tabsHtml + bodyHtml);
+  openModal('六幕主线 · 支线悬赏录', tabsHtml + bodyHtml);
 
   $('modal-body').querySelectorAll('[data-qtab]').forEach((btn) => {
     btn.addEventListener('click', () => { questTab = btn.dataset.qtab; openQuests(); });
@@ -5617,12 +5628,22 @@ function openQuests() {
 }
 
 // ==================== 6. 古董志怪与剧情图鉴 ====================
+const ENDING_ORDER = ['normal', 'friend', 'collector', 'king', 'sky_reunion'];
+
+function getAllEndingsList() {
+  return ENDING_ORDER.map((id) => ENDINGS?.[id]).filter(Boolean);
+}
+
 function openCollection() {
+  const allEndings = getAllEndingsList();
+  const totalEndings = Math.max(allEndings.length, ENDING_ORDER.length);
+  const unlockedEndingsCount = (state.endingsUnlocked || []).filter((id) => ENDING_ORDER.includes(id)).length;
   const tabsHtml = `
     <div class="modal-tabs">
       <button class="modal-tab-btn${collectionTab === 'antiques' ? ' active' : ''}" data-ct="antiques">战前古董 (${state.collections.length}/${COLLECTIONS.length})</button>
       <button class="modal-tab-btn${collectionTab === 'stories' ? ' active' : ''}" data-ct="stories">剧情信物 (${state.stories.length}/${STORY_CHAPTERS.length})</button>
       <button class="modal-tab-btn${collectionTab === 'bestiary' ? ' active' : ''}" data-ct="bestiary">墨土志怪 (${state.seenEnemies.length}/${Object.keys(ENEMIES).length})</button>
+      <button class="modal-tab-btn${collectionTab === 'endings' ? ' active' : ''}" data-ct="endings">天命结局 (${unlockedEndingsCount}/${totalEndings})</button>
     </div>
   `;
 
@@ -5643,7 +5664,17 @@ function openCollection() {
       return `
         <div class="col-card ${ok ? 'unlocked' : 'locked'}">
           <div class="modal-item-title">${escapeHtml(ch.title)} · 信物【${escapeHtml(ch.relic)}】</div>
-          <div class="modal-item-desc">${ok ? escapeHtml(ch.text) : '尚未寻得此信物，继续推进五幕主线以揭开 21:47 的真相。'}</div>
+          <div class="modal-item-desc">${ok ? escapeHtml(ch.text) : '尚未寻得此信物，继续推进六幕主线以揭开 21:47 的真相。'}</div>
+        </div>
+      `;
+    }).join('');
+  } else if (collectionTab === 'endings') {
+    bodyHtml = allEndings.map((ed) => {
+      const ok = (state.endingsUnlocked || []).includes(ed.id);
+      return `
+        <div class="col-card ${ok ? 'unlocked' : 'locked'}">
+          <div class="modal-item-title">${escapeHtml(ed.badge || '')} · ${ok ? escapeHtml(ed.title || '') : '？？？'}</div>
+          <div class="modal-item-desc">${ok ? escapeHtml(ed.content || '') : '尚未解锁此结局，继续推进主线、收集遗珍或决战天穹白玉京。'}</div>
         </div>
       `;
     }).join('');
@@ -5681,44 +5712,83 @@ function openRank() {
     </div>
   `).join('');
 
-  const canEnding = state.gold >= 15000 || state.defeatedBosses.includes('boss_tianshu') || state.collections.length >= COLLECTIONS.length;
+  const canEnding = state.gold >= 15000
+    || state.defeatedBosses.includes('boss_tianshu')
+    || state.defeatedBosses.includes('boss_archon_mech')
+    || state.collections.length >= COLLECTIONS.length;
   openModal(
     '墨土英雄榜',
     listHtml,
     `${canEnding ? '<button class="btn btn-purple" id="btn-trigger-ending">见证墨土终局</button>' : ''}<button class="btn btn-secondary" id="modal-default-close">合上卷轴</button>`
   );
-  $('btn-trigger-ending')?.addEventListener('click', openEndingModal);
+  $('btn-trigger-ending')?.addEventListener('click', () => openEndingModal());
 }
 
-function openEndingModal() {
-  advanceQuestTrigger('trigger_ending');
-  let ending = ENDINGS.normal;
+function checkEndings(forceEndingId = null) {
+  const hasSkyBoss = state.defeatedBosses.includes('boss_archon_mech');
   const hasBoss = state.defeatedBosses.includes('boss_tianshu');
   const allCol = state.collections.length >= COLLECTIONS.length;
   const allStory = state.stories.length >= STORY_CHAPTERS.length;
 
-  if (hasBoss && allCol && allStory && state.unlockedGuardians.length > 0) {
-    ending = ENDINGS.king;
-  } else if (hasBoss && allStory) {
-    ending = ENDINGS.friend;
-  } else if (allCol) {
-    ending = ENDINGS.collector;
+  if (forceEndingId && ENDINGS?.[forceEndingId]) {
+    return ENDINGS[forceEndingId];
+  }
+  if (hasSkyBoss && ENDINGS?.sky_reunion) {
+    return ENDINGS.sky_reunion;
+  }
+  if (hasBoss && allCol && allStory && state.unlockedGuardians.length > 0 && ENDINGS?.king) {
+    return ENDINGS.king;
+  }
+  if (hasBoss && allStory && ENDINGS?.friend) {
+    return ENDINGS.friend;
+  }
+  if (allCol && ENDINGS?.collector) {
+    return ENDINGS.collector;
+  }
+  return ENDINGS?.normal || getAllEndingsList()[0] || null;
+}
+
+function openEndingModal(forceEndingId = null) {
+  const reqId = typeof forceEndingId === 'string' ? forceEndingId : null;
+  advanceQuestTrigger('trigger_ending');
+  const ending = checkEndings(reqId);
+  if (!ending) return;
+
+  if (ending.id === 'sky_reunion' || state.defeatedBosses.includes('boss_archon_mech')) {
+    advanceQuestTrigger('trigger_sky_ending');
   }
 
+  if (!Array.isArray(state.endingsUnlocked)) state.endingsUnlocked = [];
   if (!state.endingsUnlocked.includes(ending.id)) {
     state.endingsUnlocked.push(ending.id);
   }
   sfx.ending();
   saveNow();
 
+  const allEndings = getAllEndingsList();
+  const totalEndings = Math.max(allEndings.length, ENDING_ORDER.length);
+  const unlockedCount = state.endingsUnlocked.filter((id) => ENDING_ORDER.includes(id)).length;
+  const galleryHtml = allEndings.map((ed) => {
+    const unlocked = state.endingsUnlocked.includes(ed.id);
+    const isCurrent = ed.id === ending.id;
+    return `
+      <div class="modal-list-item${unlocked ? ' done' : ''}" style="flex-direction:column;align-items:flex-start;gap:4px;${isCurrent ? 'border-color:rgba(243,206,122,0.75);' : ''}">
+        <div class="modal-item-title" style="font-size:13px;color:${unlocked ? '#f3ce7a' : '#8b8378'};">${unlocked ? '✓' : '○'} ${escapeHtml(ed.badge || '')} · ${unlocked ? escapeHtml(ed.title || '') : '？？？'}</div>
+        <div class="modal-item-desc" style="font-size:12px;color:${unlocked ? '#d6ccb8' : '#7a7369'};">${unlocked ? escapeHtml(ed.content || '') : '尚未达成此天命结局，继续探索墨土与天穹白玉京。'}</div>
+      </div>
+    `;
+  }).join('');
+
   openModal(
-    `${ending.badge} · ${ending.title}`,
-    `<div class="modal-list-item done" style="flex-direction:column;align-items:flex-start;gap:8px;">
-      <div class="modal-item-title" style="font-size:16px;color:#f3ce7a;">${escapeHtml(ending.title)}</div>
-      <div class="modal-item-desc" style="font-size:13px;color:#e8dec8;line-height:1.75;">${escapeHtml(ending.content)}</div>
-      <div class="modal-item-desc">已达成结局数：${state.endingsUnlocked.length} / 4 · 天命完成度 ${getEndingProgressPct()}%</div>
-    </div>`,
-    '<button class="btn btn-amber" id="modal-default-close">继续漫游墨土五域</button>'
+    `${ending.badge || '天命终局'} · ${ending.title || ''}`,
+    `<div class="modal-list-item done" style="flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:10px;">
+      <div class="modal-item-title" style="font-size:16px;color:#f3ce7a;">${escapeHtml(ending.title || '')}</div>
+      <div class="modal-item-desc" style="font-size:13px;color:#e8dec8;line-height:1.75;">${escapeHtml(ending.content || '')}</div>
+      <div class="modal-item-desc">已达成结局数：${unlockedCount} / ${totalEndings} · 天命完成度 ${getEndingProgressPct()}%</div>
+    </div>
+    <div class="modal-item-title" style="margin:6px 0;font-size:13px;color:#5eead4;">天命结局图鉴 (${unlockedCount}/${totalEndings})</div>
+    ${galleryHtml}`,
+    '<button class="btn btn-amber" id="modal-default-close">继续漫游墨土六域</button>'
   );
 }
 

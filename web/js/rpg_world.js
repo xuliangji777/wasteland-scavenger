@@ -1,5 +1,5 @@
-import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=31';
-import { sfx } from './audio.js?v=31';
+import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=32';
+import { sfx } from './audio.js?v=32';
 
 // ==================== 工具函数 ====================
 function clamp(v, min, max) {
