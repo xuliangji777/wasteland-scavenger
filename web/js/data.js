@@ -24,7 +24,8 @@ export const ASSETS = {
   boss_duangang: 'assets/sprites/boss_duangang.webp',
   boss_zhurong: 'assets/sprites/boss_zhurong.webp',
   boss_lotus_bane: 'assets/sprites/boss_lotus_bane.webp',
-  boss_tianshu: 'assets/sprites/boss_tianshu.webp'
+  boss_tianshu: 'assets/sprites/boss_tianshu.webp',
+  bg_sky_citadel: 'assets/bg_sky_citadel.webp'
 };
 
 export const QUALITY = {
@@ -65,8 +66,16 @@ export const REGIONS = [
     unlockCost: 6800, entryMap: 'vault', worldPos: { x: 88, y: 68 },
     maps: ['vault', 'cave_thunder_altar', 'cave_tianshu'],
     bossId: 'boss_tianshu', color: '#9d7cd8'
+  },
+  {
+    id: 'reg_citadel', name: '天穹白玉京域', subtitle: '苍穹浮空净土、量子军械廊与太一裁决殿', act: 6,
+    unlockCost: 12000, entryMap: 'sky_citadel', worldPos: { x: 86, y: 24 },
+    maps: ['sky_citadel'],
+    bossId: 'boss_archon_mech', color: '#38e8ff'
   }
 ];
+
+export const WORLD_REGIONS = REGIONS;
 
 // 38 件完整物品（0-11 通用废品与电子件, 12-19 区域专属, 20-24 补给品, 25-29 剧情信物, 30-37 战前古董）
 export const ITEMS = [
@@ -116,7 +125,35 @@ export const ITEMS = [
   { id: 34, name: '翡翠扳指',   seal: '古', category: 'antique', baseValue: 0, dis: false, isCollection: true, colId: 4, desc: '冰种阳绿翡翠。' },
   { id: 35, name: '紫檀木盒',   seal: '古', category: 'antique', baseValue: 0, dis: false, isCollection: true, colId: 5, desc: '小叶紫檀雕花首饰盒。' },
   { id: 36, name: '机械怀表',   seal: '古', category: 'antique', baseValue: 0, dis: false, isCollection: true, colId: 6, desc: '瑞士双盖鎏金怀表。' },
-  { id: 37, name: '战前黑胶',   seal: '古', category: 'antique', baseValue: 0, dis: false, isCollection: true, colId: 7, desc: '《第九交响曲》交响乐母盘黑胶唱片。' }
+  { id: 37, name: '战前黑胶',   seal: '古', category: 'antique', baseValue: 0, dis: false, isCollection: true, colId: 7, desc: '《第九交响曲》交响乐母盘黑胶唱片。' },
+
+  // ---- 墨家机关符箓 · 战斗/探索消耗符 (38 - 45) ----
+  { id: 38, name: '非攻护体符', seal: '护', category: 'talisman', baseValue: 140, dis: false, isConsumable: true, isTalisman: true, effect: { shield: 95, dmgReduce: 0.25 }, desc: '【墨家符箓】展开青铜墨盾 +95 点护盾，2 回合内减伤 25%。' },
+  { id: 39, name: '雷枢破甲符', seal: '雷', category: 'talisman', baseValue: 165, dis: false, isConsumable: true, isTalisman: true, effect: { dmg: 120, debuff: 'def_down' }, desc: '【墨家符箓】引九霄墨雷造成 120 点无视闪避雷伤，并击碎敌方 30% 护甲。' },
+  { id: 40, name: '天工镇魂符', seal: '镇', category: 'talisman', baseValue: 210, dis: false, isConsumable: true, isTalisman: true, effect: { dmg: 95, captureBonus: 0.35 }, desc: '【墨家符箓】净魂镇妖造成 95 点真实伤害，本回合墨壶【收妖】成功率 +35%！' },
+  { id: 41, name: '量子跃迁符', seal: '跃', category: 'talisman', baseValue: 280, dis: false, isConsumable: true, isTalisman: true, effect: { hp: 150, energy: 70, cleanse: true }, desc: '【墨家符箓】相位重构：瞬间恢复 150 生命 + 70 内息，并净化全部异常状态！' },
+  { id: 42, name: '玄墨聚气符', seal: '聚', category: 'talisman', baseValue: 155, dis: false, isConsumable: true, isTalisman: true, effect: { energy: 90, atkBuff: 0.22 }, desc: '【墨家符箓】回复 90 点内息，并使接下来 3 回合攻击力提升 22%。' },
+  { id: 43, name: '朱雀焚天符', seal: '焚', category: 'talisman', baseValue: 240, dis: false, isConsumable: true, isTalisman: true, effect: { dmg: 160, debuff: 'burn' }, desc: '【墨家符箓】唤起朱雀业火造成 160 点烈焰伤害，并附加高额【灼烧】。' },
+  { id: 44, name: '青莲净瘴符', seal: '莲', category: 'talisman', baseValue: 195, dis: false, isConsumable: true, isTalisman: true, effect: { hp: 110, radShield: 2, cleanse: true }, desc: '【墨家符箓】恢复 110 生命、净化毒瘴辐射，并赋予 2 层抗辐射护盾。' },
+  { id: 45, name: '太虚遁影符', seal: '遁', category: 'talisman', baseValue: 180, dis: false, isConsumable: true, isTalisman: true, effect: { clearWarn: true, dodgeBuff: 0.35 }, desc: '【墨家符箓】清零警戒值，战斗中必定撤退或获得 2 回合 +35% 闪避！' },
+
+  // ---- 高阶科幻材料 & 天穹珍奇道具 (46 - 61) ----
+  { id: 46, name: '量子晶格',     seal: '晶', category: 'scifi',      baseValue: 1450, dis: true,  desc: '【天穹材料】高维稳定晶格矩阵，铸造量子白玉级神兵的核心基材。' },
+  { id: 47, name: '白玉灵芯',     seal: '玉', category: 'scifi',      baseValue: 1850, dis: true,  desc: '【天穹材料】白玉京能源塔提纯的温润灵能芯片，兼具灵气与量子算力。' },
+  { id: 48, name: '纳米修复凝胶', seal: '胶', category: 'consumable', baseValue: 260,  dis: false, isConsumable: true, effect: { hp: 190, radShield: 1 }, desc: '军工级纳米医用凝胶，使用：恢复 190 生命值并附加 1 层抗辐射护盾。' },
+  { id: 49, name: '暗物质碎屑',   seal: '暗', category: 'rare',       baseValue: 2200, dis: true,  desc: '【绝密奇物】收容于磁约束瓶中的微克暗物质，价值连城。' },
+  { id: 50, name: '超导墨丝',     seal: '丝', category: 'scifi',      baseValue: 1280, dis: false, desc: '【天穹材料】零电阻先秦墨纹超导纤维，编织太虚圣铠的必备织物。' },
+  { id: 51, name: '太虚能量电池', seal: '能', category: 'consumable', baseValue: 320,  dis: false, isConsumable: true, effect: { energy: 120 }, desc: '高密度固态太虚电池，使用：立即恢复 120 点内息/能量。' },
+  { id: 52, name: '战前全息芯片', seal: '全', category: 'tech',       baseValue: 1360, dis: true,  desc: '【旧世遗珍】封存着旧纪元战术推演库的全息储存片，拆解收益极高。' },
+  { id: 53, name: '天穹通行密匙', seal: '匙', category: 'specialty',  baseValue: 1600, dis: false, desc: '【白玉京专属】镌刻执政官印徽的量子通行密匙，白玉京高阶身份凭证。' },
+  { id: 54, name: '白玉京信用晶币', seal: '晶', category: 'specialty', baseValue: 1500, dis: false, desc: '【白玉京专属】穹顶净土通行的蓝白光学信用币，在废土黑市价值不菲。' },
+  { id: 55, name: '反重力悬浮环', seal: '浮', category: 'scifi',      baseValue: 1750, dis: true,  desc: '【天穹材料】浮空廊道核心稳压环，可炼化太虚浮游剑匣。' },
+  { id: 56, name: '墨家微缩轴承', seal: '轴', category: 'tech',       baseValue: 620,  dis: true,  desc: '【机关精件】精密至微米级的青铜合金轴承，机括武器进阶核心。' },
+  { id: 57, name: '太一逻辑残片', seal: '太', category: 'rare',       baseValue: 2600, dis: true,  desc: '【白玉京专属】从裁决主神阵列剥离的高阶逻辑模块，蕴含惊人算力。' },
+  { id: 58, name: '高能聚变微核', seal: '聚', category: 'scifi',      baseValue: 2400, dis: true,  desc: '【天穹材料】掌心大小的冷聚变核心，足以驱动顶级量子外骨骼。' },
+  { id: 59, name: '穹顶净化液',   seal: '净', category: 'consumable', baseValue: 480,  dis: false, isConsumable: true, effect: { hp: 240, energy: 90, food: 65, cleanse: true }, desc: '白玉京特供全效恢复液，使用：+240生命 +90内息 +65饱食并净化全部异常！' },
+  { id: 60, name: '先秦星枢竹简', seal: '简', category: 'rare',       baseValue: 1950, dis: false, desc: '【秘传典籍】以星辰钛丝串联的墨家天穹星图残简，珍稀无比。' },
+  { id: 61, name: '量子全息星图', seal: '图', category: 'rare',       baseValue: 2800, dis: false, desc: '【终极奇物】实时投影苍穹九域坐标的立体星图仪，收藏价值无双。' }
 ];
 
 // 敌人库（9 种可收服墨妖/机灵 + 5 位洞窟区域首领）
@@ -316,6 +353,43 @@ export const ENEMIES = {
     phase2Line: '“区区凡躯，竟敢以壶逆天？！见证地脉奇点的真容！”',
     defeatLine: '“……原来，21:47 之后，人间仍有灯火未熄……”',
     desc: '吞噬地脉奇点的失控终极主脑，半血觉醒二阶段，决定墨土最终命运。'
+  },
+
+  // ---- 天穹白玉京高阶科幻机兵 & 终局裁决主神 ----
+  citadel_enforcer: {
+    id: 'citadel_enforcer', name: '穹顶律法卫', spriteType: 'guard', isBoss: false, capturable: true,
+    tier: 5, fusionCategory: 'mecha',
+    color: '#243b55', accent: '#38e8ff', scale: 1.24,
+    hp: 460, atk: 68, def: 26, exp: 420, gold: 760,
+    spiritName: '穹顶律法魄', spiritPower: 92,
+    desc: '驻守天穹白玉京长廊的高阶自律执法机兵，手持离子长戟与光学盾。'
+  },
+  quantum_sentinel: {
+    id: 'quantum_sentinel', name: '太虚量子机兵', spriteType: 'drone', isBoss: false, capturable: true,
+    tier: 5, fusionCategory: 'mecha',
+    color: '#1e3a5f', accent: '#7dd3fc', scale: 1.26,
+    hp: 510, atk: 76, def: 24, exp: 480, gold: 860,
+    spiritName: '太虚量子魄', spiritPower: 98,
+    desc: '搭载相位跃迁引擎的浮空量子卫士，能发射高能粒子束穿透重甲。'
+  },
+  jade_arbiter: {
+    id: 'jade_arbiter', name: '白玉京裁决机甲', spriteType: 'heavy_mech', isBoss: false, capturable: true,
+    tier: 5, fusionCategory: 'mecha',
+    color: '#2d3f54', accent: '#f5d061', scale: 1.38,
+    hp: 640, atk: 84, def: 32, exp: 580, gold: 1050,
+    spiritName: '白玉裁决魄', spiritPower: 110,
+    desc: '白玉京内廷精锐双足重装圣甲，双肩搭载浮游剑阵与电磁炮。'
+  },
+  boss_archon_mech: {
+    id: 'boss_archon_mech', name: '天穹裁决主神·太一', title: '白玉京终极仲裁机', spriteType: 'boss_tianshu',
+    isBoss: true, capturable: false, dropSpiritId: 'jade_arbiter', isCitadelBoss: true,
+    color: '#1b2b4a', accent: '#38e8ff', scale: 1.92,
+    hp: 3800, atk: 195, def: 38, exp: 2600, gold: 5200,
+    specialName: '太一量子天罚', specialEvery: 3, specialMult: 1.85, enrageAt: 0.5,
+    introLine: '“检测到地表未经授权的墨壶共振体。白玉京最高仲裁协议【太一】——启动！”',
+    phase2Line: '“地表尘埃岂可染指苍穹净土？展开太虚十二翼，抹除异常变量！”',
+    defeatLine: '“仲裁矩阵……过载停机……白玉京穹顶闸门已向地表开放，愿旧世与新土重归一体。”',
+    desc: '镇守天穹白玉京最高圣殿的终极量子裁决主神，半血展开太虚光翼，掉落绝世天穹神装！'
   }
 };
 
@@ -371,110 +445,413 @@ export const GUARDIANS = {
   }
 };
 
-// 装备库（4 大槽位：weapon 武器 / armor 护甲 / mech 机甲核心 / relic 秘宝，融合古武/军火/科幻墨甲/神仙妖怪）
+// 装备库（67 件：26 武器 / 16 护甲 / 12 机甲核心 / 13 秘宝，完整融合古武/军火/科幻墨甲/仙妖/白玉京量子）
 export const EQUIPMENT = {
-  wpn_inkblade: {
-    id: 'wpn_inkblade', name: '淬墨短刃', slot: 'weapon', genre: 'wuxia', weaponType: 'blade', quality: 'fine', seal: '刃',
-    atk: 14, crit: 0.08, desc: '【古武】墨尘淬火的轻巧侠客刃：攻击 +14，暴击 +8%。'
+  // ==================== 武器 · 墨剑系 (weaponStyle: 'sword', 9 件) ====================
+  wpn_pipe: {
+    id: 'wpn_pipe', name: '无锋墨铁剑', slot: 'weapon', genre: 'wuxia', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'common', seal: '剑', visualTier: 1, visualColor: '#8c969e', minRegion: 0, dropTier: 1,
+    atk: 9, crit: 0.04, desc: '【古武·入门】墨家弟子初入废土的宽背墨铁重剑：攻击 +9，暴击 +4%。'
+  },
+  wpn_bronze_feigong: {
+    id: 'wpn_bronze_feigong', name: '青铜非攻剑', slot: 'weapon', genre: 'wuxia', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'fine', seal: '非', visualTier: 1, visualColor: '#5fa88a', minRegion: 0, dropTier: 1,
+    atk: 17, def: 4, crit: 0.08, desc: '【墨家古剑】铭刻非攻云雷纹的青铜古剑：攻击 +17，防御 +4，暴击 +8%。'
   },
   wpn_qingcheng: {
-    id: 'wpn_qingcheng', name: '青城墨剑', slot: 'weapon', genre: 'wuxia', weaponType: 'blade', quality: 'rare', seal: '剑',
+    id: 'wpn_qingcheng', name: '青城墨剑', slot: 'weapon', genre: 'wuxia', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'rare', seal: '剑', visualTier: 2, visualColor: '#4da6ff', minRegion: 1, dropTier: 2,
     atk: 30, crit: 0.16, skillBonus: 0.15, desc: '【古武】青城秘传古剑：攻击 +30，暴击 +16%，武学伤害 +15%。'
   },
+  wpn_xuanmo_mech_sword: {
+    id: 'wpn_xuanmo_mech_sword', name: '玄墨机括剑', slot: 'weapon', genre: 'scifi', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'rare', seal: '括', visualTier: 3, visualColor: '#7c8cf8', minRegion: 2, dropTier: 3,
+    atk: 38, crit: 0.15, armorPen: 0.16, desc: '【墨家机关】剑脊内置高频机括齿轮的玄铁重剑：攻 +38，暴击 +15%，穿甲 +16%。'
+  },
+  wpn_xingshu_water: {
+    id: 'wpn_xingshu_water', name: '星枢断水剑', slot: 'weapon', genre: 'mythic', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'rare', seal: '星', visualTier: 3, visualColor: '#38bdf8', minRegion: 3, dropTier: 4,
+    atk: 46, crit: 0.18, maxEnergy: 20, skillBonus: 0.18, desc: '【古武×星枢】挥剑如星河断水：攻击 +46，暴击 +18%，内息 +20，技能 +18%。'
+  },
+  wpn_pulsesword: {
+    id: 'wpn_pulsesword', name: '墨渊等离子光剑', slot: 'weapon', genre: 'scifi', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'legend', seal: '脉', visualTier: 4, visualColor: '#60a5fa', minRegion: 4, dropTier: 5,
+    atk: 54, maxEnergy: 30, skillBonus: 0.22, desc: '【古武×科幻】古剑与能量核炼化而成的墨渊光剑：攻 +54，内息 +30，技能 +22%！'
+  },
+  wpn_quantum_arc: {
+    id: 'wpn_quantum_arc', name: '量子弧光剑', slot: 'weapon', genre: 'scifi', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'legend', seal: '弧', visualTier: 4, visualColor: '#38e8ff', minRegion: 4, dropTier: 5,
+    atk: 64, crit: 0.22, armorPen: 0.26, maxEnergy: 25, desc: '【量子剑器】白玉京实验室流出的高能弧光剑：攻 +64，暴击 +22%，穿甲 +26%。'
+  },
+  wpn_xuanyuan: {
+    id: 'wpn_xuanyuan', name: '轩辕墨渊剑', slot: 'weapon', genre: 'mythic', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'legend', seal: '渊', visualTier: 5, visualColor: '#f5b041', minRegion: 4, dropTier: 6,
+    atk: 72, def: 14, crit: 0.24, armorPen: 0.32, desc: '【神话神兵】终极绝世神剑：攻 +72，防 +14，暴击 +24%，无视 32% 防御！'
+  },
+  wpn_baiyujing_taixu: {
+    id: 'wpn_baiyujing_taixu', name: '白玉京·太虚粒子剑', slot: 'weapon', genre: 'scifi', weaponType: 'blade', weaponStyle: 'sword',
+    quality: 'legend', seal: '虚', visualTier: 5, visualColor: '#7ef9ff', minRegion: 5, dropTier: 6,
+    atk: 88, crit: 0.28, armorPen: 0.36, maxEnergy: 40, skillBonus: 0.30, desc: '【白玉京至宝】凝聚太虚粒子流的天穹圣剑：攻 +88，暴击 +28%，穿甲 +36%，技能 +30%！'
+  },
+
+  // ==================== 武器 · 重刃系 (weaponStyle: 'blade', 6 件) ====================
+  wpn_rust_cleaver: {
+    id: 'wpn_rust_cleaver', name: '铁锈斩骨刀', slot: 'weapon', genre: 'wuxia', weaponType: 'blade', weaponStyle: 'blade',
+    quality: 'common', seal: '刀', visualTier: 1, visualColor: '#9c7862', minRegion: 0, dropTier: 1,
+    atk: 12, crit: 0.05, desc: '【废土重刃】厚背锯齿铁刀，劈砍有力：攻击 +12，暴击 +5%。'
+  },
+  wpn_inkblade: {
+    id: 'wpn_inkblade', name: '淬墨短刃', slot: 'weapon', genre: 'wuxia', weaponType: 'blade', weaponStyle: 'blade',
+    quality: 'fine', seal: '刃', visualTier: 1, visualColor: '#6fb98f', minRegion: 0, dropTier: 1,
+    atk: 14, crit: 0.08, desc: '【古武】墨尘淬火的轻巧侠客刃：攻击 +14，暴击 +8%。'
+  },
+  wpn_chainsaw_blade: {
+    id: 'wpn_chainsaw_blade', name: '断钢链锯重刃', slot: 'weapon', genre: 'military', weaponType: 'blade', weaponStyle: 'blade',
+    quality: 'fine', seal: '锯', visualTier: 2, visualColor: '#d96b43', minRegion: 1, dropTier: 2,
+    atk: 26, crit: 0.12, armorPen: 0.14, desc: '【废都凶刃】铁爪帮仿制的高速链锯大刀：攻 +26，暴击 +12%，穿甲 +14%。'
+  },
+  wpn_zhurong_dao: {
+    id: 'wpn_zhurong_dao', name: '祝融熔炎大刀', slot: 'weapon', genre: 'military', weaponType: 'blade', weaponStyle: 'blade',
+    quality: 'rare', seal: '熔', visualTier: 3, visualColor: '#ff7034', minRegion: 2, dropTier: 3,
+    atk: 42, crit: 0.14, proc: 'burn', desc: '【赤焰兵工】刃口流淌赤红熔炎的重型战刀：攻 +42，暴击 +14%，普攻附加【灼烧】。'
+  },
+  wpn_cyber_nodachi: {
+    id: 'wpn_cyber_nodachi', name: '赛博高频墨太刀', slot: 'weapon', genre: 'scifi', weaponType: 'blade', weaponStyle: 'blade',
+    quality: 'rare', seal: '刹', visualTier: 4, visualColor: '#f43f5e', minRegion: 3, dropTier: 4,
+    atk: 52, crit: 0.22, armorPen: 0.22, desc: '【赛博义刃】超高频震荡纳米长刀，断铁如泥：攻 +52，暴击 +22%，穿甲 +22%。'
+  },
+  wpn_taotie_greataxe: {
+    id: 'wpn_taotie_greataxe', name: '饕餮噬钢巨斧', slot: 'weapon', genre: 'mythic', weaponType: 'blade', weaponStyle: 'blade',
+    quality: 'legend', seal: '饕', visualTier: 5, visualColor: '#f59e0b', minRegion: 5, dropTier: 6,
+    atk: 82, def: 12, crit: 0.20, armorPen: 0.34, lifesteal: 0.10, desc: '【凶兽重刃】吞噬金属与血气的绝世巨斧：攻 +82，防 +12，穿甲 +34%，吸血 +10%！'
+  },
+
+  // ==================== 武器 · 枪炮系 (weaponStyle: 'gun', 8 件) ====================
   wpn_flaregun: {
-    id: 'wpn_flaregun', name: '赤炎土铳', slot: 'weapon', genre: 'military', weaponType: 'pistol', quality: 'fine', seal: '铳',
+    id: 'wpn_flaregun', name: '赤炎土铳', slot: 'weapon', genre: 'military', weaponType: 'pistol', weaponStyle: 'gun',
+    quality: 'fine', seal: '铳', visualTier: 1, visualColor: '#e07a3d', minRegion: 0, dropTier: 1,
     atk: 24, crit: 0.10, proc: 'burn', desc: '【军火】短管火铳：攻击 +24，暴击 +10%，普攻 25% 概率附加【灼烧】。'
   },
   wpn_shotgun: {
-    id: 'wpn_shotgun', name: '铁爪双管霰弹铳', slot: 'weapon', genre: 'military', weaponType: 'shotgun', quality: 'rare', seal: '霰',
+    id: 'wpn_shotgun', name: '铁爪双管霰弹铳', slot: 'weapon', genre: 'military', weaponType: 'shotgun', weaponStyle: 'gun',
+    quality: 'rare', seal: '霰', visualTier: 2, visualColor: '#c95c3f', minRegion: 1, dropTier: 2,
     atk: 32, crit: 0.14, armorPen: 0.15, desc: '【军火】近战轰杀利器：攻击 +32，暴击 +14%，无视 15% 防御。'
   },
   wpn_sniper: {
-    id: 'wpn_sniper', name: '反器材狙击长铳', slot: 'weapon', genre: 'military', weaponType: 'sniper', quality: 'rare', seal: '狙',
+    id: 'wpn_sniper', name: '反器材狙击长铳', slot: 'weapon', genre: 'military', weaponType: 'sniper', weaponStyle: 'gun',
+    quality: 'rare', seal: '狙', visualTier: 3, visualColor: '#6b94b8', minRegion: 2, dropTier: 3,
     atk: 40, crit: 0.20, mechBonus: 0.25, desc: '【军火】重型反器材狙击枪：攻击 +40，暴击 +20%，对机械额外 +25% 穿甲。'
   },
-  wpn_gatling: {
-    id: 'wpn_gatling', name: '火神加特林重机枪', slot: 'weapon', genre: 'military', weaponType: 'gatling', quality: 'legend', seal: '神',
-    atk: 56, crit: 0.18, armorPen: 0.22, desc: '【军火】六管旋转重机枪！攻击 +56，暴击 +18%，倾泻钢铁弹幕无视 22% 防御！'
-  },
-  wpn_artillery: {
-    id: 'wpn_artillery', name: '便携式重炮发射器', slot: 'weapon', genre: 'military', weaponType: 'cannon', quality: 'rare', seal: '炮',
-    atk: 48, artilleryBonus: 0.25, desc: '【军火】单兵重炮：攻击 +48，重炮/空袭类技能伤害额外 +25%！'
-  },
   wpn_plasma_rifle: {
-    id: 'wpn_plasma_rifle', name: '幽蓝等离子脉冲步枪', slot: 'weapon', genre: 'scifi', weaponType: 'plasma', quality: 'rare', seal: '光',
+    id: 'wpn_plasma_rifle', name: '幽蓝等离子脉冲步枪', slot: 'weapon', genre: 'scifi', weaponType: 'plasma', weaponStyle: 'gun',
+    quality: 'rare', seal: '光', visualTier: 3, visualColor: '#38bdf8', minRegion: 3, dropTier: 4,
     atk: 44, maxEnergy: 20, crit: 0.15, desc: '【科幻】战前高能步枪：攻击 +44，内息上限 +20，暴击 +15%。'
   },
-  wpn_pulsesword: {
-    id: 'wpn_pulsesword', name: '墨渊等离子光剑', slot: 'weapon', genre: 'scifi', weaponType: 'blade', quality: 'legend', seal: '脉',
-    atk: 54, maxEnergy: 30, skillBonus: 0.22, desc: '【古武×科幻】古剑与能量核炼化而成的墨渊光剑：攻 +54，内息 +30，技能 +22%！'
+  wpn_artillery: {
+    id: 'wpn_artillery', name: '便携式重炮发射器', slot: 'weapon', genre: 'military', weaponType: 'cannon', weaponStyle: 'gun',
+    quality: 'rare', seal: '炮', visualTier: 3, visualColor: '#e08b3e', minRegion: 2, dropTier: 3,
+    atk: 48, artilleryBonus: 0.25, desc: '【军火】单兵重炮：攻击 +48，重炮/空袭类技能伤害额外 +25%！'
+  },
+  wpn_gatling: {
+    id: 'wpn_gatling', name: '火神加特林重机枪', slot: 'weapon', genre: 'military', weaponType: 'gatling', weaponStyle: 'gun',
+    quality: 'legend', seal: '神', visualTier: 4, visualColor: '#fb923c', minRegion: 3, dropTier: 5,
+    atk: 56, crit: 0.18, armorPen: 0.22, desc: '【军火】六管旋转重机枪！攻击 +56，暴击 +18%，倾泻钢铁弹幕无视 22% 防御！'
   },
   wpn_railgun: {
-    id: 'wpn_railgun', name: '朱雀烈焰电磁炮', slot: 'weapon', genre: 'scifi', weaponType: 'railgun', quality: 'legend', seal: '雀',
+    id: 'wpn_railgun', name: '朱雀烈焰电磁炮', slot: 'weapon', genre: 'scifi', weaponType: 'railgun', weaponStyle: 'gun',
+    quality: 'legend', seal: '雀', visualTier: 4, visualColor: '#f97316', minRegion: 4, dropTier: 5,
     atk: 66, artilleryBonus: 0.35, proc: 'burn', armorPen: 0.28, desc: '【军火×妖核】重炮与妖核跨界炼化：攻 +66，重炮 +35%，无视 28% 防御并附加灼烧！'
   },
-  wpn_xuanyuan: {
-    id: 'wpn_xuanyuan', name: '轩辕墨渊剑', slot: 'weapon', genre: 'mythic', weaponType: 'blade', quality: 'legend', seal: '渊',
-    atk: 72, def: 14, crit: 0.24, armorPen: 0.32, desc: '【神话神兵】终极绝世神剑：攻 +72，防 +14，暴击 +24%，无视 32% 防御！'
+  wpn_citadel_gauss: {
+    id: 'wpn_citadel_gauss', name: '白玉京·太一磁轨粒子炮', slot: 'weapon', genre: 'scifi', weaponType: 'railgun', weaponStyle: 'gun',
+    quality: 'legend', seal: '轨', visualTier: 5, visualColor: '#38e8ff', minRegion: 5, dropTier: 6,
+    atk: 86, crit: 0.24, armorPen: 0.38, artilleryBonus: 0.40, desc: '【白玉京军械】双轨量子电磁主炮：攻 +86，暴击 +24%，穿甲 +38%，重炮 +40%！'
+  },
+
+  // ==================== 武器 · 机关戟/法杖系 (weaponStyle: 'staff', 3 件) ====================
+  wpn_mojia_staff: {
+    id: 'wpn_mojia_staff', name: '墨家非攻机关棍', slot: 'weapon', genre: 'wuxia', weaponType: 'staff', weaponStyle: 'staff',
+    quality: 'fine', seal: '棍', visualTier: 1, visualColor: '#a68b5b', minRegion: 0, dropTier: 1,
+    atk: 19, def: 6, maxEnergy: 15, desc: '【墨家机关】可伸缩青铜机括长棍：攻击 +19，防御 +6，内息 +15。'
+  },
+  wpn_thunder_halberd: {
+    id: 'wpn_thunder_halberd', name: '雷枢玄墨机关戟', slot: 'weapon', genre: 'mythic', weaponType: 'staff', weaponStyle: 'staff',
+    quality: 'rare', seal: '戟', visualTier: 3, visualColor: '#60a5fa', minRegion: 2, dropTier: 4,
+    atk: 45, crit: 0.16, maxEnergy: 25, skillBonus: 0.20, desc: '【机关×雷法】戟尖缠绕墨雷电弧：攻 +45，暴击 +16%，内息 +25，奇术 +20%。'
+  },
+  wpn_tianshu_scepter: {
+    id: 'wpn_tianshu_scepter', name: '天穹量子权杖', slot: 'weapon', genre: 'scifi', weaponType: 'staff', weaponStyle: 'staff',
+    quality: 'legend', seal: '杖', visualTier: 5, visualColor: '#c084fc', minRegion: 5, dropTier: 6,
+    atk: 80, maxEnergy: 60, mpRegen: 10, skillBonus: 0.35, desc: '【白玉京秘杖】执政官级能量权杖：攻 +80，内息 +60，回息 +10，奇术/技能 +35%！'
+  },
+
+  // ==================== 护甲 (slot: 'armor', 16 件) ====================
+  armor_scavenger_cloth: {
+    id: 'armor_scavenger_cloth', name: '拾荒布衣', slot: 'armor', genre: 'wuxia', helmStyle: 'hat',
+    quality: 'common', seal: '衣', visualTier: 1, visualColor: '#9e917d', minRegion: 0, dropTier: 1,
+    def: 5, maxHp: 20, desc: '【废土常服】粗麻缝制的防风斗笠与布衫：防御 +5，最大生命 +20。'
+  },
+  armor_wasteland_leather: {
+    id: 'armor_wasteland_leather', name: '荒原革甲', slot: 'armor', genre: 'wuxia', helmStyle: 'hat',
+    quality: 'common', seal: '革', visualTier: 1, visualColor: '#8f6b4e', minRegion: 0, dropTier: 1,
+    def: 9, maxHp: 32, desc: '【废土轻甲】变异兽皮鞣制的耐磨革甲：防御 +9，最大生命 +32。'
   },
   armor_ironwire: {
-    id: 'armor_ironwire', name: '玄铁软丝甲', slot: 'armor', genre: 'wuxia', quality: 'fine', seal: '甲',
+    id: 'armor_ironwire', name: '玄铁软丝甲', slot: 'armor', genre: 'wuxia', helmStyle: 'hat',
+    quality: 'fine', seal: '甲', visualTier: 1, visualColor: '#6f8794', minRegion: 0, dropTier: 1,
     def: 12, maxHp: 45, desc: '【古武】大桥钢缆编织而成：防御 +12，最大生命 +45。'
   },
+  armor_mo_light: {
+    id: 'armor_mo_light', name: '墨铁轻甲', slot: 'armor', genre: 'wuxia', helmStyle: 'hat',
+    quality: 'fine', seal: '墨', visualTier: 2, visualColor: '#4b5563', minRegion: 1, dropTier: 2,
+    def: 16, maxHp: 62, dodgeRate: 0.05, desc: '【墨家甲胄】轻便贴身的玄墨鱼鳞甲：防御 +16，生命 +62，闪避 +5%。'
+  },
+  armor_raider_plate: {
+    id: 'armor_raider_plate', name: '铁爪铆钉重甲', slot: 'armor', genre: 'military', helmStyle: 'visor',
+    quality: 'fine', seal: '铆', visualTier: 2, visualColor: '#a84a3b', minRegion: 1, dropTier: 2,
+    def: 20, maxHp: 78, dmgReduce: 0.08, desc: '【废都重甲】车门钢板铆接的防弹护甲：防御 +20，生命 +78，减伤 +8%。'
+  },
+  armor_feigong_mech: {
+    id: 'armor_feigong_mech', name: '非攻机关甲', slot: 'armor', genre: 'scifi', helmStyle: 'visor',
+    quality: 'rare', seal: '机', visualTier: 2, visualColor: '#5fa88a', minRegion: 1, dropTier: 3,
+    def: 23, maxHp: 90, startShield: 30, desc: '【墨家机关】开战自动展开 30 点墨盾：防御 +23，生命 +90，护盾 +30。'
+  },
+  armor_arsenal_hazmat: {
+    id: 'armor_arsenal_hazmat', name: '兵工防化耐热服', slot: 'armor', genre: 'military', helmStyle: 'visor',
+    quality: 'rare', seal: '热', visualTier: 3, visualColor: '#e08b3e', minRegion: 2, dropTier: 3,
+    def: 24, maxHp: 96, radResist: 0.30, dmgReduce: 0.12, desc: '【赤焰兵工】抵御高温灼烧与辐射尘：防御 +24，生命 +96，抗辐 +30%，减伤 +12%。'
+  },
+  armor_xuanmo_robe: {
+    id: 'armor_xuanmo_robe', name: '玄墨天工袍', slot: 'armor', genre: 'wuxia', helmStyle: 'crown',
+    quality: 'rare', seal: '袍', visualTier: 3, visualColor: '#7c6bc4', minRegion: 2, dropTier: 3,
+    def: 22, maxHp: 88, maxEnergy: 30, mpRegen: 5, desc: '【墨家宗师】绣满星枢墨纹的宗师道袍：防 +22，生命 +88，内息 +30，回息 +5。'
+  },
   armor_exo: {
-    id: 'armor_exo', name: '墨甲外骨骼战衣', slot: 'armor', genre: 'scifi', quality: 'rare', seal: '铠',
+    id: 'armor_exo', name: '墨甲外骨骼战衣', slot: 'armor', genre: 'scifi', helmStyle: 'visor',
+    quality: 'rare', seal: '铠', visualTier: 3, visualColor: '#60a5fa', minRegion: 2, dropTier: 3,
     def: 26, maxHp: 100, dmgReduce: 0.16, desc: '【墨甲】防御 +26，最大生命 +100，战斗物理减伤 +16%。'
   },
+  armor_miasma_cloak: {
+    id: 'armor_miasma_cloak', name: '青瘴净莲斗篷', slot: 'armor', genre: 'mythic', helmStyle: 'hat',
+    quality: 'rare', seal: '莲', visualTier: 3, visualColor: '#62e698', minRegion: 3, dropTier: 4,
+    def: 28, maxHp: 118, radResist: 0.45, dodgeRate: 0.08, desc: '【毒泽秘衣】青莲药汁浸染的避瘴斗篷：防 +28，生命 +118，抗辐 +45%，闪避 +8%。'
+  },
+  armor_fox_silk: {
+    id: 'armor_fox_silk', name: '青丘灵丝道袍', slot: 'armor', genre: 'mythic', helmStyle: 'crown',
+    quality: 'rare', seal: '狐', visualTier: 4, visualColor: '#f088c8', minRegion: 3, dropTier: 4,
+    def: 30, maxHp: 125, maxEnergy: 38, crit: 0.10, desc: '【妖灵宝衣】九尾灵丝织就的流光法袍：防 +30，生命 +125，内息 +38，暴击 +10%。'
+  },
+  armor_nano_stealth: {
+    id: 'armor_nano_stealth', name: '纳米隐纹甲', slot: 'armor', genre: 'scifi', helmStyle: 'visor',
+    quality: 'rare', seal: '隐', visualTier: 4, visualColor: '#38bdf8', minRegion: 4, dropTier: 5,
+    def: 36, maxHp: 150, dodgeRate: 0.14, crit: 0.12, desc: '【战前特工】自适应光学迷彩纳米战甲：防 +36，生命 +150，闪避 +14%，暴击 +12%。'
+  },
+  armor_tianshu_aegis: {
+    id: 'armor_tianshu_aegis', name: '天枢地脉圣铠', slot: 'armor', genre: 'mythic', helmStyle: 'crown',
+    quality: 'legend', seal: '枢', visualTier: 4, visualColor: '#c084fc', minRegion: 4, dropTier: 5,
+    def: 42, maxHp: 185, dmgReduce: 0.20, startShield: 55, desc: '【天枢重甲】地脉灵能驱动的紫金圣铠：防 +42，生命 +185，减伤 +20%，开局护盾 +55！'
+  },
+  armor_quantum_jade: {
+    id: 'armor_quantum_jade', name: '量子白玉战甲', slot: 'armor', genre: 'scifi', helmStyle: 'quantum',
+    quality: 'legend', seal: '玉', visualTier: 5, visualColor: '#38e8ff', minRegion: 5, dropTier: 6,
+    def: 50, maxHp: 220, dmgReduce: 0.24, maxEnergy: 35, desc: '【白玉京精锐】白玉陶瓷复合材料与量子力场甲：防 +50，生命 +220，减伤 +24%，内息 +35！'
+  },
+  armor_archon_mantle: {
+    id: 'armor_archon_mantle', name: '执政官星环法袍', slot: 'armor', genre: 'scifi', helmStyle: 'crown',
+    quality: 'legend', seal: '环', visualTier: 5, visualColor: '#f5d061', minRegion: 5, dropTier: 6,
+    def: 46, maxHp: 210, maxEnergy: 55, mpRegen: 10, skillBonus: 0.22, desc: '【白玉京礼装】背负全息星环的执政官长袍：防 +46，生命 +210，内息 +55，技能 +22%！'
+  },
+  armor_sky_taixu_plate: {
+    id: 'armor_sky_taixu_plate', name: '天穹太虚圣铠', slot: 'armor', genre: 'scifi', helmStyle: 'quantum',
+    quality: 'legend', seal: '穹', visualTier: 5, visualColor: '#7ef9ff', minRegion: 5, dropTier: 6,
+    def: 58, maxHp: 265, dmgReduce: 0.28, startShield: 90, immuneTide: true, desc: '【终极圣铠】天穹白玉京至高防御圣甲：防 +58，生命 +265，减伤 +28%，开局护盾 +90，免疫辐射潮！'
+  },
+
+  // ==================== 机甲核心 (slot: 'mech', 12 件) ====================
+  mech_crossbow_box: {
+    id: 'mech_crossbow_box', name: '墨家连弩匣', slot: 'mech', genre: 'wuxia',
+    quality: 'common', seal: '弩', visualTier: 1, visualColor: '#a68b5b', minRegion: 0, dropTier: 1,
+    atk: 8, crit: 0.06, desc: '【墨家机关】挂于臂侧的青铜连发机弩匣：攻击 +8，暴击 +6%。'
+  },
   mech_steam_core: {
-    id: 'mech_steam_core', name: '废土蒸汽机甲核', slot: 'mech', genre: 'military', quality: 'fine', seal: '核',
+    id: 'mech_steam_core', name: '废土蒸汽机甲核', slot: 'mech', genre: 'military',
+    quality: 'fine', seal: '核', visualTier: 1, visualColor: '#c97b42', minRegion: 0, dropTier: 1,
     atk: 12, def: 8, maxHp: 50, artilleryBonus: 0.15, desc: '【机甲】初级机甲核心：攻击 +12，防御 +8，重炮技能 +15%。'
   },
+  mech_ranger_optic: {
+    id: 'mech_ranger_optic', name: '游侠光学瞄具', slot: 'mech', genre: 'military',
+    quality: 'fine', seal: '瞄', visualTier: 2, visualColor: '#6fb98f', minRegion: 1, dropTier: 2,
+    atk: 16, crit: 0.14, armorPen: 0.12, desc: '【军工配件】夜视测距目镜模块：攻击 +16，暴击 +14%，穿甲 +12%。'
+  },
+  mech_metro_thruster: {
+    id: 'mech_metro_thruster', name: '磁轨推进器', slot: 'mech', genre: 'scifi',
+    quality: 'fine', seal: '推', visualTier: 2, visualColor: '#60a5fa', minRegion: 1, dropTier: 2,
+    atk: 18, def: 10, dodgeRate: 0.10, desc: '【废都改装】背部磁悬浮瞬步推进翼：攻击 +18，防御 +10，闪避 +10%。'
+  },
+  mech_feigong_shield: {
+    id: 'mech_feigong_shield', name: '非攻护盾发生器', slot: 'mech', genre: 'scifi',
+    quality: 'rare', seal: '盾', visualTier: 3, visualColor: '#38bdf8', minRegion: 2, dropTier: 3,
+    def: 20, maxHp: 90, startShield: 60, dmgReduce: 0.10, desc: '【墨家防御】肩载量子墨盾发生器：防 +20，生命 +90，开局护盾 +60，减伤 +10%。'
+  },
   mech_crimson_frame: {
-    id: 'mech_crimson_frame', name: '赤焰重装墨甲', slot: 'mech', genre: 'scifi', quality: 'rare', seal: '机',
+    id: 'mech_crimson_frame', name: '赤焰重装墨甲', slot: 'mech', genre: 'scifi',
+    quality: 'rare', seal: '机', visualTier: 3, visualColor: '#ff7034', minRegion: 2, dropTier: 3,
     atk: 26, def: 18, maxHp: 95, artilleryBonus: 0.25, desc: '【墨甲】兵工级重装机甲：攻 +26，防 +18，生命 +95，重炮 +25%。'
   },
+  mech_bio_filter: {
+    id: 'mech_bio_filter', name: '青瘴生化过滤核', slot: 'mech', genre: 'scifi',
+    quality: 'rare', seal: '滤', visualTier: 3, visualColor: '#62e698', minRegion: 3, dropTier: 4,
+    def: 22, maxHp: 110, radResist: 0.50, mpRegen: 6, desc: '【毒泽生态】循环净化外呼吸核心：防 +22，生命 +110，抗辐 +50%，回息 +6。'
+  },
+  mech_arc_capacitor: {
+    id: 'mech_arc_capacitor', name: '雷枢电弧电容核', slot: 'mech', genre: 'scifi',
+    quality: 'rare', seal: '弧', visualTier: 4, visualColor: '#818cf8', minRegion: 4, dropTier: 4,
+    atk: 32, crit: 0.16, maxEnergy: 35, skillBonus: 0.20, desc: '【高压雷核】高频特斯拉过载电容：攻 +32，暴击 +16%，内息 +35，技能 +20%。'
+  },
   mech_bit_array: {
-    id: 'mech_bit_array', name: '天工浮游炮阵列', slot: 'mech', genre: 'scifi', quality: 'legend', seal: '浮',
+    id: 'mech_bit_array', name: '天工浮游炮阵列', slot: 'mech', genre: 'scifi',
+    quality: 'legend', seal: '浮', visualTier: 4, visualColor: '#fb923c', minRegion: 3, dropTier: 5,
     atk: 34, crit: 0.14, maxEnergy: 25, artilleryBonus: 0.30, desc: '【科幻墨甲】悬浮浮游炮：攻 +34，暴击 +14%，内息 +25，重炮/科幻技 +30%！'
   },
   mech_tianshu_exo: {
-    id: 'mech_tianshu_exo', name: '天枢量子玄甲', slot: 'mech', genre: 'scifi', quality: 'legend', seal: '枢',
+    id: 'mech_tianshu_exo', name: '天枢量子玄甲', slot: 'mech', genre: 'scifi',
+    quality: 'legend', seal: '枢', visualTier: 5, visualColor: '#c084fc', minRegion: 4, dropTier: 5,
     atk: 40, def: 26, maxHp: 150, artilleryBonus: 0.40, mpRegen: 6, desc: '【终极墨甲】攻 +40，防 +26，生命 +150，重炮 +40%，每回合回息 +6！'
   },
+  mech_taixu_swordbox: {
+    id: 'mech_taixu_swordbox', name: '太虚浮游剑匣', slot: 'mech', genre: 'scifi',
+    quality: 'legend', seal: '匣', visualTier: 5, visualColor: '#38e8ff', minRegion: 5, dropTier: 6,
+    atk: 52, crit: 0.22, armorPen: 0.25, doubleHit: 0.18, desc: '【白玉京剑匣】十二口量子飞剑自动齐射：攻 +52，暴击 +22%，穿甲 +25%，连击 +18%！'
+  },
+  mech_quantum_singularity: {
+    id: 'mech_quantum_singularity', name: '量子奇点引擎', slot: 'mech', genre: 'scifi',
+    quality: 'legend', seal: '奇', visualTier: 5, visualColor: '#7ef9ff', minRegion: 5, dropTier: 6,
+    atk: 58, def: 32, maxHp: 190, maxEnergy: 50, mpRegen: 12, artilleryBonus: 0.45, desc: '【白玉京终极核心】微型奇点驱动炉：攻 +58，防 +32，生命 +190，回息 +12，重炮 +45%！'
+  },
+
+  // ==================== 秘宝 (slot: 'relic', 13 件) ====================
+  relic_feigong_charm: {
+    id: 'relic_feigong_charm', name: '非攻护体符印', slot: 'relic', genre: 'wuxia',
+    quality: 'common', seal: '符', visualTier: 1, visualColor: '#b8a074', minRegion: 0, dropTier: 1,
+    def: 6, maxHp: 35, startShield: 20, desc: '【墨家信物】护佑游侠的青铜符印：防御 +6，生命 +35，开局护盾 +20。'
+  },
+  relic_mo_compass: {
+    id: 'relic_mo_compass', name: '墨子司南盘', slot: 'relic', genre: 'wuxia',
+    quality: 'fine', seal: '南', visualTier: 1, visualColor: '#c89b3c', minRegion: 0, dropTier: 1,
+    maxEnergy: 20, magicFind: 0.18, goldFind: 0.20, desc: '【寻宝秘器】指引废土宝藏的磁石罗盘：内息 +20，掉宝率 +18%，金币 +20%。'
+  },
+  relic_leishu_seal: {
+    id: 'relic_leishu_seal', name: '雷枢破甲符印', slot: 'relic', genre: 'mythic',
+    quality: 'fine', seal: '破', visualTier: 2, visualColor: '#60a5fa', minRegion: 1, dropTier: 2,
+    atk: 14, armorPen: 0.16, crit: 0.08, desc: '【雷法秘宝】蕴含一丝破甲雷纹的玉符：攻击 +14，穿甲 +16%，暴击 +8%。'
+  },
+  relic_bronze_mirror: {
+    id: 'relic_bronze_mirror', name: '先秦青铜护心佩', slot: 'relic', genre: 'mythic',
+    quality: 'fine', seal: '佩', visualTier: 2, visualColor: '#5fa88a', minRegion: 1, dropTier: 2,
+    def: 12, maxHp: 60, dmgReduce: 0.10, desc: '【古墓遗珍】铭刻镇邪铭文的青铜圆镜：防御 +12，生命 +60，减伤 +10%。'
+  },
+  relic_zhurong_ember: {
+    id: 'relic_zhurong_ember', name: '祝融火种炉', slot: 'relic', genre: 'mythic',
+    quality: 'rare', seal: '火', visualTier: 3, visualColor: '#ff7034', minRegion: 2, dropTier: 3,
+    atk: 20, maxHp: 75, proc: 'burn', skillBonus: 0.16, desc: '【赤焰秘宝】永不熄灭的兵工火种香炉：攻 +20，生命 +75，技能 +16%，攻击附灼烧。'
+  },
   relic_fox_orb: {
-    id: 'relic_fox_orb', name: '九尾灵珠', slot: 'relic', genre: 'mythic', quality: 'rare', seal: '珠',
+    id: 'relic_fox_orb', name: '九尾灵珠', slot: 'relic', genre: 'mythic',
+    quality: 'rare', seal: '珠', visualTier: 3, visualColor: '#f088c8', minRegion: 3, dropTier: 4,
     maxHp: 65, maxEnergy: 35, crit: 0.12, desc: '【妖怪秘宝】九尾辐射狐内丹：生命 +65，内息 +35，暴击 +12%。'
   },
+  relic_qingqiu_jade: {
+    id: 'relic_qingqiu_jade', name: '青丘灵狐佩', slot: 'relic', genre: 'mythic',
+    quality: 'rare', seal: '狐', visualTier: 3, visualColor: '#ec4899', minRegion: 3, dropTier: 4,
+    maxHp: 85, dodgeRate: 0.12, lifesteal: 0.08, captureBonus: 0.15, desc: '【青丘秘宝】灵狐化形留下的暖玉佩：生命 +85，闪避 +12%，吸血 +8%，收妖 +15%。'
+  },
+  relic_tiangong_soul: {
+    id: 'relic_tiangong_soul', name: '天工镇魂印', slot: 'relic', genre: 'mythic',
+    quality: 'rare', seal: '魂', visualTier: 4, visualColor: '#a87bc7', minRegion: 4, dropTier: 4,
+    atk: 22, maxEnergy: 38, captureBonus: 0.25, mpRegen: 6, desc: '【墨壶至宝】专司镇压妖魂的青铜大印：攻 +22，内息 +38，回息 +6，收妖 +25%！'
+  },
+  relic_mozi_ruler: {
+    id: 'relic_mozi_ruler', name: '墨子矩尺', slot: 'relic', genre: 'wuxia',
+    quality: 'legend', seal: '矩', visualTier: 4, visualColor: '#f5b041', minRegion: 4, dropTier: 5,
+    atk: 28, def: 18, crit: 0.18, skillBonus: 0.22, desc: '【墨家圣物】量天测地的先秦墨子金矩尺：攻 +28，防 +18，暴击 +18%，技能 +22%！'
+  },
   relic_thunder_seal: {
-    id: 'relic_thunder_seal', name: '雷公残印', slot: 'relic', genre: 'mythic', quality: 'legend', seal: '雷',
+    id: 'relic_thunder_seal', name: '雷公残印', slot: 'relic', genre: 'mythic',
+    quality: 'legend', seal: '雷', visualTier: 4, visualColor: '#38bdf8', minRegion: 4, dropTier: 5,
     atk: 24, maxEnergy: 40, skillBonus: 0.25, desc: '【仙家秘宝】雷神残印：攻击 +24，内息 +40，所有奇术与雷击伤害 +25%！'
   },
   relic_tianshu: {
-    id: 'relic_tianshu', name: '天枢护心镜', slot: 'relic', genre: 'mythic', quality: 'legend', seal: '镜',
-    maxHp: 120, maxEnergy: 45, mpRegen: 8, immuneTide: true,
-    desc: '【天枢秘宝】生命 +120，内息 +45，每回合回息 8 点，免疫辐射潮！'
+    id: 'relic_tianshu', name: '天枢护心镜', slot: 'relic', genre: 'mythic',
+    quality: 'legend', seal: '镜', visualTier: 5, visualColor: '#c084fc', minRegion: 4, dropTier: 6,
+    maxHp: 120, maxEnergy: 45, mpRegen: 8, immuneTide: true, desc: '【天枢秘宝】生命 +120，内息 +45，每回合回息 8 点，免疫辐射潮！'
+  },
+  relic_citadel_edict: {
+    id: 'relic_citadel_edict', name: '白玉京执政令', slot: 'relic', genre: 'scifi',
+    quality: 'legend', seal: '令', visualTier: 5, visualColor: '#f5d061', minRegion: 5, dropTier: 6,
+    atk: 34, def: 22, maxHp: 140, magicFind: 0.35, goldFind: 0.40, desc: '【白玉京至宝】执政官全权量子玉令：攻 +34，防 +22，生命 +140，掉宝 +35%，金币 +40%！'
+  },
+  relic_quantum_core: {
+    id: 'relic_quantum_core', name: '量子奇点核', slot: 'relic', genre: 'scifi',
+    quality: 'legend', seal: '奇', visualTier: 5, visualColor: '#38e8ff', minRegion: 5, dropTier: 6,
+    atk: 42, maxHp: 160, maxEnergy: 60, crit: 0.20, armorPen: 0.25, mpRegen: 10, desc: '【终极秘宝】悬浮于掌心的微型宇宙奇点：攻 +42，生命 +160，内息 +60，暴击 +20%，穿甲 +25%！'
   }
 };
 
-// 暗黑式随机装备前后缀词缀（Diablo-style Random Affixes）
+// ==================== 暗黑式随机词缀引擎（18 前缀 × 12 后缀 × 8 绝世特效） ====================
+export const AFFIX_PREFIXES = [
+  { id: 'pre_leech',  name: '吸血·', stat: { lifesteal: 0.12 },           desc: '攻击回复 12% 造成伤害的生命' },
+  { id: 'pre_pierce', name: '穿甲·', stat: { armorPen: 0.20 },            desc: '无视目标 20% 防御' },
+  { id: 'pre_crit',   name: '暴烈·', stat: { critRate: 0.12, crit: 0.12 }, desc: '暴击率 +12%' },
+  { id: 'pre_swift',  name: '迅捷·', stat: { doubleHit: 0.16 },           desc: '普攻 16% 概率触发二连击' },
+  { id: 'pre_shock',  name: '嗜雷·', stat: { shockOnHit: 0.22 },          desc: '攻击 22% 概率附加【感电】增伤' },
+  { id: 'pre_burn',   name: '灼魂·', stat: { burnOnHit: 0.25 },           desc: '攻击 25% 概率附加【灼烧】' },
+  { id: 'pre_poison', name: '淬毒·', stat: { poisonOnHit: 0.25 },         desc: '攻击 25% 概率附加【剧毒】' },
+  { id: 'pre_hp',     name: '护心·', stat: { maxHpPct: 0.16 },            desc: '最大生命值 +16%' },
+  { id: 'pre_qi',     name: '聚气·', stat: { mpRegen: 6 },                desc: '每回合额外回复 6 点内息' },
+  { id: 'pre_mf',     name: '寻宝·', stat: { magicFind: 0.25 },           desc: '稀有与绝世装备掉率 +25%' },
+  { id: 'pre_gold',   name: '贪婪·', stat: { goldFind: 0.30 },            desc: '战斗与搜刮废土币获取 +30%' },
+  { id: 'pre_shield', name: '墨盾·', stat: { startShield: 45 },           desc: '进入战斗立即获得 45 点墨铁护盾' },
+  { id: 'pre_wall',   name: '铁壁·', stat: { defPct: 0.18 },              desc: '总防御力 +18%' },
+  { id: 'pre_sharp',  name: '锋锐·', stat: { atkPct: 0.15 },              desc: '总攻击力 +15%' },
+  { id: 'pre_save',   name: '省气·', stat: { mpCostReduce: 0.18 },        desc: '所有技能内息消耗 -18%' },
+  { id: 'pre_seal',   name: '镇妖·', stat: { captureBonus: 0.18 },        desc: '天工墨壶收妖成功率 +18%' },
+  { id: 'pre_rad',    name: '抗辐·', stat: { radResist: 0.35 },           desc: '辐射与毒瘴伤害 -35%' },
+  { id: 'pre_dodge',  name: '灵动·', stat: { dodgeRate: 0.12 },           desc: '战斗闪避率 +12%' }
+];
+
+export const AFFIX_SUFFIXES = [
+  { id: 'suf_pojun',     name: '·破军', stat: { atk: 14 },                               desc: '攻击力 +14' },
+  { id: 'suf_feigong',   name: '·非攻', stat: { def: 10, startShield: 35 },              desc: '防御 +10，开局护盾 +35' },
+  { id: 'suf_tiangong',  name: '·天工', stat: { mpRegen: 5, mpCostReduce: 0.12 },        desc: '每回合回息 +5，技能耗蓝 -12%' },
+  { id: 'suf_quantum',   name: '·量子', stat: { critRate: 0.10, crit: 0.10, armorPen: 0.15 }, desc: '暴击 +10%，无视 15% 防御' },
+  { id: 'suf_jihun',     name: '·汲魂', stat: { lifesteal: 0.10 },                       desc: '攻击吸血 +10%' },
+  { id: 'suf_zhanyao',   name: '·斩妖', stat: { bossDmgPct: 0.22 },                      desc: '对首领与精英伤害 +22%' },
+  { id: 'suf_buqu',      name: '·不屈', stat: { cheatDeath: 1 },                         desc: '每场战斗可免疫 1 次致命伤害并保留 25% 生命' },
+  { id: 'suf_lianzhu',   name: '·连珠', stat: { doubleHit: 0.14 },                       desc: '连击触发概率 +14%' },
+  { id: 'suf_jingji',    name: '·荆棘', stat: { thorns: 0.20 },                          desc: '反弹所受近战伤害的 20%' },
+  { id: 'suf_hongyun',   name: '·鸿运', stat: { magicFind: 0.20, goldFind: 0.25 },       desc: '掉宝率 +20%，废土币获取 +25%' },
+  { id: 'suf_cangqiong', name: '·苍穹', stat: { maxHpPct: 0.14, atkPct: 0.12 },          desc: '最大生命 +14%，总攻击 +12%' },
+  { id: 'suf_taixu',     name: '·太虚', stat: { bonusDmgPct: 0.18 },                     desc: '所有攻击额外附加 18% 太虚真伤' }
+];
+
+export const LEGEND_EFFECTS = [
+  { id: 'leg_feigong_aegis',         name: '【绝世·非攻天盾】', stat: { startShield: 80, dmgReduce: 0.12 },    desc: '开战自动展开 80 点太虚墨盾，且常驻减伤 +12%。' },
+  { id: 'leg_taixu_echo',            name: '【绝世·太虚回响】', stat: { doubleHit: 0.24, bonusDmgPct: 0.15 }, desc: '24% 概率触发太虚重影连斩，并附加 15% 真伤。' },
+  { id: 'leg_quantum_collapse',      name: '【绝世·量子坍缩】', stat: { armorPen: 0.30, critRate: 0.14, crit: 0.14 }, desc: '暴击时引发量子坍缩，穿甲 +30%，暴击率 +14%。' },
+  { id: 'leg_mo_crucible_resonance', name: '【绝世·墨壶共鸣】', stat: { captureBonus: 0.25, mpRegen: 8 },     desc: '与天工墨壶共鸣：收妖成功率 +25%，每回合回息 +8。' },
+  { id: 'leg_zhurong_nova',          name: '【绝世·祝融星爆】', stat: { burnOnHit: 0.40, atkPct: 0.16 },      desc: '40% 概率引爆祝融星火灼烧敌阵，总攻击 +16%。' },
+  { id: 'leg_baiyujing_grace',       name: '【绝世·白玉京庇佑】', stat: { maxHpPct: 0.20, radResist: 0.50 },  desc: '穹顶净土之力加身：最大生命 +20%，辐射抗性 +50%。' },
+  { id: 'leg_thunder_judgment',      name: '【绝世·九霄雷裁】', stat: { shockOnHit: 0.35, bossDmgPct: 0.25 }, desc: '引九霄墨雷裁决强敌：35% 感电，对首领伤害 +25%。' },
+  { id: 'leg_undying_ink',           name: '【绝世·玄墨不灭】', stat: { cheatDeath: 1, lifesteal: 0.12 },     desc: '濒死触发玄墨重生（1 次/战），并附带 12% 吸血。' }
+];
+
 export const AFFIXES = {
-  prefixes: [
-    { id: 'pre_leech',  name: '吸血之', stat: { lifesteal: 0.12 },       desc: '攻击回复 12% 造成伤害的生命' },
-    { id: 'pre_pierce', name: '破甲之', stat: { armorPen: 0.20 },        desc: '无视目标 20% 防御' },
-    { id: 'pre_crit',   name: '暴击之', stat: { crit: 0.12 },            desc: '暴击率 +12%' },
-    { id: 'pre_ink',    name: '墨雷附魔·', stat: { bonusDmg: 16 },       desc: '每次攻击附加 16 点墨雷真伤' },
-    { id: 'pre_ap',     name: '穿甲弹头·', stat: { atk: 10, mechBonus: 0.20 }, desc: '攻击 +10，对机械/重甲 +20% 伤害' }
-  ],
-  suffixes: [
-    { id: 'suf_swift',  name: '·迅捷',   stat: { atk: 6, crit: 0.06 },    desc: '攻击 +6，暴击 +6%' },
-    { id: 'suf_rad',    name: '·抗辐射', stat: { def: 6, radResist: 0.35 }, desc: '防御 +6，辐射与毒瘴伤害 -35%' },
-    { id: 'suf_arty',   name: '·重炮增幅', stat: { artilleryBonus: 0.22 }, desc: '机甲重炮系技能伤害 +22%' },
-    { id: 'suf_wall',   name: '·玄铁壁', stat: { def: 10, maxHp: 45 },    desc: '防御 +10，生命上限 +45' },
-    { id: 'suf_qi',     name: '·聚息',   stat: { maxEnergy: 20, mpRegen: 4 }, desc: '内息上限 +20，每回合回息 +4' }
-  ]
+  prefixes: AFFIX_PREFIXES,
+  suffixes: AFFIX_SUFFIXES,
+  legendEffects: LEGEND_EFFECTS
 };
 
-// 生成带暗黑随机词缀的装备实例（良品 1 词缀，珍品/绝世 2 词缀）
+// 生成带暗黑随机词缀的装备实例（良品 1 词缀，珍品 2 词缀，绝世 2 词缀 + 1 绝世特效）
 export function rollEquipment(baseId, qualityOverride = null) {
   const base = EQUIPMENT[baseId];
   if (!base) return null;
@@ -482,16 +859,22 @@ export function rollEquipment(baseId, qualityOverride = null) {
   const inst = { ...base, uid: `${baseId}_${Date.now()}_${Math.floor(Math.random() * 9999)}`, quality, affixes: [] };
   const rollCount = quality === 'legend' || quality === 'rare' ? 2 : quality === 'fine' ? 1 : 0;
   if (rollCount >= 1) {
-    const pre = AFFIXES.prefixes[Math.floor(Math.random() * AFFIXES.prefixes.length)];
+    const pre = AFFIX_PREFIXES[Math.floor(Math.random() * AFFIX_PREFIXES.length)];
     inst.affixes.push(pre);
     inst.name = `${pre.name}${inst.name}`;
     for (const [k, v] of Object.entries(pre.stat)) inst[k] = (inst[k] || 0) + v;
   }
   if (rollCount >= 2) {
-    const suf = AFFIXES.suffixes[Math.floor(Math.random() * AFFIXES.suffixes.length)];
+    const suf = AFFIX_SUFFIXES[Math.floor(Math.random() * AFFIX_SUFFIXES.length)];
     inst.affixes.push(suf);
     inst.name = `${inst.name}${suf.name}`;
     for (const [k, v] of Object.entries(suf.stat)) inst[k] = (inst[k] || 0) + v;
+  }
+  if (quality === 'legend' && LEGEND_EFFECTS.length > 0) {
+    const leg = LEGEND_EFFECTS[Math.floor(Math.random() * LEGEND_EFFECTS.length)];
+    inst.legendEffect = leg;
+    inst.affixes.push(leg);
+    for (const [k, v] of Object.entries(leg.stat)) inst[k] = (inst[k] || 0) + v;
   }
   return inst;
 }
@@ -801,6 +1184,28 @@ export const NPCS = {
       { text: '研习古武修为（打开技能修为阁）', desc: '消耗修为点升级六大被动修为', action: 'skills' },
       { text: '请教四系流派搭配心得', desc: '了解古武/军火/墨甲/奇术克制之道' },
       { text: '打坐吐纳恢复内息（免费回满内息）', desc: '在武馆蒲团调息片刻' }
+    ]
+  },
+  npc_archon: {
+    id: 'npc_archon', name: '白玉京执政官·公输明', title: '天穹穹顶最高执政官',
+    portrait: 'assets/portrait_yinshi.jpg',
+    spriteType: 'scholar', robeColor: '#e2e8f0', accentColor: '#38e8ff',
+    talk: '“三百年来，你是第一个手持先秦天工墨壶、自废土踏入白玉京的旅人。穹顶之上虽无辐射尘，却已被『太一』裁决矩阵锁死太久……”',
+    options: [
+      { text: '倾听白玉京与地表分离的真相', desc: '了解 21:47 大停电背后的天穹净土密史', action: 'story_branch' },
+      { text: '请求穹顶医疗舱全面净化恢复', desc: '立即回复满生命与满内息', action: 'inn' },
+      { text: '询问裁决主神·太一的弱点', desc: '获取终极首领战斗情报' }
+    ]
+  },
+  npc_quantum_smith: {
+    id: 'npc_quantum_smith', name: '天工量子军械师', title: '白玉京首席神兵锻造官',
+    portrait: 'assets/portrait_laohuang.jpg',
+    spriteType: 'smith', robeColor: '#1e3a5f', accentColor: '#f5d061',
+    talk: '“先秦墨家机括与量子晶格本就是一体两面！把你在废土收集的妖魂与白玉灵芯交给我，为你铸出冠绝苍穹的太虚粒子神兵！”',
+    options: [
+      { text: '开启量子「天工墨壶」熔炉', desc: '使用墨壶炼化高阶神兵与护驾', action: 'crucible' },
+      { text: '白玉京量子军械交易', desc: '买卖高阶符箓、补给与稀有物资', action: 'shop' },
+      { text: '高阶量子拆解台', desc: '拆解量子晶格与战前核心获取暴击收益', action: 'disassemble' }
     ]
   }
 };
@@ -1456,13 +1861,13 @@ export const MAPS = [
   {
     id: 'cave_tianshu', index: 15, regionId: 'reg_vault', sceneType: 'cave',
     name: '天枢地脉密窟', short: '天枢密窟', isSafe: false, unlockCost: 0,
-    worldPos: { x: 92, y: 74 }, links: ['vault'],
+    worldPos: { x: 92, y: 74 }, links: ['vault', 'sky_citadel'],
     width: 2100, height: 1200,
     bgAsset: 'bg_cave.webp', bgTint: 'rgba(42, 18, 74, 0.48)',
     spawn: { x: 338, y: 883 },
     palette: { ground: '#211536', road: '#170e26', shadow: 'rgba(8,4,16,0.62)', accent: '#c084fc', mist: 'rgba(170,120,245,0.20)' },
     weatherPool: [1],
-    desc: '先秦墨家青铜巨柱与战前量子奇点融为一体的宏伟终极圣殿。深入东北殿堂击败「天枢主脑·玄墨大帝」以决定墨土终局！',
+    desc: '先秦墨家青铜巨柱与战前量子奇点融为一体的宏伟终极圣殿。深入东北殿堂击败「天枢主脑·玄墨大帝」后，更可乘量子天梯直抵「天穹白玉京」！',
     weight: [0, 0, 0, 2, 4, 6, 10, 10, 12, 10, 16, 14, 0, 0, 0, 0, 0, 0, 8, 18, 2, 2, 6, 8, 4, 0, 0, 0, 0, 4, 2, 2, 3, 3, 4, 5, 5, 6],
     buildings: [],
     obstacles: [
@@ -1472,7 +1877,8 @@ export const MAPS = [
       { id: 'ts_pillar_4', type: 'vault_pillar', x: 1369, y: 621,  w: 75, h: 58, label: '天枢量子柱' }
     ],
     portals: [
-      { id: 'tianshu_exit', x: 234, y: 917, r: 44, to: 'vault', spawnX: 2860, spawnY: 587, label: '撤出天枢密窟 · 返回07号避难所' }
+      { id: 'tianshu_exit', x: 234, y: 917, r: 44, to: 'vault', spawnX: 2860, spawnY: 587, label: '撤出天枢密窟 · 返回07号避难所' },
+      { id: 'tianshu_to_citadel', x: 1790, y: 318, r: 46, to: 'sky_citadel', spawnX: 260, spawnY: 620, label: '乘量子天梯 · 升往天穹白玉京' }
     ],
     npc: null,
     enemySpawns: [
@@ -1672,6 +2078,54 @@ export const MAPS = [
       { id: 'th_loot_5', x: 1584, y: 261,  r: 34, name: '天枢量子秘库',     type: 'vault_box',  respawnSec: 36 }
     ],
     hasWarn: true, hasTide: true, hasChem: false
+  },
+
+  // ---------- 22. 终局浮空科幻净土：天穹白玉京 · 穹顶净土 ----------
+  {
+    id: 'sky_citadel', index: 21, regionId: 'reg_citadel', region: 5, sceneType: 'wild', theme: 'citadel',
+    name: '天穹白玉京 · 穹顶净土', short: '天穹白玉京', isSafe: false, unlockCost: 12000,
+    worldPos: { x: 86, y: 24 }, links: ['cave_tianshu', 'vault'],
+    width: 3120, height: 1040,
+    bgAsset: 'bg_sky_citadel.webp', bgTint: null,
+    spawn: { x: 260, y: 620 },
+    palette: { ground: '#dce8f2', road: '#c2d8ea', shadow: 'rgba(14,32,58,0.38)', accent: '#38e8ff', mist: 'rgba(180,235,255,0.18)' },
+    weatherPool: [0],
+    desc: '高悬于云海之上的完好旧世科幻都会！汉白玉浮空大道与霓虹云雷光柱交相辉映，公输明执政官与天工量子军械师驻守西廊，东境裁决殿深处镇守着终极主神「太一」！',
+    weight: [0, 0, 0, 0, 0, 2, 4, 4, 6, 6, 10, 12, 0, 0, 0, 0, 0, 0, 6, 14, 0, 0, 2, 4, 2, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 5, 4, 5, 5, 6, 4, 5, 4, 4, 14, 14, 6, 10, 12, 6, 10, 12, 12, 10, 8, 10, 10, 6, 8, 8],
+    walkablePolys: [
+      [[120, 420], [3000, 420], [3000, 820], [120, 820]]
+    ],
+    buildings: [],
+    obstacles: [
+      { id: 'sc_pillar_1', type: 'vault_pillar', x: 860,  y: 455, w: 92, h: 48, label: '白玉量子光柱' },
+      { id: 'sc_pillar_2', type: 'vault_pillar', x: 1480, y: 725, w: 96, h: 48, label: '云雷全息纪念碑' },
+      { id: 'sc_pillar_3', type: 'reactor_core', x: 2040, y: 460, w: 104, h: 52, label: '太虚能源中继塔' },
+      { id: 'sc_pillar_4', type: 'vault_pillar', x: 2420, y: 720, w: 96, h: 48, label: '裁决殿汉白玉柱' }
+    ],
+    portals: [
+      { id: 'citadel_to_tianshu', x: 180, y: 580, r: 46, to: 'cave_tianshu', spawnX: 1620, spawnY: 360, label: '量子降维梯 · 返回天枢地脉密窟' },
+      { id: 'citadel_to_vault',   x: 180, y: 740, r: 44, to: 'vault',        spawnX: 2860, spawnY: 587, label: '天穹传送阵 · 返回07号避难所' }
+    ],
+    npc: { id: 'npc_archon', x: 560, y: 520, facing: 'down' },
+    npcs: [
+      { id: 'npc_archon',        x: 560,  y: 520, facing: 'down' },
+      { id: 'npc_quantum_smith', x: 1080, y: 520, facing: 'down' }
+    ],
+    enemySpawns: [
+      { enemyId: 'citadel_enforcer', x: 1320, y: 600, patrolR: 110, speed: 98 },
+      { enemyId: 'quantum_sentinel', x: 1660, y: 560, patrolR: 115, speed: 108 },
+      { enemyId: 'citadel_enforcer', x: 1880, y: 670, patrolR: 110, speed: 98 },
+      { enemyId: 'jade_arbiter',     x: 2240, y: 610, patrolR: 105, speed: 92 },
+      { enemyId: 'quantum_sentinel', x: 2460, y: 540, patrolR: 100, speed: 108 }
+    ],
+    bossSpawn: { enemyId: 'boss_archon_mech', x: 2790, y: 620, patrolR: 75, speed: 80 },
+    lootZones: [
+      { id: 'sc_loot_1', x: 740,  y: 740, r: 36, name: '白玉京军械补给柜', type: 'vault_box', equipPool: ['wpn_quantum_arc', 'armor_quantum_jade', 'mech_taixu_swordbox'], respawnSec: 40 },
+      { id: 'sc_loot_2', x: 1420, y: 475, r: 36, name: '太虚量子晶格库',   type: 'vault_box', equipPool: ['wpn_citadel_gauss', 'armor_archon_mantle', 'relic_citadel_edict'], respawnSec: 44 },
+      { id: 'sc_loot_3', x: 2120, y: 745, r: 36, name: '穹顶执政官密匣',   type: 'vault_box', equipPool: ['wpn_tianshu_scepter', 'mech_quantum_singularity', 'relic_quantum_core'], respawnSec: 48 },
+      { id: 'sc_loot_4', x: 2660, y: 480, r: 38, name: '太一圣殿绝世宝库', type: 'vault_box', equipPool: ['wpn_baiyujing_taixu', 'armor_sky_taixu_plate', 'wpn_taotie_greataxe'], respawnSec: 55 }
+    ],
+    hasWarn: false, hasTide: false, hasChem: false
   }
 ];
 
@@ -2387,10 +2841,42 @@ export const STORY_CUTSCENES = {
         reward: { gold: 380, exp: 90, clue: '【终极天机】集齐 5 件剧情信物 + 8 件古董 + 击败玄墨大帝 = 隐藏结局「天工墨主」！' }
       }
     ]
+  },
+
+  cutscene_sky_citadel: {
+    id: 'cutscene_sky_citadel',
+    title: '第六幕：苍穹云海之上 · 天穹白玉京',
+    repeatableHint: '公输明负手望向云海：“白玉京的穹顶能源足以净化整片废土，只要你能令裁决主神·太一停机。”',
+    beats: [
+      {
+        speaker: '旁白', role: '天穹跃迁', portrait: 'hero',
+        text: '量子天梯冲破铅灰色的辐射云层，刺目的日光洒在无瑕的汉白玉浮空大道上——高耸入云的琉璃摩天楼间，全息云雷符文静静流转。这就是传说中躲过了 21:47 大停电的【天穹白玉京】！'
+      },
+      {
+        speaker: '白玉京执政官·公输明', role: '天穹穹顶最高执政官', portrait: 'yinshi',
+        text: '“三百年来，地表之人以为旧纪元早已灰飞烟灭；而穹顶之上的居民，亦被『太一』仲裁协议告知地表再无生灵。直到你的天工墨壶震碎了云层封锁。”'
+      },
+      {
+        speaker: '沈砚', role: '墨土拾荒者', portrait: 'hero',
+        text: '“既然净土犹存，便不该任由地表百万苍生在黑雪与毒瘴中挣扎。无论挡路的是玄墨大帝还是太一主神，我手中这口墨剑，自会替人间劈开天门！”'
+      }
+    ],
+    choices: [
+      {
+        text: '执剑宣誓：终结太一封锁，令天穹能源反哺地表墨土',
+        reply: '公输明肃然拱手，亲手递上一枚白玉京通行密匙与量子跃迁符：“以此令为凭，去东境裁决殿直面太一吧！”（+5 声望，+600 废土币，+120 经验）',
+        reward: { reputation: 5, gold: 600, exp: 120, clue: '【天穹密令】击败裁决殿深处的「天穹裁决主神·太一」即可夺取绝世太虚神装！' }
+      },
+      {
+        text: '务实备战：向天工量子军械师申领高阶战备物资',
+        reply: '公输明点头授意军械库开启，为你划拨高额军资与穹顶灵丹。（+900 废土币，+1 九转青瘴丹，+60 内息）',
+        reward: { gold: 900, elixir: 'elixir_jiuzhuan', energy: 60, clue: '【量子锻造】白玉京四个秘库宝箱皆蕴含绝世级太虚装备与随机词缀！' }
+      }
+    ]
   }
 };
 
-// ==================== v26 废土残碑遗卷 / 旧纪元环境日志（按五域分布） ====================
+// ==================== v26 废土残碑遗卷 / 旧纪元环境日志（按六域分布） ====================
 export const WORLD_LORE_ENTRIES = {
   reg_town: [
     '【旧纪元残卷 · 城郊观测站】“21:47，全城电网瞬间归零，天穹浮现墨色星环。防空洞广播仍在循环播放疏散坐标……”',
@@ -2416,5 +2902,9 @@ export const WORLD_LORE_ENTRIES = {
     '【旧纪元残卷 · 07 号主控日志】“天枢主脑得出结论：唯有将地脉灵能凝固为『永恒墨海』，方可根除人类战争。我们在 21:47 失去了全部控制权。”',
     '【废土日志 · 林博士加密档案】“天工墨壶是唯一能与天枢奇点产生逆向共振的先秦原型器。只要它还在人间，墨土就还有黎明。”',
     '【残碑遗卷 · 雷公古坛刻铭】“天枢地脉贯通古今，上承先秦机关术，下接旧世量子网。执壶之人，你的抉择将重塑这片山河。”'
+  ],
+  reg_citadel: [
+    '【天穹玉简 · 浮空城升空纪要】“21:47 前十分钟，反重力云雷环全功率启动，白玉京脱离地表三万尺。自那日起，天穹与尘世永隔云海。”',
+    '【白玉京内廷密档 · 太一仲裁协议】“主神『太一』以零污染为最高律令，封锁了所有降维天梯——唯有持有先秦天工墨壶共振频率者，方可重写最高权限。”'
   ]
 };

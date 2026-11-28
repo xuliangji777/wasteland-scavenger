@@ -7,6 +7,9 @@ import {
   GUARDIANS,
   EQUIPMENT,
   AFFIXES,
+  AFFIX_PREFIXES,
+  AFFIX_SUFFIXES,
+  LEGEND_EFFECTS,
   rollEquipment,
   ELIXIRS,
   RECIPES,
@@ -27,11 +30,11 @@ import {
   SIDE_QUESTS,
   STORY_CUTSCENES,
   WORLD_LORE_ENTRIES
-} from './data.js?v=30';
-import { InkWorldEngine } from './rpg_world.js?v=30';
-import { sfx } from './audio.js?v=30';
-import { spawnFloatText } from './fx.js?v=30';
-import { storage } from './storage.js?v=30';
+} from './data.js?v=31';
+import { InkWorldEngine } from './rpg_world.js?v=31';
+import { sfx } from './audio.js?v=31';
+import { spawnFloatText } from './fx.js?v=31';
+import { storage } from './storage.js?v=31';
 
 // ==================== 常量与辅助 ====================
 const SLOT_NAMES = {
@@ -123,8 +126,8 @@ function expForNextLevel(lv) {
 // ==================== 存档与状态初始化 ====================
 function createInitialState() {
   const starterWeapon = {
-    ...EQUIPMENT.wpn_inkblade,
-    uid: 'starter_wpn_inkblade',
+    ...(EQUIPMENT.wpn_pipe || EQUIPMENT.wpn_inkblade),
+    uid: 'starter_wpn_mojia_sword',
     quality: 'common',
     affixes: []
   };
@@ -189,7 +192,8 @@ function createInitialState() {
       reg_ruins: 4,
       reg_arsenal: 3,
       reg_swamp: 1,
-      reg_vault: 2
+      reg_vault: 2,
+      reg_citadel: 0
     },
 
     // 剧情、古董、图鉴与任务
@@ -315,50 +319,126 @@ function getEquippedWeaponBranch() {
   return 'martial';
 }
 
-// ==================== 角色属性与计算 ====================
+// ==================== 角色属性与暗黑词缀聚合引擎 (v31) ====================
+const AFFIX_STAT_KEYS = [
+  'lifesteal', 'armorPen', 'critRate', 'bonusDmgPct', 'bossDmgPct',
+  'thorns', 'doubleHit', 'mpRegen', 'mpCostReduce', 'magicFind',
+  'goldFind', 'startShield', 'cheatDeath', 'burnOnHit', 'poisonOnHit',
+  'shockOnHit', 'maxHpPct', 'atkPct', 'defPct', 'dodgeRate',
+  'captureBonus', 'radResist'
+];
+
+function getHeroAffixStats() {
+  const totals = {};
+  for (const k of AFFIX_STAT_KEYS) totals[k] = 0;
+
+  for (const slot of ['weapon', 'armor', 'mech', 'relic']) {
+    const eq = state.equipped?.[slot];
+    if (!eq) continue;
+    const base = EQUIPMENT[eq.id] || {};
+    const afList = Array.isArray(eq.affixes) ? [...eq.affixes] : [];
+    if (eq.legendEffect && !afList.some((a) => a && a.id === eq.legendEffect.id)) {
+      afList.push(eq.legendEffect);
+    }
+    const afSums = {};
+    for (const af of afList) {
+      if (!af?.stat) continue;
+      for (const [k, v] of Object.entries(af.stat)) {
+        if (typeof v === 'number') afSums[k] = (afSums[k] || 0) + v;
+      }
+    }
+    for (const k of AFFIX_STAT_KEYS) {
+      const fromEq = typeof eq[k] === 'number' ? eq[k] : 0;
+      const fromBaseAndAf = (typeof base[k] === 'number' ? base[k] : 0) + (afSums[k] || 0);
+      totals[k] += Math.max(fromEq, fromBaseAndAf);
+    }
+  }
+
+  totals.lifesteal = Math.min(0.50, totals.lifesteal);
+  totals.armorPen = Math.min(0.85, totals.armorPen);
+  totals.critRate = Math.min(0.65, totals.critRate);
+  totals.doubleHit = Math.min(0.65, totals.doubleHit);
+  totals.thorns = Math.min(0.75, totals.thorns);
+  totals.mpCostReduce = Math.min(0.55, totals.mpCostReduce);
+  totals.dodgeRate = Math.min(0.55, totals.dodgeRate);
+  totals.radResist = Math.min(0.85, totals.radResist);
+  totals.captureBonus = Math.min(0.60, totals.captureBonus);
+  return totals;
+}
+
+function getEffectiveSkillMpCost(skill) {
+  const baseCost = Number(skill?.mpCost) || 0;
+  if (baseCost <= 0) return 0;
+  const afx = getHeroAffixStats();
+  return Math.max(1, Math.round(baseCost * (1 - (afx.mpCostReduce || 0))));
+}
+
 function getHeroStats() {
   const lv = state.level || 1;
+  const afx = getHeroAffixStats();
   const stats = {
     maxHp: 100 + lv * 20,
     maxEnergy: 90 + lv * 10,
     atk: 14 + lv * 4 + (state.skills[4] || 0) * 6,
     def: 4 + Math.floor(lv * 1.6),
     crit: 0.08 + (state.skills[5] || 0) * 0.08,
-    armorPen: 0,
-    lifesteal: 0,
-    radResist: 0,
+    armorPen: afx.armorPen,
+    lifesteal: afx.lifesteal,
+    radResist: afx.radResist,
     artilleryBonus: 0,
     skillBonus: 0,
     mechBonus: 0,
     dmgReduce: 0,
-    mpRegen: 0,
+    mpRegen: afx.mpRegen,
     bonusDmg: 0,
+    bonusDmgPct: afx.bonusDmgPct,
+    bossDmgPct: afx.bossDmgPct,
+    thorns: afx.thorns,
+    doubleHit: afx.doubleHit,
+    mpCostReduce: afx.mpCostReduce,
+    magicFind: afx.magicFind,
+    goldFind: afx.goldFind,
+    startShield: afx.startShield,
+    cheatDeath: afx.cheatDeath,
+    burnOnHit: afx.burnOnHit,
+    poisonOnHit: afx.poisonOnHit,
+    shockOnHit: afx.shockOnHit,
+    dodgeRate: afx.dodgeRate,
+    captureBonus: afx.captureBonus,
     immuneTide: false,
     proc: null,
     bagMax: 16 + (state.skills[2] || 0) * 3,
-    moveSpeed: 220 + (state.skills[0] || 0) * 26
+    moveSpeed: 220 + (state.skills[0] || 0) * 26,
+    affix: afx
   };
 
   for (const slot of ['weapon', 'armor', 'mech', 'relic']) {
     const eq = state.equipped[slot];
     if (!eq) continue;
+    const base = EQUIPMENT[eq.id] || {};
     stats.atk += eq.atk || 0;
     stats.def += eq.def || 0;
     stats.maxHp += eq.maxHp || 0;
     stats.maxEnergy += eq.maxEnergy || 0;
-    stats.crit += eq.crit || 0;
-    stats.armorPen += eq.armorPen || 0;
-    stats.lifesteal += eq.lifesteal || 0;
-    stats.radResist += eq.radResist || 0;
+    // 基础装备暴击率（避免与 afx.critRate 重复叠加）
+    const baseCrit = typeof base.crit === 'number'
+      ? base.crit
+      : Math.max(0, (eq.crit || 0) - (eq.critRate || 0));
+    stats.crit += baseCrit;
     stats.artilleryBonus += eq.artilleryBonus || 0;
     stats.skillBonus += eq.skillBonus || 0;
     stats.mechBonus += eq.mechBonus || 0;
     stats.dmgReduce += eq.dmgReduce || 0;
-    stats.mpRegen += eq.mpRegen || 0;
     stats.bonusDmg += eq.bonusDmg || 0;
     if (eq.immuneTide) stats.immuneTide = true;
     if (eq.proc && !stats.proc) stats.proc = eq.proc;
   }
+
+  // 应用暗黑词缀百分比加成与暴击率
+  stats.crit += afx.critRate || 0;
+  if (afx.maxHpPct > 0) stats.maxHp = Math.round(stats.maxHp * (1 + afx.maxHpPct));
+  if (afx.atkPct > 0) stats.atk = Math.round(stats.atk * (1 + afx.atkPct));
+  if (afx.defPct > 0) stats.def = Math.round(stats.def * (1 + afx.defPct));
 
   const guard = state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null;
   if (guard?.atkBonusPct) {
@@ -369,6 +449,7 @@ function getHeroStats() {
   stats.armorPen = Math.min(0.85, stats.armorPen);
   stats.dmgReduce = Math.min(0.65, stats.dmgReduce);
   stats.radResist = Math.min(0.85, stats.radResist);
+  stats.dodgeRate = Math.min(0.55, stats.dodgeRate);
   return stats;
 }
 
@@ -645,12 +726,54 @@ function getSideQuestProgress(sq) {
   }
 }
 
-// ==================== 2.5D 世界与 21 图无缝切换 ====================
+// ==================== 2.5D 世界与 22 图无缝切换 + 实时纸娃娃外观同步 ====================
+function getHeroAppearancePayload() {
+  const wpn = state.equipped?.weapon || {};
+  const arm = state.equipped?.armor || {};
+  const qRank = { common: 1, fine: 2, rare: 3, legend: 4 };
+  let rarityTier = 1;
+  for (const slot of ['weapon', 'armor', 'mech', 'relic']) {
+    const q = state.equipped?.[slot]?.quality;
+    if (q && (qRank[q] || 1) > rarityTier) rarityTier = qRank[q];
+  }
+  const weaponStyle = wpn.weaponStyle || (
+    ['pistol', 'shotgun', 'sniper', 'plasma', 'cannon', 'gatling', 'railgun'].includes(wpn.weaponType)
+      ? 'gun'
+      : wpn.weaponType === 'staff'
+        ? 'staff'
+        : 'sword'
+  );
+  return {
+    weaponStyle,
+    weaponTier: wpn.visualTier || 1,
+    weaponColor: wpn.visualColor || '#c8d6e5',
+    armorTier: arm.visualTier || 1,
+    armorColor: arm.visualColor || '#6d8a7e',
+    helmStyle: arm.helmStyle || 'hat',
+    rarityTier
+  };
+}
+
+function syncHeroVisuals() {
+  const app = getHeroAppearancePayload();
+  world?.setHeroAppearance?.(app);
+  const batSprite = $('bat-hero-sprite');
+  if (batSprite) {
+    batSprite.setAttribute('data-weapon-style', app.weaponStyle);
+    batSprite.setAttribute('data-armor-tier', String(app.armorTier));
+    batSprite.setAttribute('data-helm-style', app.helmStyle);
+    batSprite.style.setProperty('--hero-aura-color', app.armorColor);
+  }
+  return app;
+}
+
 function syncWorldAppearance() {
-  if (!world) return;
-  const g = state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null;
-  world.setGuardian(g);
-  world.setHeroWeapon(state.equipped.weapon?.weaponType || 'blade');
+  if (world) {
+    const g = state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null;
+    world.setGuardian(g);
+    world.setHeroWeapon(state.equipped.weapon?.weaponType || 'blade');
+  }
+  syncHeroVisuals();
 }
 
 function isRegionUnlocked(regionId) {
@@ -686,6 +809,7 @@ function getBgmTrackForMap(mapId) {
   if (id === 'arsenal') return 'arsenal';
   if (id === 'swamp') return 'swamp';
   if (id === 'vault') return 'vault';
+  if (id === 'sky_citadel') return 'sky_citadel';
   return 'wasteland';
 }
 
@@ -767,6 +891,7 @@ function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true, 
     guardian: state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null,
     heroWeaponType: state.equipped.weapon?.weaponType || 'blade'
   });
+  syncHeroVisuals();
 
   if (target.id === 'cave_metro') advanceQuestTrigger('enter_cave_metro');
   if (target.isSafe) state.warn = Math.max(0, state.warn - 30);
@@ -888,12 +1013,14 @@ function rollItemFromMap(map) {
 }
 
 function rollQuality(bonusMult = 1) {
+  const afx = getHeroAffixStats();
+  const mfBonus = 1 + (afx.magicFind || 0);
   const eagleBonus = 1 + (state.skills[1] || 0) * 0.15 + (state.skills[5] || 0) * 0.06;
   const hermitBonus = (state.hermitLuckBuff || 0) > 0 ? 1.15 : 1;
-  const m = bonusMult * eagleBonus * hermitBonus;
-  const legendRate = Math.min(0.18, QUALITY.legend.rate * m);
-  const rareRate = Math.min(0.32, QUALITY.rare.rate * m);
-  const fineRate = Math.min(0.42, QUALITY.fine.rate * Math.sqrt(m));
+  const m = bonusMult * eagleBonus * hermitBonus * mfBonus;
+  const legendRate = Math.min(0.26, QUALITY.legend.rate * m);
+  const rareRate = Math.min(0.38, QUALITY.rare.rate * m);
+  const fineRate = Math.min(0.45, QUALITY.fine.rate * Math.sqrt(m));
   const r = Math.random();
   if (r < legendRate) return 'legend';
   if (r < legendRate + rareRate) return 'rare';
@@ -902,19 +1029,21 @@ function rollQuality(bonusMult = 1) {
 }
 
 const REGION_CHEST_ITEMS = [
-  [4, 5, 13, 14, 20, 21, 22, 23],     // 0: 墨石镇域
-  [5, 7, 12, 14, 15, 16, 22, 23],     // 1: 铁锈废都域
-  [6, 7, 8, 9, 18, 22, 23, 24],       // 2: 赤焰兵工域
-  [6, 8, 10, 17, 18, 22, 23, 24],     // 3: 青瘴毒泽域
-  [8, 9, 10, 11, 19, 23, 24]          // 4: 天枢核心域
+  [4, 5, 13, 14, 20, 21, 22, 23, 38, 42],        // 0: 墨石镇域
+  [5, 7, 12, 14, 15, 16, 22, 23, 38, 39, 45],    // 1: 铁锈废都域
+  [6, 7, 8, 9, 18, 22, 23, 24, 39, 43, 42],      // 2: 赤焰兵工域
+  [6, 8, 10, 17, 18, 22, 23, 24, 40, 44, 45],    // 3: 青瘴毒泽域
+  [8, 9, 10, 11, 19, 23, 24, 40, 41, 43, 44],    // 4: 天枢核心域
+  [46, 47, 48, 49, 50, 51, 52, 55, 58, 59, 41]   // 5: 天穹白玉京域
 ];
 
 const REGION_MONSTER_DROPS = [
-  [2, 3, 4, 13, 20, 21, 22],          // 0: 墨石镇域
-  [3, 4, 5, 12, 14, 20, 22],          // 1: 铁锈废都域
-  [5, 6, 7, 8, 18, 21, 22, 23],       // 2: 赤焰兵工域
-  [5, 7, 10, 17, 22, 23, 24],         // 3: 青瘴毒泽域
-  [6, 8, 9, 10, 11, 19, 23, 24]       // 4: 天枢核心域
+  [2, 3, 4, 13, 20, 21, 22, 38],                 // 0: 墨石镇域
+  [3, 4, 5, 12, 14, 20, 22, 39, 42],             // 1: 铁锈废都域
+  [5, 6, 7, 8, 18, 21, 22, 23, 39, 43],          // 2: 赤焰兵工域
+  [5, 7, 10, 17, 22, 23, 24, 40, 44],            // 3: 青瘴毒泽域
+  [6, 8, 9, 10, 11, 19, 23, 24, 40, 41, 45],     // 4: 天枢核心域
+  [46, 47, 48, 50, 51, 52, 54, 56, 57, 59, 41]   // 5: 天穹白玉京域
 ];
 
 const REGION_EQUIP_POOLS = [
@@ -922,8 +1051,18 @@ const REGION_EQUIP_POOLS = [
   ['wpn_qingcheng', 'wpn_shotgun', 'wpn_sniper', 'armor_ironwire', 'mech_steam_core'],
   ['wpn_gatling', 'wpn_artillery', 'wpn_pulsesword', 'mech_crimson_frame', 'armor_exo'],
   ['wpn_plasma_rifle', 'armor_exo', 'relic_fox_orb', 'mech_crimson_frame', 'wpn_pulsesword'],
-  ['wpn_railgun', 'wpn_xuanyuan', 'mech_bit_array', 'mech_tianshu_exo', 'relic_thunder_seal', 'relic_tianshu']
+  ['wpn_railgun', 'wpn_xuanyuan', 'mech_bit_array', 'mech_tianshu_exo', 'relic_thunder_seal', 'relic_tianshu'],
+  ['wpn_baiyujing_taixu', 'wpn_citadel_gauss', 'wpn_tianshu_scepter', 'armor_quantum_jade', 'armor_sky_taixu_plate', 'mech_taixu_swordbox', 'relic_quantum_core']
 ];
+
+function getRegionEquipPool(regionIdx) {
+  const curRegion = Math.max(0, Number(regionIdx) || 0);
+  const allEligible = Object.keys(EQUIPMENT).filter((id) => (EQUIPMENT[id]?.minRegion ?? 0) <= curRegion);
+  if (!allEligible.length) return REGION_EQUIP_POOLS[curRegion] || REGION_EQUIP_POOLS[0];
+  const minFloor = Math.max(0, curRegion - 1);
+  const tierMatched = allEligible.filter((id) => (EQUIPMENT[id]?.minRegion ?? 0) >= minFloor);
+  return tierMatched.length ? tierMatched : allEligible;
+}
 
 const BOSS_RARE_MATS = [10, 11, 18, 19]; // 辐射稳定核、战前黑匣子、军工伺服机、避难所芯片
 
@@ -939,22 +1078,28 @@ function getChestKey(mapId, node) {
 }
 
 function rollChestEquipQuality(regionIdx, isPremium, rareBonus = 1) {
+  const afx = getHeroAffixStats();
+  const mfBonus = 1 + (afx.magicFind || 0);
   const eagleBonus = 1 + (state.skills[1] || 0) * 0.12 + (state.skills[5] || 0) * 0.05;
-  const mult = rareBonus * eagleBonus * (isPremium ? 1.35 : 1);
+  const mult = rareBonus * eagleBonus * mfBonus * (isPremium ? 1.35 : 1);
   const r = Math.random();
-  const legendChance = Math.min(0.55, (0.04 + regionIdx * 0.08 + (isPremium ? 0.08 : 0)) * mult);
-  const rareChance = Math.min(0.65, (0.30 + regionIdx * 0.10 + (isPremium ? 0.15 : 0)) * Math.sqrt(mult));
+  const legendChance = Math.min(0.65, (0.04 + regionIdx * 0.08 + (isPremium ? 0.08 : 0)) * mult);
+  const rareChance = Math.min(0.72, (0.30 + regionIdx * 0.10 + (isPremium ? 0.15 : 0)) * Math.sqrt(mult));
   if (r < legendChance) return 'legend';
   if (r < legendChance + rareChance) return 'rare';
   return 'fine';
 }
 
 function rollMonsterEquipQuality(regionIdx) {
+  const afx = getHeroAffixStats();
+  const mfBonus = 1 + (afx.magicFind || 0);
   const r = Math.random();
-  const rareChance = 0.08 + regionIdx * 0.08;
-  const fineChance = 0.36 + regionIdx * 0.08;
-  if (r < rareChance) return 'rare';
-  if (r < rareChance + fineChance) return 'fine';
+  const legendChance = Math.min(0.28, (regionIdx >= 3 ? (0.03 + (regionIdx - 2) * 0.04) : 0.01) * mfBonus);
+  const rareChance = Math.min(0.55, (0.08 + regionIdx * 0.08) * mfBonus);
+  const fineChance = Math.min(0.50, (0.36 + regionIdx * 0.08) * Math.sqrt(mfBonus));
+  if (r < legendChance) return 'legend';
+  if (r < legendChance + rareChance) return 'rare';
+  if (r < legendChance + rareChance + fineChance) return 'fine';
   return 'common';
 }
 
@@ -1016,7 +1161,7 @@ function handleSalvageNode(node) {
   const regionIdx = getRegionTierIndex(curMap);
   const stats = getHeroStats();
   const baseGold = 45 + regionIdx * 65 + (state.level || 1) * 12;
-  const bonusGold = Math.round(baseGold * (1 + Math.random() * 0.5) * 1.5);
+  const bonusGold = Math.round(baseGold * (1 + Math.random() * 0.5) * 1.5 * (1 + (stats.goldFind || 0)));
   state.gold += bonusGold;
 
   const lootLabels = [`+${bonusGold} 币`];
@@ -1034,13 +1179,13 @@ function handleSalvageNode(node) {
   // 100% 必出高品质暗黑词缀装备
   const pool = Array.isArray(node.equipPool) && node.equipPool.length
     ? node.equipPool
-    : (REGION_EQUIP_POOLS[regionIdx] || REGION_EQUIP_POOLS[0]);
+    : getRegionEquipPool(regionIdx);
   const baseId = pool[Math.floor(Math.random() * pool.length)];
   const eqQuality = rollChestEquipQuality(regionIdx, true, 1.4);
   const eq = rollEquipment(baseId, eqQuality);
   if (eq) {
     addEquipmentToBag(eq);
-    sfx.pick(eq.quality);
+    sfx.playLootAffixDrop?.(eq.quality);
     lootLabels.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
     floatNearHero(`+${eq.name}`, QUALITY[eq.quality].color);
   }
@@ -1115,9 +1260,9 @@ function handleLootNode(node) {
   const regionIdx = getRegionTierIndex(curMap);
   const isPremiumChest = node.type === 'vault_box' || node.type === 'relic_spot' || curMap.sceneType === 'cave';
 
-  // 1. 丰厚区域阶梯废土币（地窟/秘匣额外 +50%）
+  // 1. 丰厚区域阶梯废土币（地窟/秘匣额外 +50%，叠加暗黑贪婪词缀 goldFind）
   const baseGold = 45 + regionIdx * 65 + (state.level || 1) * 12;
-  const goldGain = Math.round(baseGold * (1 + Math.random() * 0.5) * (isPremiumChest ? 1.5 : 1));
+  const goldGain = Math.round(baseGold * (1 + Math.random() * 0.5) * (isPremiumChest ? 1.5 : 1) * (1 + (stats.goldFind || 0)));
   state.gold += goldGain;
 
   const lootParts = [`+${goldGain} 币`];
@@ -1179,17 +1324,19 @@ function handleLootNode(node) {
     lootParts.push(`丹药·${ELIXIRS[elixirId]?.name || '九转青瘴丹'}`);
   }
 
-  // 4. 品质词缀装备：地窟/秘匣 100% 必出，野外宝箱 55% 概率出
-  const equipChance = isPremiumChest ? 1.0 : 0.55;
+  // 4. 品质词缀装备：地窟/秘匣 100% 必出，野外宝箱 55% 概率出（受 magicFind 加成）
+  const equipChance = isPremiumChest ? 1.0 : Math.min(0.90, 0.55 * (1 + (stats.magicFind || 0) * 0.4));
+  let droppedEquipQuality = null;
   if (Math.random() < equipChance) {
     const eqPool = Array.isArray(node.equipPool) && node.equipPool.length
       ? node.equipPool
-      : (REGION_EQUIP_POOLS[regionIdx] || REGION_EQUIP_POOLS[0]);
+      : getRegionEquipPool(regionIdx);
     const baseId = eqPool[Math.floor(Math.random() * eqPool.length)];
     const eqQuality = rollChestEquipQuality(regionIdx, isPremiumChest, weather.rareBonus);
     const eq = rollEquipment(baseId, eqQuality);
     if (eq) {
       addEquipmentToBag(eq);
+      droppedEquipQuality = eq.quality;
       lootParts.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
       bestQuality = eq.quality;
       floatNearHero(`+${eq.name}`, QUALITY[eq.quality].color);
@@ -1198,7 +1345,11 @@ function handleLootNode(node) {
     floatNearHero(`+${goldGain} 币`, '#f3ce7a');
   }
 
-  sfx.pick(bestQuality);
+  if (droppedEquipQuality) {
+    sfx.playLootAffixDrop?.(droppedEquipQuality);
+  } else {
+    sfx.pick(bestQuality);
+  }
   gainExp(18 + regionIdx * 8 + (isPremiumChest ? 12 : 0));
   showToast(`开启「${node.name || '宝箱'}」：${lootParts.join('、')}！`, bestQuality === 'legend' || bestQuality === 'rare' ? 'success' : 'info');
   if (isPremiumChest || Math.random() < 0.45) {
@@ -1283,7 +1434,8 @@ const MAP_ENTRY_CUTSCENES = {
   ruins: 'entry_ruins',
   arsenal: 'entry_arsenal',
   swamp: 'entry_swamp',
-  vault: 'entry_vault'
+  vault: 'entry_vault',
+  sky_citadel: 'cutscene_sky_citadel'
 };
 
 let activeCutscene = null;
@@ -1564,6 +1716,54 @@ function openNpcDialog(npcId) {
 }
 
 function handleNpcOption(npc, idx, opt) {
+  const id = npc.id;
+
+  // 天穹白玉京专属执政官与量子军械师优先分发
+  if (id === 'npc_archon') {
+    if (idx === 0) {
+      closeDialog(true);
+      if (STORY_CUTSCENES.cutscene_sky_citadel) {
+        playStoryCutscene('cutscene_sky_citadel', { isNpcStory: true });
+      }
+      revealRegionLore('reg_citadel');
+      return;
+    } else if (idx === 1) {
+      const stats = getHeroStats();
+      state.hp = stats.maxHp;
+      state.energy = stats.maxEnergy;
+      state.food = 100;
+      state.warn = 0;
+      sfx.ending?.();
+      $('dialog-text').textContent = `“穹顶光子医疗舱净化完毕！气血 (${stats.maxHp})、内息 (${stats.maxEnergy}) 与饱食已悉数回满，所有辐射残留均已清零。”`;
+      showToast('穹顶医疗舱全面净化完成！', 'success');
+      updateHUD();
+      scheduleSave();
+      return;
+    } else if (idx === 2) {
+      revealRegionLore('reg_citadel');
+      $('dialog-text').textContent = '“裁决主神·太一盘踞在东境裁决殿深处，拥有极高护甲与周期性量子裁决炮。务必装备【穿甲】、【斩妖/首领增伤】与【不屈】词缀神兵，并备好『非攻护体符』与『雷枢破甲符』，先破其盾再斩核心！西廊四座白玉京秘库亦藏有绝世太虚神装。”';
+      updateHUD();
+      scheduleSave();
+      return;
+    }
+  } else if (id === 'npc_quantum_smith') {
+    if (opt.action === 'shop') {
+      closeDialog();
+      openQuantumArmoryShop('shop');
+      return;
+    }
+    if (opt.action === 'crucible') {
+      closeDialog();
+      openCrucible();
+      return;
+    }
+    if (opt.action === 'disassemble') {
+      closeDialog();
+      openDisassemble();
+      return;
+    }
+  }
+
   if (opt.action === 'shop') { closeDialog(); openShop(); return; }
   if (opt.action === 'inn') { closeDialog(); openInn(); return; }
   if (opt.action === 'crucible') { closeDialog(); openCrucible(); return; }
@@ -1573,8 +1773,6 @@ function handleNpcOption(npc, idx, opt) {
     playStoryCutscene(`npc_story_${npc.id}`, { isNpcStory: true });
     return;
   }
-
-  const id = npc.id;
   if (id === 'laohuang') {
     if (idx === 1) {
       $('dialog-text').textContent = '“阿哲那块旧表停在 21:47。你出东门去城郊废土找盲眼老鬼，他知道防空洞的入口，鼠王窝里兴许就有阿哲的遗物！”';
@@ -2602,6 +2800,7 @@ function startBattle(worldEnemy, skipPreCutscene = false) {
     state.seenEnemies.push(tpl.id);
   }
 
+  const afx = getHeroAffixStats();
   battle = {
     worldEnemy,
     tpl,
@@ -2616,11 +2815,17 @@ function startBattle(worldEnemy, skipPreCutscene = false) {
     phase2: false,
     healedHalf: false,
     captureBonus: 0,
-    heroShield: 0,
+    heroShield: afx.startShield || 0,
+    cheatDeathUsed: false,
     dmgReduceTurns: 0,
+    dmgReduceVal: 0.30,
     overdriveTurns: 0,
+    atkBuffTurns: 0,
+    atkBuffVal: 0,
+    dodgeBuffTurns: 0,
+    dodgeBuffVal: 0,
     heroStatus: { burn: 0, poison: 0 },
-    enemyStatus: { burn: 0, poison: 0, stun: 0, def_down: 0 }
+    enemyStatus: { burn: 0, poison: 0, stun: 0, def_down: 0, shock: 0 }
   };
 
   battleSubMode = null;
@@ -2647,10 +2852,12 @@ function startBattle(worldEnemy, skipPreCutscene = false) {
     heroBatImg.style.background = 'transparent';
     heroBatImg.classList.remove('hit', 'hit-flash', 'lunge-left');
   }
+  syncHeroVisuals();
   const battleOverlay = $('rpg-battle-overlay');
   battleOverlay?.classList.remove('hidden', 'enemy-turn', 'screen-shake');
 
-  logBattle(tpl.introLine || `遭遇「${tpl.name}」！凝神戒备，准备迎战！`);
+  const shieldNote = battle.heroShield > 0 ? ` 【开局墨盾 +${battle.heroShield}】已自动展开！` : '';
+  logBattle((tpl.introLine || `遭遇「${tpl.name}」！凝神戒备，准备迎战！`) + shieldNote);
   setBattleButtonsEnabled(true);
   updateBattleUI();
   startBattleAmbient();
@@ -2686,13 +2893,29 @@ function triggerHitAnim(isEnemy, strong = false) {
   }
 }
 
+function spawnWeaponHitVfx(weaponStyle = 'sword', isCrit = false) {
+  const container = getBattleVfxContainer();
+  if (!container) return;
+  const style = ['sword', 'blade', 'gun', 'staff'].includes(weaponStyle) ? weaponStyle : 'sword';
+  const { x, y } = getBattleTargetPos('enemy', container, 0, 4);
+  const el = document.createElement('div');
+  el.className = `vfx-${style}${isCrit ? ' is-crit-vfx' : ''}`;
+  el.style.left = `${Math.round(x)}px`;
+  el.style.top = `${Math.round(y)}px`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 460);
+}
+
 function calcDamageToEnemy(mult = 1, opts = {}) {
   const stats = getHeroStats();
   let atk = stats.atk;
   if (battle.overdriveTurns > 0) atk = Math.round(atk * 1.3);
+  if (battle.atkBuffTurns > 0 && battle.atkBuffVal > 0) {
+    atk = Math.round(atk * (1 + battle.atkBuffVal));
+  }
 
   let def = battle.enemy.def;
-  if (battle.enemyStatus.def_down > 0) def = Math.round(def * 0.75);
+  if (battle.enemyStatus.def_down > 0) def = Math.round(def * 0.70);
   const pen = opts.ignoreDef ? 1 : clamp(stats.armorPen + (opts.armorPen || 0), 0, 1);
   const effDef = Math.round(def * (1 - pen));
 
@@ -2704,15 +2927,25 @@ function calcDamageToEnemy(mult = 1, opts = {}) {
   if (opts.isSkill && stats.skillBonus > 0) {
     dmg = Math.round(dmg * (1 + stats.skillBonus));
   }
-  const isMechTarget = ['drone', 'flame_mech', 'guard', 'auto_turret', 'heavy_mech', 'mech_taotie', 'boss_zhurong', 'boss_tianshu'].includes(battle.tpl.spriteType);
+  const isMechTarget = ['drone', 'flame_mech', 'guard', 'auto_turret', 'heavy_mech', 'mech_taotie', 'boss_zhurong', 'boss_tianshu', 'boss_archon_mech'].includes(battle.tpl.spriteType)
+    || ['citadel_enforcer', 'quantum_sentinel', 'jade_arbiter', 'boss_archon_mech'].includes(battle.tpl.id);
   if (isMechTarget && stats.mechBonus > 0) {
     dmg = Math.round(dmg * (1 + stats.mechBonus));
+  }
+  if ((battle.tpl.isBoss || battle.tpl.isElite) && stats.bossDmgPct > 0) {
+    dmg = Math.round(dmg * (1 + stats.bossDmgPct));
+  }
+  if (battle.enemyStatus.shock > 0) {
+    dmg = Math.round(dmg * 1.20);
   }
 
   const critRate = opts.guaranteedCrit ? 1 : clamp(stats.crit + (opts.critBonus || 0), 0, 0.95);
   const isCrit = Math.random() < critRate;
   if (isCrit) dmg = Math.round(dmg * 1.65);
 
+  if (stats.bonusDmgPct > 0) {
+    dmg = Math.round(dmg * (1 + stats.bonusDmgPct));
+  }
   dmg += stats.bonusDmg || 0;
   return { dmg, isCrit, lifesteal: stats.lifesteal || 0 };
 }
@@ -2773,7 +3006,8 @@ function handleBattleVictory(captured = false) {
   const stats = getHeroStats();
 
   const expGain = captured ? Math.round(tpl.exp * 0.65) : tpl.exp;
-  const goldGain = captured ? Math.round(tpl.gold * 0.65) : tpl.gold;
+  const baseGoldGain = captured ? Math.round(tpl.gold * 0.65) : tpl.gold;
+  const goldGain = Math.round(baseGoldGain * (1 + (stats.goldFind || 0)));
   state.gold += goldGain;
   state.stats.battleWin = (state.stats.battleWin || 0) + 1;
   if (['heavy_mech', 'auto_turret', 'mech_taotie'].includes(tpl.id)) {
@@ -2781,6 +3015,7 @@ function handleBattleVictory(captured = false) {
   }
 
   const dropList = [];
+  let droppedEquipQuality = null;
   if (tpl.isBoss) {
     if (!state.defeatedBosses.includes(tpl.id)) state.defeatedBosses.push(tpl.id);
     world?.setDefeatedBosses?.(state.defeatedBosses);
@@ -2806,11 +3041,12 @@ function handleBattleVictory(captured = false) {
       boss_duangang: ['wpn_shotgun', 'wpn_qingcheng', 'wpn_sniper'],
       boss_zhurong: ['wpn_gatling', 'mech_crimson_frame', 'wpn_pulsesword'],
       boss_lotus_bane: ['relic_fox_orb', 'armor_exo', 'wpn_plasma_rifle'],
-      boss_tianshu: ['wpn_xuanyuan', 'mech_tianshu_exo', 'relic_tianshu']
-    }[tpl.id] || (REGION_EQUIP_POOLS[regionIdx] || ['wpn_qingcheng']);
+      boss_tianshu: ['wpn_xuanyuan', 'mech_tianshu_exo', 'relic_tianshu'],
+      boss_archon_mech: ['wpn_baiyujing_taixu', 'wpn_citadel_gauss', 'armor_sky_taixu_plate', 'mech_quantum_singularity', 'relic_quantum_core']
+    }[tpl.id] || getRegionEquipPool(regionIdx);
 
-    const isMidLateBoss = ['boss_zhurong', 'boss_lotus_bane', 'boss_tianshu'].includes(tpl.id);
-    const bossQuality = tpl.isFinalBoss
+    const isMidLateBoss = ['boss_zhurong', 'boss_lotus_bane', 'boss_tianshu', 'boss_archon_mech'].includes(tpl.id);
+    const bossQuality = (tpl.isFinalBoss || tpl.id === 'boss_archon_mech')
       ? 'legend'
       : tpl.id === 'boss_lotus_bane'
         ? (Math.random() < 0.7 ? 'legend' : 'rare')
@@ -2824,6 +3060,7 @@ function handleBattleVictory(captured = false) {
     );
     if (eq) {
       addEquipmentToBag(eq);
+      droppedEquipQuality = eq.quality;
       dropList.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
     }
 
@@ -2853,13 +3090,15 @@ function handleBattleVictory(captured = false) {
       }
     }
 
-    // 普通怪物：~30% 概率掉落匹配当前区域的暗黑词缀装备
-    if (!captured && Math.random() < 0.30) {
-      const eqPool = REGION_EQUIP_POOLS[regionIdx] || REGION_EQUIP_POOLS[0];
+    // 普通怪物：~30% 概率（受 magicFind 加成）掉落匹配当前区域 (minRegion <= curRegion) 的暗黑词缀装备
+    const eqDropChance = Math.min(0.65, 0.30 * (1 + (stats.magicFind || 0) * 0.5));
+    if (!captured && Math.random() < eqDropChance) {
+      const eqPool = getRegionEquipPool(regionIdx);
       const pick = eqPool[Math.floor(Math.random() * eqPool.length)];
       const eq = rollEquipment(pick, rollMonsterEquipQuality(regionIdx));
       if (eq) {
         addEquipmentToBag(eq);
+        droppedEquipQuality = eq.quality;
         dropList.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
       }
     }
@@ -2871,6 +3110,10 @@ function handleBattleVictory(captured = false) {
         dropList.push(`古董·${pityAntique.name}`);
       }
     }
+  }
+
+  if (droppedEquipQuality) {
+    setTimeout(() => sfx.playLootAffixDrop?.(droppedEquipQuality), 320);
   }
 
   const extraMsg = dropList.length ? ` 战利品：${dropList.join('、')}！` : '';
@@ -2932,6 +3175,7 @@ function loadFromSlot(slotId, slotLabel = '存档') {
   }
   closeModal(false, true);
   enterMap(state.mapId, state.heroX, state.heroY);
+  syncHeroVisuals();
   sfx.ending();
   showToast(`已读取「${slotLabel}」：回到 ${MAPS_BY_ID[state.mapId]?.name || '墨石镇'}！`, 'success');
   return true;
@@ -3021,6 +3265,7 @@ function runEnemyTurn(prevLogs = []) {
     logs.push('【剧毒】造成 18 点毒素伤害！');
   }
   if (battle.enemyStatus.def_down > 0) battle.enemyStatus.def_down -= 1;
+  if (battle.enemyStatus.shock > 0) battle.enemyStatus.shock -= 1;
 
   if (battle.enemy.hp <= 0) {
     updateBattleUI();
@@ -3062,35 +3307,54 @@ function runEnemyTurn(prevLogs = []) {
       const tpl = battle.tpl;
       const isSpecial = tpl.specialEvery && (battle.turn % tpl.specialEvery === 0);
       const mult = isSpecial ? (tpl.specialMult || 1.5) : 1;
-      const baseEnemyDmg = battle.enemy.atk * mult;
-      let rawDmg = Math.max(4, Math.round(baseEnemyDmg * (100 / (100 + stats.def * 1.15))));
-      let reduce = stats.dmgReduce + (battle.dmgReduceTurns > 0 ? 0.30 : 0);
-      rawDmg = Math.max(2, Math.round(rawDmg * (1 - clamp(reduce, 0, 0.78))));
 
-      let absorbed = 0;
-      if (battle.heroShield > 0) {
-        absorbed = Math.min(battle.heroShield, rawDmg);
-        battle.heroShield -= absorbed;
-        rawDmg -= absorbed;
-      }
+      const totalDodge = clamp((stats.dodgeRate || 0) + (battle.dodgeBuffTurns > 0 ? (battle.dodgeBuffVal || 0.35) : 0), 0, 0.75);
+      if (totalDodge > 0 && Math.random() < totalDodge) {
+        triggerBattleLunge(false);
+        spawnBattleDmgNum('hero', '闪避!', 'mystic');
+        sfx.uiTick?.();
+        logs.push(`身法灵动，完美闪避了${tpl.name}的${isSpecial ? `绝招【${tpl.specialName}】` : '猛攻'}！`);
+      } else {
+        const baseEnemyDmg = battle.enemy.atk * mult;
+        let rawDmg = Math.max(4, Math.round(baseEnemyDmg * (100 / (100 + stats.def * 1.15))));
+        const activeReduce = battle.dmgReduceTurns > 0 ? (battle.dmgReduceVal || 0.30) : 0;
+        let reduce = stats.dmgReduce + activeReduce;
+        rawDmg = Math.max(2, Math.round(rawDmg * (1 - clamp(reduce, 0, 0.78))));
+        const preShieldDmg = rawDmg;
 
-      state.hp = Math.max(0, state.hp - rawDmg);
-      triggerBattleLunge(false);
-      triggerHitAnim(false, isSpecial);
-      spawnBattleSlashVfx('hero', 'enemy');
-      sfx.playEnemyAttackSfx?.(tpl);
-      if (rawDmg > 0) {
-        spawnBattleDmgNum('hero', isSpecial ? `${tpl.specialName || '重创'} -${rawDmg}` : `-${rawDmg}`, 'enemy-hit');
-      } else if (absorbed > 0) {
-        spawnBattleDmgNum('hero', '护盾格挡!', 'shield');
-      }
-      logs.push(isSpecial
-        ? `${tpl.name}发动绝招【${tpl.specialName}】，造成 ${rawDmg} 点重创！`
-        : `${tpl.name}发起猛攻，造成 ${rawDmg} 点伤害！`);
+        let absorbed = 0;
+        if (battle.heroShield > 0) {
+          absorbed = Math.min(battle.heroShield, rawDmg);
+          battle.heroShield -= absorbed;
+          rawDmg -= absorbed;
+        }
 
-      if (isSpecial && tpl.inflicts) {
-        battle.heroStatus[tpl.inflicts] = 2;
-        logs.push(`你陷入了【${tpl.inflicts === 'burn' ? '灼烧' : '剧毒'}】状态！`);
+        state.hp = Math.max(0, state.hp - rawDmg);
+        triggerBattleLunge(false);
+        triggerHitAnim(false, isSpecial);
+        spawnBattleSlashVfx('hero', 'enemy');
+        sfx.playEnemyAttackSfx?.(tpl);
+        if (rawDmg > 0) {
+          spawnBattleDmgNum('hero', isSpecial ? `${tpl.specialName || '重创'} -${rawDmg}` : `-${rawDmg}`, 'enemy-hit');
+        } else if (absorbed > 0) {
+          spawnBattleDmgNum('hero', '护盾格挡!', 'shield');
+        }
+        logs.push(isSpecial
+          ? `${tpl.name}发动绝招【${tpl.specialName}】，造成 ${rawDmg} 点重创！`
+          : `${tpl.name}发起猛攻，造成 ${rawDmg} 点伤害！`);
+
+        if (stats.thorns > 0 && preShieldDmg > 0 && battle.enemy.hp > 0) {
+          const refl = Math.max(1, Math.round(preShieldDmg * stats.thorns));
+          battle.enemy.hp = Math.max(0, battle.enemy.hp - refl);
+          triggerHitAnim(true, false);
+          spawnBattleDmgNum('enemy', `荆棘 -${refl}`, 'physical', { offsetY: -22 });
+          logs.push(`【荆棘】反弹 ${refl} 点伤害！`);
+        }
+
+        if (isSpecial && tpl.inflicts && rawDmg > 0) {
+          battle.heroStatus[tpl.inflicts] = 2;
+          logs.push(`你陷入了【${tpl.inflicts === 'burn' ? '灼烧' : '剧毒'}】状态！`);
+        }
       }
     }
 
@@ -3108,14 +3372,32 @@ function runEnemyTurn(prevLogs = []) {
       if (d > 0) spawnBattleDmgNum('hero', `剧毒 -${d}`, 'enemy-hit', { offsetY: -28 });
     }
 
+    // 【不屈】绝境逢生（每场战斗触发 1 次，保留 25% 生命）
+    if (state.hp <= 0 && (stats.cheatDeath || 0) > 0 && !battle.cheatDeathUsed) {
+      battle.cheatDeathUsed = true;
+      state.hp = Math.max(1, Math.round(stats.maxHp * 0.25));
+      spawnBattleDmgNum('hero', '不屈重生!', 'heal', { offsetY: -36 });
+      sfx.ending?.();
+      logs.push(`【不屈】绝境逢生！保留 ${state.hp} 点气血（25%）继续死战！`);
+    }
+
     if (battle.dmgReduceTurns > 0) battle.dmgReduceTurns -= 1;
     if (battle.overdriveTurns > 0) battle.overdriveTurns -= 1;
+    if (battle.atkBuffTurns > 0) battle.atkBuffTurns -= 1;
+    if (battle.dodgeBuffTurns > 0) battle.dodgeBuffTurns -= 1;
     battle.captureBonus = 0;
     battle.turn += 1;
 
     updateBattleUI();
     updateHUD();
     logBattle(logs.slice(-2).join(' '));
+
+    if (battle.enemy.hp <= 0) {
+      setTimeout(() => {
+        if (battle) handleBattleVictory(false);
+      }, 420);
+      return;
+    }
 
     if (state.hp <= 0) {
       setTimeout(() => {
@@ -3148,12 +3430,15 @@ function battlePlayerAttack() {
   const stats = getHeroStats();
   const { dmg, isCrit, lifesteal } = calcDamageToEnemy(1, {});
   const branch = getEquippedWeaponBranch();
+  const weaponStyle = getHeroAppearancePayload().weaponStyle;
   const wType = state.equipped?.weapon?.weaponType || '';
   const isHeavy = Boolean(isCrit || wType === 'cannon' || wType === 'heavy' || wType === 'railgun');
 
   triggerBattleLunge(true);
   const { impactMs, totalMs } = spawnBattleCombatVfx(branch, { isCrit });
-  if (typeof sfx.playBasicAttackSfx === 'function') {
+  if (typeof sfx.playWeaponAttack === 'function') {
+    sfx.playWeaponAttack(weaponStyle, isCrit);
+  } else if (typeof sfx.playBasicAttackSfx === 'function') {
     sfx.playBasicAttackSfx(state.equipped?.weapon);
   } else if (typeof sfx.playCombatSfx === 'function') {
     sfx.playCombatSfx(branch, isHeavy);
@@ -3164,11 +3449,14 @@ function battlePlayerAttack() {
   const logs = [`沈砚挥兵直击，造成 ${dmg} 点${isCrit ? '暴击' : ''}伤害！`];
   logBattle(`沈砚运转兵锋，蓄势直击【${battle.tpl.name}】！`);
 
-  // 命中瞬间结算顿挫与飘字
+  const willDoubleHit = (stats.doubleHit || 0) > 0 && Math.random() < stats.doubleHit;
+
+  // 命中瞬间结算顿挫、武器流派特效与暗黑词缀触发
   setTimeout(() => {
     if (!battle) return;
     battle.enemy.hp = Math.max(0, battle.enemy.hp - dmg);
     triggerHitAnim(true, isHeavy);
+    spawnWeaponHitVfx(weaponStyle, isCrit);
     const dmgStyle = isCrit ? 'crit' : (branch === 'martial' ? 'physical' : branch);
     spawnBattleDmgNum('enemy', isCrit ? `暴击! -${dmg}` : `-${dmg}`, dmgStyle);
 
@@ -3178,13 +3466,45 @@ function battlePlayerAttack() {
       spawnBattleDmgNum('hero', `+${heal} HP`, 'heal', { offsetY: -18 });
       logs.push(`吸血回复 +${heal} 气血！`);
     }
-    if (stats.proc === 'burn' && Math.random() < 0.25) {
-      battle.enemyStatus.burn = 2;
-      logs.push('武器触发【灼烧】！');
+    const burnChance = Math.min(0.85, (stats.proc === 'burn' ? 0.25 : 0) + (stats.burnOnHit || 0));
+    if (burnChance > 0 && Math.random() < burnChance) {
+      battle.enemyStatus.burn = Math.max(battle.enemyStatus.burn || 0, 2);
+      logs.push('触发【灼烧】！');
+    }
+    if ((stats.poisonOnHit || 0) > 0 && Math.random() < stats.poisonOnHit) {
+      battle.enemyStatus.poison = Math.max(battle.enemyStatus.poison || 0, 2);
+      logs.push('触发【剧毒】！');
+    }
+    if ((stats.shockOnHit || 0) > 0 && Math.random() < stats.shockOnHit) {
+      battle.enemyStatus.shock = Math.max(battle.enemyStatus.shock || 0, 2);
+      spawnBattleDmgNum('enemy', '感电!', 'mystic', { offsetY: -36 });
+      logs.push('触发【感电】（易伤 +20%）！');
     }
 
     updateBattleUI();
     logBattle(logs.join(' '));
+
+    // 【连击】二连追击
+    if (willDoubleHit && battle.enemy.hp > 0) {
+      setTimeout(() => {
+        if (!battle || battle.enemy.hp <= 0) return;
+        const follow = calcDamageToEnemy(0.75, {});
+        battle.enemy.hp = Math.max(0, battle.enemy.hp - follow.dmg);
+        triggerBattleLunge(true);
+        triggerHitAnim(true, follow.isCrit);
+        spawnWeaponHitVfx(weaponStyle, follow.isCrit);
+        sfx.playWeaponAttack?.(weaponStyle, follow.isCrit);
+        spawnBattleDmgNum('enemy', follow.isCrit ? `连击暴击! -${follow.dmg}` : `连击! -${follow.dmg}`, 'crit', { offsetY: -26 });
+        if (follow.lifesteal > 0) {
+          const heal2 = Math.max(1, Math.round(follow.dmg * follow.lifesteal));
+          state.hp = Math.min(stats.maxHp, state.hp + heal2);
+          spawnBattleDmgNum('hero', `+${heal2} HP`, 'heal', { offsetY: -34 });
+        }
+        logs.push(`【连击】瞬影追击，再斩 ${follow.dmg} 点伤害！`);
+        updateBattleUI();
+        logBattle(logs.slice(-2).join(' '));
+      }, 240);
+    }
   }, impactMs);
 
   setTimeout(() => {
@@ -3194,7 +3514,7 @@ function battlePlayerAttack() {
       return;
     }
     runEnemyTurn(logs);
-  }, totalMs);
+  }, willDoubleHit ? totalMs + 280 : totalMs);
 }
 
 function battleUseSkill(skill) {
@@ -3203,8 +3523,9 @@ function battleUseSkill(skill) {
     showToast(`需修为 Lv.${skill.unlockLv} 解锁【${skill.name}】`, 'warn');
     return;
   }
-  if (state.energy < skill.mpCost) {
-    showToast(`内息不足（需 ${skill.mpCost} 点）`, 'warn');
+  const mpCost = getEffectiveSkillMpCost(skill);
+  if (state.energy < mpCost) {
+    showToast(`内息不足（需 ${mpCost} 点）`, 'warn');
     return;
   }
 
@@ -3214,7 +3535,7 @@ function battleUseSkill(skill) {
   setBattleButtonsEnabled(false);
 
   const stats = getHeroStats();
-  state.energy -= skill.mpCost;
+  state.energy -= mpCost;
   const logs = [];
   const flavorPrefix = skill.flavor ? `${skill.flavor} ` : '';
 
@@ -3312,6 +3633,19 @@ function battleUseSkill(skill) {
       spawnBattleDmgNum('enemy', '眩晕!', 'mystic', { offsetY: -34 });
     }
     if (skill.captureBonus) battle.captureBonus = skill.captureBonus;
+    if ((stats.burnOnHit || 0) > 0 && Math.random() < stats.burnOnHit) {
+      battle.enemyStatus.burn = Math.max(battle.enemyStatus.burn || 0, 2);
+      logs.push('词缀触发【灼烧】！');
+    }
+    if ((stats.poisonOnHit || 0) > 0 && Math.random() < stats.poisonOnHit) {
+      battle.enemyStatus.poison = Math.max(battle.enemyStatus.poison || 0, 2);
+      logs.push('词缀触发【剧毒】！');
+    }
+    if ((stats.shockOnHit || 0) > 0 && Math.random() < stats.shockOnHit) {
+      battle.enemyStatus.shock = Math.max(battle.enemyStatus.shock || 0, 2);
+      spawnBattleDmgNum('enemy', '感电!', 'mystic', { offsetY: -36 });
+      logs.push('词缀触发【感电】！');
+    }
 
     updateBattleUI();
     logBattle(logs.join(' '));
@@ -3339,8 +3673,9 @@ function battleAttemptCapture() {
   setBattleButtonsEnabled(false);
 
   const ratio = battle.enemy.hp / battle.enemy.maxHp;
+  const afxCaptureBonus = getHeroAffixStats().captureBonus || 0;
   let chance = ratio <= 0.4 ? (0.68 + (0.4 - ratio) * 0.75) : ratio <= 0.65 ? 0.30 : 0.12;
-  chance = clamp(chance + (battle.captureBonus || 0), 0.1, 0.98);
+  chance = clamp(chance + (battle.captureBonus || 0) + afxCaptureBonus, 0.1, 0.98);
   const succeeded = Math.random() < chance;
   const container = getBattleVfxContainer();
 
@@ -3503,6 +3838,7 @@ function battleUseConsumable(kind, key) {
   const stats = getHeroStats();
   let effect = null;
   let label = '';
+  let isTalisman = false;
 
   if (kind === 'elixir') {
     if ((state.elixirs[key] || 0) <= 0) return;
@@ -3517,6 +3853,7 @@ function battleUseConsumable(kind, key) {
     const it = ITEMS[key];
     effect = it.effect;
     label = it.name;
+    isTalisman = Boolean(it.isTalisman || it.category === 'talisman');
   }
 
   battle.busy = true;
@@ -3524,31 +3861,124 @@ function battleUseConsumable(kind, key) {
   $('bat-subpanel').classList.add('hidden');
   setBattleButtonsEnabled(false);
 
-  if (effect?.clearWarn) {
-    state.warn = 0;
-    logBattle(`掷出【${label}】，烟幕弥漫，全身而退！`);
+  if (isTalisman) {
+    sfx.playTalismanCast?.();
+    spawnBattleSlashVfx('hero', 'mystic', false);
+  } else {
     sfx.pick('fine');
-    setTimeout(() => closeBattle(), 650);
-    return;
   }
 
+  // 太虚遁影符 / 烟幕：清零警戒；非首领必撤退，首领战赋予 2 回合高额闪避
+  if (effect?.clearWarn) {
+    state.warn = 0;
+    if (!battle.tpl.isBoss) {
+      logBattle(`祭出【${label}】，清零警戒并遁影脱离战场！`);
+      setTimeout(() => closeBattle(), 650);
+      return;
+    }
+    if (effect.dodgeBuff) {
+      battle.dodgeBuffTurns = 2;
+      battle.dodgeBuffVal = effect.dodgeBuff;
+      spawnBattleDmgNum('hero', `闪避 +${Math.round(effect.dodgeBuff * 100)}%`, 'mystic');
+      updateBattleUI();
+      setTimeout(() => runEnemyTurn([`祭出【${label}】，首领威压下化影避锋，2 回合闪避 +${Math.round(effect.dodgeBuff * 100)}%！`]), 360);
+      return;
+    }
+  }
+
+  const logs = [];
+  let yOff = 0;
+
+  if (effect?.shield) {
+    battle.heroShield += effect.shield;
+    spawnBattleDmgNum('hero', `护盾 +${effect.shield}`, 'shield', { offsetY: yOff });
+    yOff -= 24;
+    logs.push(`展开 ${effect.shield} 点青铜墨盾`);
+  }
+  if (effect?.dmgReduce) {
+    battle.dmgReduceTurns = Math.max(battle.dmgReduceTurns || 0, 2);
+    battle.dmgReduceVal = Math.max(battle.dmgReduceVal || 0, effect.dmgReduce);
+    logs.push(`2 回合减伤 ${Math.round(effect.dmgReduce * 100)}%`);
+  }
   if (effect?.hp) {
     state.hp = Math.min(stats.maxHp, state.hp + effect.hp);
-    spawnBattleDmgNum('hero', `+${effect.hp} HP`, 'heal');
+    spawnBattleDmgNum('hero', `+${effect.hp} HP`, 'heal', { offsetY: yOff });
+    yOff -= 24;
+    logs.push(`气血 +${effect.hp}`);
   }
   if (effect?.energy) {
     state.energy = Math.min(stats.maxEnergy, state.energy + effect.energy);
-    spawnBattleDmgNum('hero', `+${effect.energy} 内息`, 'mystic', { offsetY: effect?.hp ? -28 : 0 });
+    spawnBattleDmgNum('hero', `+${effect.energy} 内息`, 'mystic', { offsetY: yOff });
+    yOff -= 24;
+    logs.push(`内息 +${effect.energy}`);
   }
   if (effect?.food) state.food = Math.min(100, state.food + effect.food);
   if (effect?.radShield) {
-    state.radShield += effect.radShield;
-    spawnBattleDmgNum('hero', `抗辐射护盾 +${effect.radShield}`, 'shield', { offsetY: -34 });
+    state.radShield = (state.radShield || 0) + effect.radShield;
+    spawnBattleDmgNum('hero', `抗辐射 +${effect.radShield}`, 'shield', { offsetY: yOff });
+    yOff -= 24;
+    logs.push(`抗辐射护盾 +${effect.radShield}`);
+  }
+  if (effect?.cleanse) {
+    battle.heroStatus.burn = 0;
+    battle.heroStatus.poison = 0;
+    spawnBattleDmgNum('hero', '净化异常!', 'heal', { offsetY: yOff });
+    yOff -= 24;
+    logs.push('净化全部异常状态');
+  }
+  if (effect?.atkBuff) {
+    battle.atkBuffTurns = 3;
+    battle.atkBuffVal = effect.atkBuff;
+    spawnBattleDmgNum('hero', `攻击 +${Math.round(effect.atkBuff * 100)}%`, 'crit', { offsetY: yOff });
+    yOff -= 24;
+    logs.push(`3 回合攻击 +${Math.round(effect.atkBuff * 100)}%`);
+  }
+  if (effect?.dodgeBuff) {
+    battle.dodgeBuffTurns = 2;
+    battle.dodgeBuffVal = effect.dodgeBuff;
+    spawnBattleDmgNum('hero', `闪避 +${Math.round(effect.dodgeBuff * 100)}%`, 'mystic', { offsetY: yOff });
+    yOff -= 24;
+    logs.push(`2 回合闪避 +${Math.round(effect.dodgeBuff * 100)}%`);
+  }
+  if (effect?.captureBonus) {
+    battle.captureBonus = (battle.captureBonus || 0) + effect.captureBonus;
+    spawnBattleDmgNum('enemy', `收妖 +${Math.round(effect.captureBonus * 100)}%`, 'capture', { offsetY: -34 });
+    logs.push(`本回合收妖成功率 +${Math.round(effect.captureBonus * 100)}%`);
+  }
+  if (effect?.dmg) {
+    const tdmg = Math.round(effect.dmg * (1 + (stats.skillBonus || 0)));
+    battle.enemy.hp = Math.max(0, battle.enemy.hp - tdmg);
+    triggerBattleLunge(true);
+    triggerHitAnim(true, tdmg >= 120);
+    spawnBattleSlashVfx('enemy', 'mystic', tdmg >= 140);
+    spawnBattleDmgNum('enemy', `符伤 -${tdmg}`, 'mystic');
+    logs.push(`造成 ${tdmg} 点符箓真伤`);
+  }
+  if (effect?.debuff) {
+    if (effect.debuff === 'burn') {
+      battle.enemyStatus.burn = Math.max(battle.enemyStatus.burn || 0, 3);
+      logs.push('附加【灼烧】');
+    } else if (effect.debuff === 'def_down') {
+      battle.enemyStatus.def_down = Math.max(battle.enemyStatus.def_down || 0, 2);
+      spawnBattleDmgNum('enemy', '破甲!', 'physical', { offsetY: -26 });
+      logs.push('击碎敌方 30% 护甲');
+    } else {
+      battle.enemyStatus[effect.debuff] = 2;
+    }
   }
 
-  sfx.pick('fine');
   updateBattleUI();
-  setTimeout(() => runEnemyTurn([`服下【${label}】，元气恢复！`]), 320);
+  const summary = `${isTalisman ? '祭出' : '服下'}【${label}】${logs.length ? `：${logs.join('，')}！` : '，元气恢复！'}`;
+  logBattle(summary);
+
+  if (battle.enemy.hp <= 0) {
+    setTimeout(() => {
+      if (battle) handleBattleVictory(false);
+    }, 420);
+    return;
+  }
+
+  setTimeout(() => runEnemyTurn([summary]), 420);
 }
 
 function battleAttemptRun() {
@@ -3629,14 +4059,15 @@ function renderBattleSubpanel() {
 
     const list = COMBAT_SKILLS.filter((s) => s.category === battleSkillBranch);
     const cardsHtml = list.map((s) => {
+      const effCost = getEffectiveSkillMpCost(s);
       const locked = state.level < s.unlockLv;
-      const noMp = state.energy < s.mpCost;
+      const noMp = state.energy < effCost;
       const stateCls = locked ? ' is-locked' : (noMp ? ' is-nomp' : '');
       return `
         <button class="bat-skill-btn${stateCls}" data-skill-id="${s.id}" title="${escapeHtml(s.desc)}" ${locked || noMp ? 'disabled' : ''}>
           ${renderSkillIcon(s)}
           <span class="bat-skill-name">${escapeHtml(s.name)}</span>
-          <span class="bat-skill-cost">${locked ? `Lv.${s.unlockLv}` : `${s.mpCost}内息`}</span>
+          <span class="bat-skill-cost">${locked ? `Lv.${s.unlockLv}` : `${effCost}内息`}</span>
         </button>
       `;
     }).join('');
@@ -4511,9 +4942,16 @@ function renderEquipCard(eq, actionsHtml) {
   if (eq.artilleryBonus) statBits.push(`重炮+${Math.round(eq.artilleryBonus * 100)}%`);
   if (eq.radResist) statBits.push(`抗辐+${Math.round(eq.radResist * 100)}%`);
 
-  const affixHtml = (eq.affixes || []).map((af, idx) =>
-    `<span class="affix-tag ${idx === 0 ? 'affix-prefix' : 'affix-suffix'}">${escapeHtml(af.name)}：${escapeHtml(af.desc)}</span>`
-  ).join('');
+  const rawAffixes = Array.isArray(eq.affixes) ? eq.affixes : [];
+  const legendAf = eq.legendEffect || rawAffixes.find((a) => a?.id?.startsWith('leg_')) || null;
+  const normalAffixes = rawAffixes.filter((a) => a && a.id !== legendAf?.id);
+  const affixHtml = normalAffixes.map((af, idx) => {
+    const isPrefix = af.id?.startsWith('pre_') || (!af.id?.startsWith('suf_') && idx === 0);
+    return `<span class="affix-chip ${isPrefix ? 'prefix' : 'suffix'}">${escapeHtml(af.name)} ${escapeHtml(af.desc)}</span>`;
+  }).join('');
+  const legendHtml = legendAf
+    ? `<div class="legend-affix-line"><strong>${escapeHtml(legendAf.name)}</strong> ${escapeHtml(legendAf.desc)}</div>`
+    : '';
 
   const isTechOrMil = eq.genre === 'military' || eq.genre === 'scifi';
   let conditionBadge = '';
@@ -4545,6 +4983,7 @@ function renderEquipCard(eq, actionsHtml) {
         </div>
       </div>
       ${affixHtml ? `<div class="affix-list">${affixHtml}</div>` : ''}
+      ${legendHtml}
       <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">${actionsHtml}</div>
     </div>
   `;
@@ -4619,6 +5058,46 @@ function openBagModal() {
         `)).join('')}</div>`
       : '<div class="armory-empty-prompt">神兵匣暂无闲置灵器，探索废墟、拆解重炮或于天工墨壶炼化即可铸得异纹神兵。</div>';
 
+    const app = getHeroAppearancePayload();
+    const afx = getHeroAffixStats();
+    const WPN_STYLE_LABELS = { sword: '墨剑', blade: '重刃', gun: '枪炮', staff: '机关戟' };
+    const HELM_STYLE_LABELS = { hat: '墨竹斗笠', visor: '战术目镜', crown: '墨家道冠', quantum: '量子光环' };
+    const paperDollHtml = `
+      <div class="hero-paperdoll-bar">
+        <span>兵锋：<strong>${WPN_STYLE_LABELS[app.weaponStyle] || '墨剑'} T${app.weaponTier}</strong></span>
+        <span>甲胄光晕：<strong style="color:${app.armorColor};">T${app.armorTier}</strong></span>
+        <span>冠饰：<strong>${HELM_STYLE_LABELS[app.helmStyle] || '墨竹斗笠'}</strong></span>
+      </div>
+    `;
+    const afxBadges = [];
+    if (afx.atkPct > 0) afxBadges.push(`总攻+${Math.round(afx.atkPct * 100)}%`);
+    if (afx.defPct > 0) afxBadges.push(`总防+${Math.round(afx.defPct * 100)}%`);
+    if (afx.maxHpPct > 0) afxBadges.push(`生命+${Math.round(afx.maxHpPct * 100)}%`);
+    if (afx.critRate > 0) afxBadges.push(`词缀暴+${Math.round(afx.critRate * 100)}%`);
+    if (afx.armorPen > 0) afxBadges.push(`穿甲+${Math.round(afx.armorPen * 100)}%`);
+    if (afx.lifesteal > 0) afxBadges.push(`吸血+${Math.round(afx.lifesteal * 100)}%`);
+    if (afx.doubleHit > 0) afxBadges.push(`连击+${Math.round(afx.doubleHit * 100)}%`);
+    if (afx.bonusDmgPct > 0) afxBadges.push(`真伤+${Math.round(afx.bonusDmgPct * 100)}%`);
+    if (afx.bossDmgPct > 0) afxBadges.push(`首领伤+${Math.round(afx.bossDmgPct * 100)}%`);
+    if (afx.startShield > 0) afxBadges.push(`开局盾+${afx.startShield}`);
+    if (afx.thorns > 0) afxBadges.push(`荆棘+${Math.round(afx.thorns * 100)}%`);
+    if (afx.dodgeRate > 0) afxBadges.push(`闪避+${Math.round(afx.dodgeRate * 100)}%`);
+    if (afx.mpRegen > 0) afxBadges.push(`回息+${afx.mpRegen}`);
+    if (afx.mpCostReduce > 0) afxBadges.push(`省气-${Math.round(afx.mpCostReduce * 100)}%`);
+    if (afx.burnOnHit > 0) afxBadges.push(`灼烧${Math.round(afx.burnOnHit * 100)}%`);
+    if (afx.poisonOnHit > 0) afxBadges.push(`剧毒${Math.round(afx.poisonOnHit * 100)}%`);
+    if (afx.shockOnHit > 0) afxBadges.push(`感电${Math.round(afx.shockOnHit * 100)}%`);
+    if (afx.cheatDeath > 0) afxBadges.push('不屈×1');
+    if (afx.captureBonus > 0) afxBadges.push(`收妖+${Math.round(afx.captureBonus * 100)}%`);
+    if (afx.radResist > 0) afxBadges.push(`抗辐+${Math.round(afx.radResist * 100)}%`);
+    if (afx.magicFind > 0) afxBadges.push(`掉宝+${Math.round(afx.magicFind * 100)}%`);
+    if (afx.goldFind > 0) afxBadges.push(`贪婪+${Math.round(afx.goldFind * 100)}%`);
+    const affixSummaryHtml = `
+      <div class="affix-summary-strip">
+        ${afxBadges.length ? afxBadges.map((t) => `<span class="affix-chip">${t}</span>`).join('') : '<span class="affix-chip">当前尚未激活暗黑随机词缀（穿戴良品/珍品/绝世神兵激活）</span>'}
+      </div>
+    `;
+
     bodyHtml = `
       <div class="armory-sanctuary">
         <div class="armory-stage">
@@ -4647,6 +5126,8 @@ function openBagModal() {
             ${renderPedestal('relic')}
           </div>
         </div>
+        ${paperDollHtml}
+        ${affixSummaryHtml}
       </div>
       <div class="armory-vault">
         <div class="armory-vault-head">
@@ -4794,8 +5275,16 @@ function openBagModal() {
     btn.addEventListener('click', () => {
       const idx = state.bag.findIndex((b) => b.uid === btn.dataset.useUid);
       if (idx < 0) return;
-      const [entry] = state.bag.splice(idx, 1);
-      applyItemEffectOutsideBattle(ITEMS[entry.itemId]);
+      const entry = state.bag[idx];
+      const item = ITEMS[entry.itemId];
+      const ef = item?.effect || {};
+      const hasOutOfBattleEffect = Boolean(ef.hp || ef.energy || ef.food || ef.radShield || ef.clearWarn);
+      if (!hasOutOfBattleEffect) {
+        showToast(`【${item?.name || '符箓'}】需在战斗中祭出施展！`, 'warn');
+        return;
+      }
+      state.bag.splice(idx, 1);
+      applyItemEffectOutsideBattle(item);
       openBagModal();
     });
   });
@@ -4838,7 +5327,11 @@ function applyItemEffectOutsideBattle(item) {
   if (ef.food) state.food = Math.min(100, state.food + ef.food);
   if (ef.radShield) state.radShield += ef.radShield;
   if (ef.clearWarn) state.warn = 0;
-  sfx.pick('fine');
+  if (item.isTalisman || item.category === 'talisman') {
+    sfx.playTalismanCast?.();
+  } else {
+    sfx.pick('fine');
+  }
   showToast(`已使用【${item.name}】！`, 'success');
   updateHUD();
   scheduleSave();
@@ -5279,6 +5772,183 @@ function openShop() {
     const earned = sellAllTrash(1);
     showToast(earned > 0 ? `售出废品获 ${earned} 废土币！` : '暂无可售废品。', earned > 0 ? 'success' : 'info');
     openShop();
+  });
+}
+
+// 天穹白玉京 · 天工量子军械库（Lv.20-30 高阶神兵/护甲/墨家符箓 + 300币词条重铸）
+const QUANTUM_EQUIP_STOCK = [
+  { equipId: 'wpn_quantum_arc',       quality: 'legend', price: 3200, reqLv: 20 },
+  { equipId: 'wpn_citadel_gauss',     quality: 'legend', price: 4800, reqLv: 24 },
+  { equipId: 'wpn_tianshu_scepter',   quality: 'legend', price: 4600, reqLv: 24 },
+  { equipId: 'wpn_baiyujing_taixu',   quality: 'legend', price: 5600, reqLv: 28 },
+  { equipId: 'armor_quantum_jade',    quality: 'legend', price: 3600, reqLv: 20 },
+  { equipId: 'armor_archon_mantle',   quality: 'legend', price: 4200, reqLv: 24 },
+  { equipId: 'armor_sky_taixu_plate', quality: 'legend', price: 5400, reqLv: 28 }
+];
+
+const QUANTUM_ITEM_STOCK = [
+  { itemId: 38, price: 180 },
+  { itemId: 39, price: 210 },
+  { itemId: 40, price: 260 },
+  { itemId: 41, price: 340 },
+  { itemId: 42, price: 190 },
+  { itemId: 43, price: 290 },
+  { itemId: 44, price: 240 },
+  { itemId: 45, price: 220 },
+  { itemId: 59, price: 520 }
+];
+
+const REFORGE_COST = 300;
+
+function openQuantumArmoryShop(tab = 'shop') {
+  const stats = getHeroStats();
+  const bagFull = state.bag.length >= stats.bagMax;
+  const tabsHtml = `
+    <div class="armory-tabs-bar" style="margin-bottom:10px;">
+      <button class="armory-tab-btn${tab === 'shop' ? ' active' : ''}" data-qtab="shop">高阶量子神兵 (Lv.20–30)</button>
+      <button class="armory-tab-btn${tab === 'talismans' ? ' active' : ''}" data-qtab="talismans">墨家机关符箓</button>
+      <button class="armory-tab-btn${tab === 'reforge' ? ' active' : ''}" data-qtab="reforge">词条重铸 (${REFORGE_COST}币)</button>
+    </div>
+  `;
+
+  let bodyHtml = '';
+  if (tab === 'shop') {
+    bodyHtml = QUANTUM_EQUIP_STOCK.map((entry) => {
+      const tpl = EQUIPMENT[entry.equipId];
+      if (!tpl) return '';
+      const q = QUALITY[entry.quality] || QUALITY.legend;
+      const noGold = state.gold < entry.price;
+      return `
+        <div class="modal-list-item">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            ${renderVisualThumb('equip', tpl, 44)}
+            <div style="min-width:0;">
+              <div class="modal-item-title" style="color:${q.color};">${escapeHtml(tpl.name)} <small style="opacity:0.75;">(推荐 Lv.${entry.reqLv} · 随机双词缀+绝世特效)</small></div>
+              <div class="modal-item-desc">${escapeHtml(tpl.desc)}</div>
+            </div>
+          </div>
+          <button class="btn btn-amber btn-sm" data-qbuy-eq="${entry.equipId}" data-qbuy-q="${entry.quality}" data-qbuy-price="${entry.price}" ${noGold ? 'disabled' : ''}>${noGold ? `缺币 (${entry.price}币)` : `锻购 ${entry.price}币`}</button>
+        </div>
+      `;
+    }).join('');
+  } else if (tab === 'talismans') {
+    bodyHtml = QUANTUM_ITEM_STOCK.map((s) => {
+      const it = ITEMS[s.itemId];
+      if (!it) return '';
+      const noGold = state.gold < s.price;
+      const isDisabled = noGold || bagFull;
+      const btnLabel = bagFull ? '行囊已满' : noGold ? `缺币 (${s.price}币)` : `买 ${s.price}币`;
+      return `
+        <div class="modal-list-item">
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${renderVisualThumb('item', it, 44)}
+            <div>
+              <div class="modal-item-title">${escapeHtml(it.name)}</div>
+              <div class="modal-item-desc">${escapeHtml(it.desc)}</div>
+            </div>
+          </div>
+          <button class="btn btn-amber btn-sm" data-qbuy-item="${s.itemId}" data-qbuy-price="${s.price}" ${isDisabled ? 'disabled' : ''}>${btnLabel}</button>
+        </div>
+      `;
+    }).join('');
+  } else {
+    const slotsHtml = ['weapon', 'armor', 'mech', 'relic'].map((slot) => {
+      const eq = state.equipped?.[slot];
+      if (!eq) {
+        return `
+          <div class="modal-list-item">
+            <div>
+              <div class="modal-item-title">${SLOT_NAMES[slot]} · 未穿戴</div>
+              <div class="modal-item-desc">请先在神兵整备中装备该部位灵器，再行重铸暗黑词条。</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" disabled>空槽</button>
+          </div>
+        `;
+      }
+      const noGold = state.gold < REFORGE_COST;
+      const targetQuality = eq.quality === 'common' ? 'fine' : eq.quality;
+      return renderEquipCard(eq, `
+        <button class="btn btn-amber btn-sm" data-reforge-slot="${slot}" ${noGold ? 'disabled' : ''}>${noGold ? `缺币 (${REFORGE_COST}币)` : `词条重铸 ${REFORGE_COST}币`}${eq.quality === 'common' ? ' (升至良品)' : ''}</button>
+      `);
+    }).join('');
+    bodyHtml = `
+      <div class="modal-item-desc" style="margin-bottom:8px;">消耗 <strong>${REFORGE_COST} 废土币</strong>，利用白玉京量子晶格炉重新洗炼当前穿戴装备的全部暗黑前缀、后缀与绝世特效！</div>
+      <div class="armory-equip-grid">${slotsHtml}</div>
+    `;
+  }
+
+  openModal(
+    `天工量子军械库 · 持有 ${state.gold} 废土币`,
+    tabsHtml + bodyHtml,
+    '<button class="btn btn-green" id="qshop-sell-all">一键售出废品</button><button class="btn btn-secondary" id="modal-default-close">离开军械库</button>'
+  );
+
+  $('modal-body').querySelectorAll('[data-qtab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      sfx.uiTick?.();
+      openQuantumArmoryShop(btn.dataset.qtab);
+    });
+  });
+
+  $('modal-body').querySelectorAll('[data-qbuy-eq]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const eqId = btn.dataset.qbuyEq;
+      const qual = btn.dataset.qbuyQ || 'legend';
+      const price = Number(btn.dataset.qbuyPrice) || 3000;
+      if (state.gold < price) { showToast('废土币不足！', 'warn'); return; }
+      const eq = rollEquipment(eqId, qual);
+      if (!eq) return;
+      state.gold -= price;
+      addEquipmentToBag(eq);
+      sfx.playLootAffixDrop?.(eq.quality);
+      showToast(`锻购成功！获得【${QUALITY[eq.quality].name}】${eq.name}！`, 'success');
+      updateHUD();
+      scheduleSave();
+      openQuantumArmoryShop('shop');
+    });
+  });
+
+  $('modal-body').querySelectorAll('[data-qbuy-item]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = Number(btn.dataset.qbuyItem);
+      const price = Number(btn.dataset.qbuyPrice);
+      const curStats = getHeroStats();
+      if (state.gold < price) { showToast('废土币不足！', 'warn'); return; }
+      if (state.bag.length >= curStats.bagMax) { showToast('行囊已满！', 'warn'); return; }
+      state.gold -= price;
+      state.bag.push({ uid: `qbuy_${Date.now()}_${Math.random()}`, itemId: id, quality: 'rare' });
+      sfx.coin();
+      showToast(`购得【${ITEMS[id].name}】！`, 'success');
+      updateHUD();
+      scheduleSave();
+      openQuantumArmoryShop('talismans');
+    });
+  });
+
+  $('modal-body').querySelectorAll('[data-reforge-slot]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const slot = btn.dataset.reforgeSlot;
+      const curEq = state.equipped?.[slot];
+      if (!curEq) return;
+      if (state.gold < REFORGE_COST) { showToast(`词条重铸需 ${REFORGE_COST} 废土币！`, 'warn'); return; }
+      const nextQuality = curEq.quality === 'common' ? 'fine' : (curEq.quality || 'fine');
+      const reforged = rollEquipment(curEq.id, nextQuality);
+      if (!reforged) return;
+      state.gold -= REFORGE_COST;
+      state.equipped[slot] = reforged;
+      syncHeroVisuals();
+      sfx.playLootAffixDrop?.(reforged.quality);
+      showToast(`词条重铸成功！焕然一新：【${reforged.name}】！`, 'success');
+      updateHUD();
+      scheduleSave();
+      openQuantumArmoryShop('reforge');
+    });
+  });
+
+  $('qshop-sell-all')?.addEventListener('click', () => {
+    const earned = sellAllTrash(1.2);
+    showToast(earned > 0 ? `白玉京溢价回收废品，获 ${earned} 废土币！` : '暂无可售废品。', earned > 0 ? 'success' : 'info');
+    openQuantumArmoryShop(tab);
   });
 }
 
@@ -6122,6 +6792,7 @@ function init() {
 
   // 加载初始地图并启动世界循环
   enterMap(state.mapId, state.heroX, state.heroY, { suppressArrivalFx: suppressInitialArrival });
+  syncHeroVisuals();
   world.start();
   startHazardLoop();
   updateHUD();

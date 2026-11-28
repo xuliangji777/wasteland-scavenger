@@ -1,5 +1,5 @@
-import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=30';
-import { sfx } from './audio.js?v=30';
+import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=31';
+import { sfx } from './audio.js?v=31';
 
 // ==================== 工具函数 ====================
 function clamp(v, min, max) {
@@ -10,11 +10,31 @@ function dist(ax, ay, bx, by) {
   return Math.hypot(ax - bx, ay - by);
 }
 
+function hexToRgb(color, fallback = [200, 214, 229]) {
+  if (typeof color !== 'string') return fallback;
+  const raw = color.trim().replace(/^#/, '');
+  if (raw.length === 3) {
+    const r = parseInt(raw[0] + raw[0], 16);
+    const g = parseInt(raw[1] + raw[1], 16);
+    const b = parseInt(raw[2] + raw[2], 16);
+    if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) return [r, g, b];
+  } else if (raw.length === 6) {
+    const r = parseInt(raw.slice(0, 2), 16);
+    const g = parseInt(raw.slice(2, 4), 16);
+    const b = parseInt(raw.slice(4, 6), 16);
+    if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) return [r, g, b];
+  }
+  return fallback;
+}
+
 function resolveBgPath(bgAsset) {
   if (!bgAsset) return null;
+  if (ASSETS[bgAsset]) return ASSETS[bgAsset];
   if (bgAsset.startsWith('assets/') || bgAsset.startsWith('/') || bgAsset.startsWith('http')) {
     return bgAsset;
   }
+  const stem = bgAsset.replace(/\.(webp|png|jpg|jpeg)$/i, '');
+  if (ASSETS[stem]) return ASSETS[stem];
   return `assets/${bgAsset}`;
 }
 
@@ -241,6 +261,17 @@ export class InkWorldEngine {
       targetY: null,
       weaponType: 'blade',
       _stuckFrames: 0
+    };
+
+    // 主角实时纸娃娃装备外观（Diablo 风格大地图可见武器/护甲灵环/头饰）
+    this.heroAppearance = {
+      weaponStyle: 'sword',
+      weaponTier: 1,
+      weaponColor: '#c8d6e5',
+      armorTier: 1,
+      armorColor: '#6d8a7e',
+      helmStyle: 'hat',
+      rarityTier: 1
     };
 
     // 护驾灵兽跟随状态
@@ -533,7 +564,29 @@ export class InkWorldEngine {
 
   /** 可选：设置主角外观武器类型 */
   setHeroWeapon(weaponType) {
-    this.hero.weaponType = weaponType || 'blade';
+    const style = weaponType || 'blade';
+    this.hero.weaponType = style;
+    if (['sword', 'blade', 'gun', 'staff'].includes(style)) {
+      this.heroAppearance = { ...this.heroAppearance, weaponStyle: style };
+      this._pausedFrameDrawn = false;
+    }
+  }
+
+  /** 实时更新主角大地图纸娃娃装备外观并立即触发重绘 */
+  setHeroAppearance(app) {
+    if (!app || typeof app !== 'object') return;
+    this.heroAppearance = {
+      ...this.heroAppearance,
+      ...app
+    };
+    if (app.weaponStyle) {
+      this.hero.weaponType = app.weaponStyle;
+    }
+    this._pausedFrameDrawn = false;
+    if (this.map && this.paused) {
+      this.draw();
+      this._pausedFrameDrawn = true;
+    }
   }
 
   /** 供移动端虚拟十字键调用：dir 为 'up' | 'down' | 'left' | 'right' */
@@ -1667,13 +1720,15 @@ export class InkWorldEngine {
     this.particles = [];
     if (!this.map) return;
     const scene = this.map.sceneType;
-    const pType = scene === 'interior'
-      ? 'mote'
-      : scene === 'cave'
-        ? 'cave_mote'
-        : (WEATHERS[this.weatherId]?.particleType || 'leaf');
+    const pType = this.map.theme === 'citadel'
+      ? 'citadel_mote'
+      : scene === 'interior'
+        ? 'mote'
+        : scene === 'cave'
+          ? 'cave_mote'
+          : (WEATHERS[this.weatherId]?.particleType || 'leaf');
 
-    const countMap = { rain: 85, sand: 68, rad: 56, heat: 36, leaf: 30, mote: 24, cave_mote: 34 };
+    const countMap = { rain: 85, sand: 68, rad: 56, heat: 36, leaf: 30, mote: 24, cave_mote: 34, citadel_mote: 44 };
     const count = countMap[pType] || 32;
     const w = this.viewW || 960;
     const h = this.viewH || 540;
@@ -1685,7 +1740,22 @@ export class InkWorldEngine {
 
   _makeParticle(pType, w, h, randomPos) {
     const x = randomPos ? Math.random() * w : (pType === 'sand' ? w + 10 : Math.random() * w);
-    const y = randomPos ? Math.random() * h : (pType === 'heat' ? h + 10 : -10);
+    const y = randomPos ? Math.random() * h : ((pType === 'heat' || pType === 'citadel_mote') ? h + 10 : -10);
+    if (pType === 'citadel_mote') {
+      const isGold = Math.random() < 0.38;
+      return {
+        type: pType,
+        x,
+        y,
+        vx: -10 + Math.random() * 20,
+        vy: -14 - Math.random() * 22,
+        r: 1.5 + Math.random() * 2.1,
+        a: 0.34 + Math.random() * 0.44,
+        phase: Math.random() * 6.28,
+        isGold,
+        sparkle: Math.random() < 0.32
+      };
+    }
     if (pType === 'rain') {
       return { type: pType, x, y, vx: -110 - Math.random() * 45, vy: 430 + Math.random() * 160, len: 12 + Math.random() * 10, r: 1.2, a: 0.28 + Math.random() * 0.35 };
     }
@@ -1821,9 +1891,15 @@ export class InkWorldEngine {
         // 中央垂直水墨薄雾过渡带，柔和消除左右拼接接缝
         const seamW = Math.max(90, Math.round(mw * 0.04));
         const vGrad = ctx.createLinearGradient(tileW - seamW, 0, tileW + seamW, 0);
-        vGrad.addColorStop(0, 'rgba(10, 14, 18, 0)');
-        vGrad.addColorStop(0.5, 'rgba(10, 14, 18, 0.22)');
-        vGrad.addColorStop(1, 'rgba(10, 14, 18, 0)');
+        if (map.theme === 'citadel') {
+          vGrad.addColorStop(0, 'rgba(186, 236, 255, 0)');
+          vGrad.addColorStop(0.5, 'rgba(186, 236, 255, 0.16)');
+          vGrad.addColorStop(1, 'rgba(186, 236, 255, 0)');
+        } else {
+          vGrad.addColorStop(0, 'rgba(10, 14, 18, 0)');
+          vGrad.addColorStop(0.5, 'rgba(10, 14, 18, 0.22)');
+          vGrad.addColorStop(1, 'rgba(10, 14, 18, 0)');
+        }
         ctx.fillStyle = vGrad;
         ctx.fillRect(tileW - seamW, 0, seamW * 2, mh);
       } else {
@@ -2991,11 +3067,20 @@ export class InkWorldEngine {
     ctx.restore();
   }
 
-  // ==================== 主角「沈砚」真 4 帧手绘行走精灵 + 朱砂墨巾飘动 ====================
+  // ==================== 主角「沈砚」真 4 帧手绘行走精灵 + 实时纸娃娃装备外观 ====================
 
   _drawHero(ctx) {
     const h = this.hero;
     const t = this._elapsed;
+    const app = this.heroAppearance || {
+      weaponStyle: 'sword',
+      weaponTier: 1,
+      weaponColor: '#c8d6e5',
+      armorTier: 1,
+      armorColor: '#6d8a7e',
+      helmStyle: 'hat',
+      rarityTier: 1
+    };
     const strideBounce = h.moving ? Math.abs(Math.sin(h.walkPhase)) * 1.5 : 0;
     const idleWave = Math.sin(t * 2.6);
     const idleBreathY = h.moving ? 1 : (1 + idleWave * 0.015);
@@ -3014,6 +3099,11 @@ export class InkWorldEngine {
     ctx.beginPath();
     ctx.ellipse(0, 3, 21 * shadowScale, 7 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // 护甲阶位脚下墨纹灵环（armorTier >= 2）
+    if ((app.armorTier || 1) >= 2) {
+      this._drawHeroArmorFootAura(ctx, app, t);
+    }
 
     if (h.moving && walkSprite && walkSprite.loaded && !walkSprite.error && walkSprite.img.naturalHeight > 0) {
       // 真 4 帧手绘行走序列（hero_walk.png: 4 帧横向等宽，朝右行走，足底紧贴 y = 0）
@@ -3035,6 +3125,13 @@ export class InkWorldEngine {
         frameIdx * cellW, 0, cellW, cellH,
         -drawW * 0.5, -drawH, drawW, drawH
       );
+
+      // 纸娃娃前景装备层（武器 + 头饰 + 高阶护甲肩部灵气）
+      this._drawHeroWeapon(ctx, app, drawH, t, h.walkPhase, true);
+      this._drawHeroHelmAccent(ctx, app, drawH, t);
+      if ((app.armorTier || 1) >= 3) {
+        this._drawHeroShoulderQiMotes(ctx, app, drawH, t);
+      }
       ctx.restore();
     } else if (idleSprite && idleSprite.loaded && !idleSprite.error && idleSprite.img.naturalHeight > 0) {
       // 静止站立：hero.png 柔和呼吸，与行走基线 (+3) 完全齐平零跳帧
@@ -3044,18 +3141,533 @@ export class InkWorldEngine {
       ctx.translate(0, 3);
       ctx.scale(flipX * idleBreathX, idleBreathY);
       ctx.drawImage(img, -drawW * 0.5, -drawH, drawW, drawH);
+
+      // 纸娃娃前景装备层（武器 + 头饰 + 高阶护甲肩部灵气）
+      this._drawHeroWeapon(ctx, app, drawH, t, 0, false);
+      this._drawHeroHelmAccent(ctx, app, drawH, t);
+      if ((app.armorTier || 1) >= 3) {
+        this._drawHeroShoulderQiMotes(ctx, app, drawH, t);
+      }
       ctx.restore();
     } else {
       // 精灵加载前回退剪影
+      ctx.save();
+      ctx.translate(0, 3 - strideBounce);
+      ctx.scale(flipX, 1);
       ctx.fillStyle = '#1f1c18';
       ctx.strokeStyle = '#c89b3c';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.roundRect(-12, -52 - strideBounce, 24, 50, 6);
+      ctx.roundRect(-12, -55, 24, 50, 6);
       ctx.fill();
       ctx.stroke();
+      this._drawHeroWeapon(ctx, app, drawH, t, h.moving ? h.walkPhase : 0, h.moving);
+      this._drawHeroHelmAccent(ctx, app, drawH, t);
+      if ((app.armorTier || 1) >= 3) {
+        this._drawHeroShoulderQiMotes(ctx, app, drawH, t);
+      }
+      ctx.restore();
     }
 
+    ctx.restore();
+  }
+
+  /** 护甲阶位脚下墨纹灵环（tier 2 基础单环，tier 3-5 双环墨符灵阵） */
+  _drawHeroArmorFootAura(ctx, app, t) {
+    const tier = clamp(app.armorTier || 1, 1, 5);
+    const [r, g, b] = hexToRgb(app.armorColor, [109, 138, 126]);
+    const pulse = 0.65 + 0.35 * Math.sin(t * (2.4 + tier * 0.35));
+    const baseAlpha = 0.16 + tier * 0.065;
+
+    ctx.save();
+    ctx.translate(0, 3);
+    ctx.scale(1, 0.42);
+
+    // 柔和接地灵气光晕
+    const auraR = 26 + tier * 2.2;
+    const grad = ctx.createRadialGradient(0, 0, 5, 0, 0, auraR);
+    grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.85 * pulse).toFixed(3)})`);
+    grad.addColorStop(0.65, `rgba(${r}, ${g}, ${b}, ${(baseAlpha * 0.35 * pulse).toFixed(3)})`);
+    grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, auraR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 外圈旋转墨纹虚环
+    ctx.save();
+    ctx.rotate(t * 0.55);
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${(0.42 + tier * 0.09 * pulse).toFixed(3)})`;
+    ctx.lineWidth = tier >= 4 ? 2.1 : 1.5;
+    ctx.setLineDash(tier >= 3 ? [8, 5, 3, 5] : [7, 6]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 24 + tier * 0.8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // 珍品/绝世（tier 3-5）内圈反旋符环与四方墨菱点
+    if (tier >= 3) {
+      ctx.save();
+      ctx.rotate(-t * 0.82);
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${(0.36 + pulse * 0.28).toFixed(3)})`;
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 19, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const glyphCount = tier >= 5 ? 6 : 4;
+      ctx.fillStyle = `rgba(255, 248, 228, ${(0.55 + pulse * 0.35).toFixed(3)})`;
+      for (let i = 0; i < glyphCount; i++) {
+        const ang = (i * Math.PI * 2) / glyphCount;
+        const gx = Math.cos(ang) * (24 + tier * 0.8);
+        const gy = Math.sin(ang) * (24 + tier * 0.8);
+        ctx.beginPath();
+        ctx.arc(gx, gy, tier >= 5 ? 2.1 : 1.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  /** 高阶护甲（tier 3-5）环绕肩部的浮游灵气粒子 */
+  _drawHeroShoulderQiMotes(ctx, app, drawH, t) {
+    const tier = clamp(app.armorTier || 3, 3, 5);
+    const [r, g, b] = hexToRgb(app.armorColor, [168, 123, 199]);
+    const count = tier; // 3..5 motes
+    const centerY = -drawH * 0.63;
+
+    ctx.save();
+    for (let i = 0; i < count; i++) {
+      const ang = t * (1.7 + tier * 0.18) + (i * Math.PI * 2) / count;
+      const mx = Math.cos(ang) * (15.5 + (i % 2) * 2.5);
+      const my = centerY + Math.sin(ang * 1.35) * 6.5 - Math.abs(Math.sin(ang)) * 2.2;
+      const flicker = 0.7 + 0.3 * Math.sin(t * 7.2 + i * 2.1);
+      const coreR = tier >= 5 ? 2.1 : 1.7;
+
+      const glow = ctx.createRadialGradient(mx, my, 0.4, mx, my, coreR * 3.8);
+      glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.72 * flicker).toFixed(3)})`);
+      glow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(mx, my, coreR * 3.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(255, 250, 236, ${(0.88 * flicker).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(mx, my, coreR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** 主角手持纸娃娃装备武器（随步频自然摆动，支持 sword / blade / gun / staff） */
+  _drawHeroWeapon(ctx, app, drawH, t, walkPhase, moving) {
+    const style = app.weaponStyle || 'sword';
+    if (style === 'none') return;
+    const tier = clamp(app.weaponTier || 1, 1, 5);
+    const [wr, wg, wb] = hexToRgb(app.weaponColor, [200, 214, 229]);
+    const hasGlow = tier >= 3;
+    const isLegend = tier >= 4;
+    const pulse = 0.72 + 0.28 * Math.sin(t * 5.2);
+
+    const swing = moving
+      ? Math.sin(walkPhase) * 0.24
+      : Math.sin(t * 2.1) * 0.04;
+    const strideShiftX = moving ? Math.cos(walkPhase) * 2.0 : 0;
+    const handX = 8.5 + strideShiftX;
+    const handY = -drawH * 0.42;
+
+    ctx.save();
+    ctx.translate(handX, handY);
+
+    if (style === 'blade') {
+      // 重型废土锯齿砍刀 / 链锯战刃（灼热余烬刃缘）
+      ctx.rotate(-0.44 + swing * 1.08);
+
+      // 高阶刀身外辉
+      if (hasGlow) {
+        ctx.strokeStyle = `rgba(${wr}, ${wg}, ${wb}, ${(0.28 + (isLegend ? 0.16 : 0)) * pulse})`;
+        ctx.lineWidth = isLegend ? 9.5 : 7.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(3, -1);
+        ctx.lineTo(29, -2.5);
+        ctx.stroke();
+      }
+
+      // 握柄与粗重护手
+      ctx.fillStyle = '#251e1a';
+      ctx.strokeStyle = '#110e0c';
+      ctx.lineWidth = 1.2;
+      ctx.fillRect(-8, -2.2, 9, 4.4);
+      ctx.strokeRect(-8, -2.2, 9, 4.4);
+
+      ctx.fillStyle = '#6c5846';
+      ctx.fillRect(-1.5, -5.2, 3.2, 10.4);
+      ctx.strokeRect(-1.5, -5.2, 3.2, 10.4);
+
+      // 厚重暗铁刀背与锯齿刃体
+      ctx.fillStyle = '#2c3035';
+      ctx.strokeStyle = '#12100e';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(1.5, -4.6);
+      ctx.lineTo(27.5, -5.6);
+      ctx.lineTo(31.5, -1.6);
+      // 锯齿刃口
+      ctx.lineTo(27.5, 2.8);
+      ctx.lineTo(24.5, 1.0);
+      ctx.lineTo(21.5, 3.2);
+      ctx.lineTo(18.5, 1.2);
+      ctx.lineTo(15.5, 3.3);
+      ctx.lineTo(12.5, 1.2);
+      ctx.lineTo(9.5, 3.2);
+      ctx.lineTo(6.5, 1.2);
+      ctx.lineTo(1.5, 3.0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 灼热余烬刃缘
+      ctx.strokeStyle = hasGlow
+        ? `rgba(255, 154, 64, ${(0.85 + 0.15 * pulse).toFixed(3)})`
+        : `rgba(${wr}, ${wg}, ${wb}, 0.82)`;
+      ctx.lineWidth = hasGlow ? 2.1 : 1.5;
+      ctx.beginPath();
+      ctx.moveTo(2.5, 2.4);
+      ctx.lineTo(28.5, 1.9);
+      ctx.lineTo(31.0, -1.5);
+      ctx.stroke();
+
+      // 刀背工业铆钉与微光槽
+      ctx.strokeStyle = `rgba(${wr}, ${wg}, ${wb}, ${hasGlow ? 0.92 : 0.55})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(4, -2.5);
+      ctx.lineTo(24, -3.2);
+      ctx.stroke();
+    } else if (style === 'gun') {
+      // 墨工赛博电磁步枪 / 等离子轨道枪（青金线圈枪管）
+      ctx.rotate(-0.16 + swing * 0.52);
+
+      // 枪托与墨黑机匣
+      ctx.fillStyle = '#1f252c';
+      ctx.strokeStyle = '#0e1115';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(-10, -2.2, 17, 5.4, 1.5);
+      ctx.fill();
+      ctx.stroke();
+
+      // 握把
+      ctx.fillStyle = '#2d2622';
+      ctx.beginPath();
+      ctx.moveTo(-2, 3);
+      ctx.lineTo(-4.5, 8);
+      ctx.lineTo(-0.5, 8);
+      ctx.lineTo(1.5, 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 双轨电磁枪管
+      ctx.fillStyle = '#36414d';
+      ctx.fillRect(6, -3.4, 21, 2.2);
+      ctx.fillRect(6, 0.4, 21, 2.2);
+      ctx.strokeRect(6, -3.4, 21, 2.2);
+      ctx.strokeRect(6, 0.4, 21, 2.2);
+
+      // 发光量子/电磁线圈槽
+      if (hasGlow) {
+        ctx.strokeStyle = `rgba(${wr}, ${wg}, ${wb}, ${(0.34 * pulse).toFixed(3)})`;
+        ctx.lineWidth = 5.5;
+        ctx.beginPath();
+        ctx.moveTo(7, -0.4);
+        ctx.lineTo(27.5, -0.4);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = `rgba(${wr}, ${wg}, ${wb}, ${(0.84 + 0.16 * pulse).toFixed(3)})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(7, -0.4);
+      ctx.lineTo(26.5, -0.4);
+      ctx.stroke();
+
+      // 3 道青金电磁环箍
+      for (let i = 0; i < 3; i++) {
+        const cx = 10 + i * 6;
+        ctx.strokeStyle = i === 1 && isLegend ? '#f6d27a' : `rgb(${wr}, ${wg}, ${wb})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cx, -4.0);
+        ctx.lineTo(cx, 3.2);
+        ctx.stroke();
+      }
+
+      // 枪口高能辉光核心
+      if (hasGlow) {
+        const muz = ctx.createRadialGradient(27.5, -0.4, 0.5, 27.5, -0.4, isLegend ? 6.5 : 4.5);
+        muz.addColorStop(0, `rgba(255, 255, 255, ${(0.9 * pulse).toFixed(3)})`);
+        muz.addColorStop(0.5, `rgba(${wr}, ${wg}, ${wb}, ${(0.65 * pulse).toFixed(3)})`);
+        muz.addColorStop(1, `rgba(${wr}, ${wg}, ${wb}, 0)`);
+        ctx.fillStyle = muz;
+        ctx.beginPath();
+        ctx.arc(27.5, -0.4, isLegend ? 6.5 : 4.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (style === 'staff') {
+      // 古铜墨家机关戟 / 灵杖（顶部悬浮旋转墨符光环）
+      ctx.rotate(-1.02 + swing * 0.72);
+
+      // 乌木古铜长柄
+      ctx.strokeStyle = '#14110f';
+      ctx.lineWidth = 4.0;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-18, 0);
+      ctx.lineTo(27, 0);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#8b6a3e';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(-17, 0);
+      ctx.lineTo(26, 0);
+      ctx.stroke();
+
+      // 机关月牙戟刃与青铜矛尖
+      ctx.fillStyle = '#c89b48';
+      ctx.strokeStyle = '#15120f';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(25, -2.2);
+      ctx.lineTo(36, 0);
+      ctx.lineTo(25, 2.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 侧翼月牙机关刃
+      ctx.fillStyle = `rgb(${wr}, ${wg}, ${wb})`;
+      ctx.beginPath();
+      ctx.moveTo(19, -1.5);
+      ctx.quadraticCurveTo(23, -10.5, 29, -7.5);
+      ctx.quadraticCurveTo(24, -4.2, 23.5, -1.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 旋转悬浮墨符灵环
+      ctx.save();
+      ctx.translate(22, 0);
+      ctx.rotate(t * 2.4);
+      const ringR = hasGlow ? 8.2 : 6.6;
+      if (hasGlow) {
+        const rg = ctx.createRadialGradient(0, 0, 1, 0, 0, ringR * 1.55);
+        rg.addColorStop(0, `rgba(${wr}, ${wg}, ${wb}, ${(0.45 * pulse).toFixed(3)})`);
+        rg.addColorStop(1, `rgba(${wr}, ${wg}, ${wb}, 0)`);
+        ctx.fillStyle = rg;
+        ctx.beginPath();
+        ctx.arc(0, 0, ringR * 1.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = `rgba(${wr}, ${wg}, ${wb}, ${(0.78 + 0.22 * pulse).toFixed(3)})`;
+      ctx.lineWidth = hasGlow ? 1.7 : 1.3;
+      ctx.setLineDash([4.5, 3.2]);
+      ctx.beginPath();
+      ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 灵环核心晶点
+      ctx.fillStyle = '#fff9e6';
+      ctx.beginPath();
+      ctx.arc(0, 0, isLegend ? 2.4 : 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else {
+      // 'sword' — 墨家直刃双锋汉剑（中脊发光血槽，高阶剑辉）
+      ctx.rotate(-0.56 + swing);
+
+      // 高阶剑气辉光
+      if (hasGlow) {
+        ctx.strokeStyle = `rgba(${wr}, ${wg}, ${wb}, ${(0.28 + (isLegend ? 0.18 : 0)) * pulse})`;
+        ctx.lineWidth = isLegend ? 8.5 : 6.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(2, 0);
+        ctx.lineTo(31, 0);
+        ctx.stroke();
+      }
+
+      // 墨绳剑柄与剑首
+      ctx.fillStyle = '#241e1a';
+      ctx.strokeStyle = '#110e0c';
+      ctx.lineWidth = 1.1;
+      ctx.fillRect(-7.5, -1.6, 7.5, 3.2);
+      ctx.strokeRect(-7.5, -1.6, 7.5, 3.2);
+
+      ctx.fillStyle = '#d4a64a';
+      ctx.beginPath();
+      ctx.arc(-8.2, 0, 2.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 墨家菱形青铜剑格
+      ctx.fillStyle = isLegend ? '#f0c766' : '#c89b3c';
+      ctx.strokeStyle = '#15120e';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(0, -6.2);
+      ctx.lineTo(3.2, 0);
+      ctx.lineTo(0, 6.2);
+      ctx.lineTo(-2.2, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 双锋直剑剑身
+      ctx.fillStyle = '#e5edf4';
+      ctx.strokeStyle = '#14171a';
+      ctx.lineWidth = 1.15;
+      ctx.beginPath();
+      ctx.moveTo(2.4, -2.6);
+      ctx.lineTo(27.5, -1.8);
+      ctx.lineTo(33.5, 0);
+      ctx.lineTo(27.5, 1.8);
+      ctx.lineTo(2.4, 2.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 中脊发光血槽（weaponColor）
+      ctx.strokeStyle = `rgba(${wr}, ${wg}, ${wb}, ${(hasGlow ? 0.96 : 0.78).toFixed(3)})`;
+      ctx.lineWidth = hasGlow ? 1.7 : 1.2;
+      ctx.beginPath();
+      ctx.moveTo(3.2, 0);
+      ctx.lineTo(29.5, 0);
+      ctx.stroke();
+
+      // 绝世剑尖星芒高光
+      if (isLegend) {
+        ctx.fillStyle = `rgba(255, 252, 240, ${(0.75 + 0.25 * pulse).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(31.5, 0, 1.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /** 头饰精致视觉点缀（'hat' 保留原斗笠干净；'visor' / 'crown' / 'quantum'） */
+  _drawHeroHelmAccent(ctx, app, drawH, t) {
+    const helm = app.helmStyle || 'hat';
+    if (helm === 'hat') return;
+
+    ctx.save();
+    if (helm === 'visor') {
+      // 战术青光护目镜反光
+      const vy = -drawH * 0.78;
+      const pulse = 0.75 + 0.25 * Math.sin(t * 4.8);
+      const glow = ctx.createRadialGradient(6.5, vy, 1, 6.5, vy, 10.5);
+      glow.addColorStop(0, `rgba(56, 232, 255, ${(0.55 * pulse).toFixed(3)})`);
+      glow.addColorStop(1, 'rgba(56, 232, 255, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(6.5, vy, 10.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#0e2230';
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(1.5, vy + 0.4);
+      ctx.lineTo(10.8, vy - 1.1);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(92, 242, 255, ${(0.9 + 0.1 * pulse).toFixed(3)})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(2.0, vy + 0.3);
+      ctx.lineTo(10.4, vy - 1.0);
+      ctx.stroke();
+
+      // 扫光亮点
+      const glintT = (t * 1.4) % 1;
+      const gx = 2.5 + glintT * 7.5;
+      const gy = vy + 0.2 - glintT * 1.2;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(gx, gy, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (helm === 'crown') {
+      // 古金墨家道冠剪影
+      const cy = -drawH * 0.94;
+      ctx.fillStyle = '#e5b84b';
+      ctx.strokeStyle = '#1a140d';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(-7.5, cy + 2);
+      ctx.lineTo(-5.8, cy - 5.2);
+      ctx.lineTo(-2.4, cy - 1.8);
+      ctx.lineTo(0, cy - 8.2);
+      ctx.lineTo(2.4, cy - 1.8);
+      ctx.lineTo(5.8, cy - 5.2);
+      ctx.lineTo(7.5, cy + 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 道冠中央玉金明珠
+      ctx.fillStyle = '#fff3be';
+      ctx.beginPath();
+      ctx.arc(0, cy - 1.8, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (helm === 'quantum') {
+      // 悬浮半透全息青金量子光环
+      const bob = Math.sin(t * 3.2) * 1.4;
+      const hy = -drawH * 0.99 + bob;
+      const pulse = 0.72 + 0.28 * Math.sin(t * 4.4);
+
+      ctx.save();
+      ctx.translate(0, hy);
+      ctx.scale(1, 0.34);
+
+      // 柔和青金全息辉光
+      const haloGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, 19);
+      haloGrad.addColorStop(0, 'rgba(56, 232, 255, 0)');
+      haloGrad.addColorStop(0.65, `rgba(56, 232, 255, ${(0.34 * pulse).toFixed(3)})`);
+      haloGrad.addColorStop(1, 'rgba(255, 224, 130, 0)');
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 19, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 外青环
+      ctx.rotate(t * 1.6);
+      ctx.strokeStyle = `rgba(56, 232, 255, ${(0.82 * pulse).toFixed(3)})`;
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([12, 6, 5, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 14.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 内金环
+      ctx.rotate(-t * 2.8);
+      ctx.strokeStyle = `rgba(255, 226, 138, ${(0.78 * pulse).toFixed(3)})`;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([7, 7]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 11.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -3150,6 +3762,46 @@ export class InkWorldEngine {
         ctx.ellipse(0, 0, p.r * 1.4, p.r * 0.6, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+      } else if (p.type === 'citadel_mote') {
+        // 天穹白玉京：澄澈青金量子光尘（无废土灰尘，清透未来感）
+        const shimmer = 0.65 + 0.35 * Math.sin((p.phase || 0) * 1.6);
+        const alpha = p.a * shimmer;
+        const glowR = p.r * 3.8;
+        const glow = ctx.createRadialGradient(p.x, p.y, 0.3, p.x, p.y, glowR);
+        if (p.isGold) {
+          glow.addColorStop(0, `rgba(255, 228, 148, ${(alpha * 0.78).toFixed(3)})`);
+          glow.addColorStop(0.5, `rgba(255, 212, 108, ${(alpha * 0.28).toFixed(3)})`);
+          glow.addColorStop(1, 'rgba(255, 212, 108, 0)');
+        } else {
+          glow.addColorStop(0, `rgba(72, 238, 255, ${(alpha * 0.82).toFixed(3)})`);
+          glow.addColorStop(0.5, `rgba(56, 218, 255, ${(alpha * 0.30).toFixed(3)})`);
+          glow.addColorStop(1, 'rgba(56, 218, 255, 0)');
+        }
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = p.isGold
+          ? `rgba(255, 248, 220, ${(alpha * 1.05).toFixed(3)})`
+          : `rgba(218, 252, 255, ${(alpha * 1.05).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (p.sparkle) {
+          const arm = p.r * (1.7 + shimmer * 0.9);
+          ctx.strokeStyle = p.isGold
+            ? `rgba(255, 236, 170, ${(alpha * 0.65).toFixed(3)})`
+            : `rgba(148, 246, 255, ${(alpha * 0.65).toFixed(3)})`;
+          ctx.lineWidth = 0.9;
+          ctx.beginPath();
+          ctx.moveTo(p.x - arm, p.y);
+          ctx.lineTo(p.x + arm, p.y);
+          ctx.moveTo(p.x, p.y - arm);
+          ctx.lineTo(p.x, p.y + arm);
+          ctx.stroke();
+        }
       } else {
         // 室内微尘 / 洞窟灵尘
         ctx.fillStyle = p.type === 'cave_mote' ? accent : '#f0dfc0';
@@ -3164,9 +3816,10 @@ export class InkWorldEngine {
   }
 
   _drawInkVignette(ctx, w, h) {
+    const isCitadel = this.map?.theme === 'citadel';
     const grad = ctx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.36, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
     grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(14, 11, 8, 0.42)');
+    grad.addColorStop(1, isCitadel ? 'rgba(12, 30, 52, 0.22)' : 'rgba(14, 11, 8, 0.42)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
   }

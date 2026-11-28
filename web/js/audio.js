@@ -1,5 +1,5 @@
-// ==================== Web Audio Studio Synthesizer & Foley Engine (v30) ====================
-// Zero external MP3 dependencies · Warm Master Bus + Spatial Delay/Reverb + 14 BGM + Bespoke Combat Foley
+// ==================== Web Audio Studio Synthesizer & Foley Engine (v31) ====================
+// Zero external MP3 dependencies · Warm Master Bus + Spatial Delay/Reverb + 15 BGM + Physics-Accurate Combat Foley
 
 const NOTE = {
   C2: 65.41,  D2: 73.42,  Eb2: 77.78, E2: 82.41,  F2: 87.31,  Fs2: 92.50, G2: 98.00,  Ab2: 103.83, A2: 110.00, Bb2: 116.54, B2: 123.47,
@@ -26,7 +26,24 @@ class SoundEngine {
     this.sfxReverbSend = null;
     this.noiseBuffer = null;
 
-    // BGM State
+    // BGM State & Track Registry
+    this.bgmTracks = {
+      studio:       { id: 'studio',       name: '工作室片头',             bpm: 90 },
+      prologue:     { id: 'prologue',     name: '序章 · 寒夜孤箫',         bpm: 79 },
+      town:         { id: 'town',         name: '墨石镇 · 灯火市集',       bpm: 97 },
+      interior:     { id: 'interior',     name: '内室 · 茶肆古琴',         bpm: 54 },
+      wasteland:    { id: 'wasteland',    name: '城郊废土 · 朔风雷达',     bpm: 56 },
+      ruins:        { id: 'ruins',        name: '铁锈废都 · 赛博细雨',     bpm: 105 },
+      arsenal:      { id: 'arsenal',      name: '赤焰兵工 · 锻铁脉动',     bpm: 111 },
+      swamp:        { id: 'swamp',        name: '青瘴毒泽 · 迷雾铃箫',     bpm: 48 },
+      cave:         { id: 'cave',         name: '地下魔窟 · 幽邃水滴',     bpm: 58 },
+      cave_tianshu: { id: 'cave_tianshu', name: '玄墨天枢 · 地脉奇点',     bpm: 64 },
+      cave_fox:     { id: 'cave_fox',     name: '狐仙秘境 · 青丘古韵',     bpm: 74 },
+      vault:        { id: 'vault',        name: '天枢核心 · 星盘圣殿',     bpm: 73 },
+      sky_citadel:  { id: 'sky_citadel',  name: '天穹白玉京 · 穹顶净土',   bpm: 84 },
+      battle:       { id: 'battle',       name: '遭遇战 · 战鼓急弦',       bpm: 144 },
+      boss:         { id: 'boss',         name: '首领决战 · 雷霆铜号',     bpm: 171 }
+    };
     this.currentTrack = 'none';
     this.desiredBgmTrack = 'none';
     this.pendingTrack = null;
@@ -829,6 +846,105 @@ class SoundEngine {
     osc.stop(t + 0.46);
   }
 
+  _voiceCrystalArp(ctx, dest, freq, t, dur = 0.62, vol = 0.085) {
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const osc2Gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+
+    osc1.type = 'sine';
+    osc2.type = 'triangle';
+    osc1.frequency.setValueAtTime(freq, t);
+    osc2.frequency.setValueAtTime(freq * 2, t);
+    osc2.detune.setValueAtTime(3.5, t);
+    osc2Gain.gain.setValueAtTime(0.22, t);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(Math.min(freq * 6.5, 8400), t);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(freq * 1.4, 900), t + dur);
+    filter.Q.value = 1.6;
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    osc1.connect(filter);
+    osc2.connect(osc2Gain);
+    osc2Gain.connect(filter);
+    filter.connect(g);
+    g.connect(dest);
+
+    if (this.reverbSend) {
+      const s = ctx.createGain();
+      s.gain.setValueAtTime(0.58, t);
+      g.connect(s);
+      s.connect(this.reverbSend);
+    }
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + dur + 0.05);
+    osc2.stop(t + dur + 0.05);
+  }
+
+  _voiceGlassPad(ctx, dest, freqs, dur = 4.6, vol = 0.11, time = null, reverbAmt = 0.62) {
+    const t = time ?? ctx.currentTime;
+    const out = dest || this.bgmMaster || ctx.destination;
+    const list = Array.isArray(freqs) ? freqs : [freqs];
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(520, t);
+    filter.frequency.exponentialRampToValueAtTime(2400, t + dur * 0.45);
+    filter.frequency.exponentialRampToValueAtTime(780, t + dur);
+    filter.Q.value = 1.1;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + Math.min(0.75, dur * 0.28));
+    g.gain.setValueAtTime(vol * 0.9, t + dur * 0.68);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    filter.connect(g);
+    g.connect(out);
+
+    const rev = out === this.sfxMaster ? this.sfxReverbSend : this.reverbSend;
+    if (rev && reverbAmt > 0) {
+      const send = ctx.createGain();
+      send.gain.setValueAtTime(reverbAmt, t);
+      g.connect(send);
+      send.connect(rev);
+    }
+
+    const perVoice = 1 / Math.max(1, Math.sqrt(list.length));
+    list.forEach((f, i) => {
+      const oscA = ctx.createOscillator();
+      const oscB = ctx.createOscillator();
+      const vg = ctx.createGain();
+      oscA.type = 'sine';
+      oscB.type = 'triangle';
+      oscA.frequency.setValueAtTime(f, t);
+      oscB.frequency.setValueAtTime(f * 2, t);
+      oscA.detune.setValueAtTime(-4 - (i % 2) * 2, t);
+      oscB.detune.setValueAtTime(4 + (i % 2) * 2, t);
+      vg.gain.setValueAtTime(perVoice * 0.52, t);
+
+      const bGain = ctx.createGain();
+      bGain.gain.setValueAtTime(0.24, t);
+
+      oscA.connect(vg);
+      oscB.connect(bGain);
+      bGain.connect(vg);
+      vg.connect(filter);
+
+      oscA.start(t);
+      oscB.start(t);
+      oscA.stop(t + dur + 0.08);
+      oscB.stop(t + dur + 0.08);
+    });
+  }
+
   _createPadDrone(ctx, session, freqs, opts = {}) {
     const now = ctx.currentTime;
     const filter = ctx.createBiquadFilter();
@@ -978,14 +1094,14 @@ class SoundEngine {
     this.playSciFiPad([NOTE.D4, NOTE.Fs4, NOTE.A4, NOTE.D5], 1.55, 0.12, now + 2.2, bus, 0.55);
   }
 
-  // ==================== 14 Distinct BGM Tracks with 0.6s Crossfade ====================
+  // ==================== 15 Distinct BGM Tracks with 0.6s Crossfade ====================
 
   playBgm(trackName) {
     const aliasMap = { wild: 'wasteland' };
     const normalized = aliasMap[trackName] || trackName;
     const valid = [
       'studio', 'prologue', 'town', 'interior', 'wasteland', 'ruins',
-      'arsenal', 'swamp', 'cave', 'cave_tianshu', 'cave_fox', 'vault', 'battle', 'boss', 'none'
+      'arsenal', 'swamp', 'cave', 'cave_tianshu', 'cave_fox', 'vault', 'sky_citadel', 'battle', 'boss', 'none'
     ];
     const target = valid.includes(normalized) ? normalized : 'none';
 
@@ -1076,6 +1192,7 @@ class SoundEngine {
       case 'cave_tianshu': this._buildCaveTianshuTrack(ctx, session); break;
       case 'cave_fox':     this._buildCaveFoxTrack(ctx, session);     break;
       case 'vault':        this._buildVaultTrack(ctx, session);       break;
+      case 'sky_citadel':  this._buildSkyCitadelTrack(ctx, session);  break;
       case 'battle':    this._buildBattleTrack(ctx, session);    break;
       case 'boss':      this._buildBossTrack(ctx, session);      break;
       default: break;
@@ -1562,6 +1679,97 @@ class SoundEngine {
     session.timers.push(setInterval(tick, 410));
   }
 
+  // 10b. sky_citadel (天穹白玉京 · 穹顶净土) — bpm 84: crystalline high-register synth arpeggios + soaring pentatonic guzheng + lush clean sci-fi glass pad + deep resonant sub-bass pulse + delicate bronze-jade windchimes
+  _buildSkyCitadelTrack(ctx, session) {
+    // Pristine floating sanctuary sub-drone & airy high-altitude sheen
+    this._createPadDrone(ctx, session, [NOTE.D2, NOTE.A2, NOTE.D3, NOTE.A3], {
+      type: 'sine', gain: 0.088, filterFreq: 640, lfoRate: 0.08, lfoDepth: 160, q: 1.1
+    });
+    this._createAmbientNoise(ctx, session, {
+      gain: 0.022, filterType: 'bandpass', freq: 1450, q: 2.2, lfoRate: 0.07, lfoDepth: 320
+    });
+
+    // bpm 84 -> 8th-note step = 60000 / 84 / 2 = 357.14ms
+    const stepMs = Math.round(60000 / 84 / 2);
+
+    // Crystalline high-register synth arpeggio (Dmaj9 -> Bm7 -> Gmaj9 -> Asus4)
+    const crystalArp = [
+      NOTE.D5, NOTE.A5, NOTE.D6, NOTE.E6, NOTE.D6, NOTE.A5, NOTE.Fs5, NOTE.E5,
+      NOTE.B4, NOTE.Fs5, NOTE.B5, NOTE.D6, NOTE.B5, NOTE.Fs5, NOTE.A5, NOTE.D5,
+      NOTE.G5, NOTE.B5, NOTE.D6, NOTE.G6, NOTE.E6, NOTE.D6, NOTE.B5, NOTE.A5,
+      NOTE.A4, NOTE.E5, NOTE.A5, NOTE.E6, NOTE.D6, NOTE.A5, NOTE.E5, NOTE.D5
+    ];
+
+    // Soaring pentatonic guzheng melody (64 steps, noble sweeping D-major pentatonic)
+    const guzhengLead = [
+      NOTE.A4, 0, NOTE.B4, 0, NOTE.D5, 0, 0, NOTE.E5,
+      NOTE.Fs5, 0, 0, NOTE.A5, 0, 0, NOTE.Fs5, 0,
+      NOTE.E5, 0, NOTE.D5, 0, NOTE.B4, 0, 0, NOTE.A4,
+      NOTE.D5, 0, 0, 0, 0, 0, 0, 0,
+      NOTE.A5, 0, NOTE.B5, 0, NOTE.D6, 0, 0, NOTE.E6,
+      NOTE.D6, 0, NOTE.B5, 0, NOTE.A5, 0, NOTE.Fs5, 0,
+      NOTE.E5, 0, NOTE.Fs5, 0, NOTE.A5, 0, NOTE.E5, 0,
+      NOTE.D5, 0, 0, 0, 0, 0, 0, 0
+    ];
+
+    // Lush clean sci-fi glass pad chords (triggered every 16 steps)
+    const glassChords = [
+      [NOTE.D3, NOTE.A3, NOTE.E4, NOTE.Fs4],
+      [NOTE.B2, NOTE.Fs3, NOTE.D4, NOTE.A4],
+      [NOTE.G2, NOTE.D3, NOTE.B3, NOTE.E4],
+      [NOTE.A2, NOTE.E3, NOTE.A3, NOTE.D4]
+    ];
+
+    // Deep resonant sub-bass pulse (32 steps)
+    const subPulse = [
+      NOTE.D2, 0, 0, 0, NOTE.D2, 0, NOTE.A2, 0,
+      NOTE.B2 * 0.5, 0, 0, 0, NOTE.B2 * 0.5, 0, NOTE.Fs2, 0,
+      NOTE.G2, 0, 0, 0, NOTE.G2, 0, NOTE.D2, 0,
+      NOTE.A2, 0, 0, 0, NOTE.A2, 0, NOTE.E2, 0
+    ];
+
+    // Delicate bronze-jade windchimes
+    const windChimes = [NOTE.D6, NOTE.E6, NOTE.A5, NOTE.G6, NOTE.B5];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.035;
+      const aIdx = step % crystalArp.length;
+      const gIdx = step % guzhengLead.length;
+      const sIdx = step % subPulse.length;
+
+      // 1) Lush clean sci-fi glass pad bloom on chord boundaries
+      if (step % 16 === 0) {
+        const chord = glassChords[Math.floor(step / 16) % glassChords.length];
+        this._voiceGlassPad(ctx, session.gain, chord, 5.6, 0.115, t, 0.65);
+      }
+
+      // 2) Crystalline high-register synth arpeggio
+      this._voiceCrystalArp(ctx, session.gain, crystalArp[aIdx], t, 0.68, aIdx % 8 === 0 ? 0.088 : 0.062);
+
+      // 3) Soaring pentatonic guzheng melody
+      if (guzhengLead[gIdx]) {
+        this.pluckGuqin(guzhengLead[gIdx], 1.9, 0.145, t, session.gain, 0.58, 0.014);
+      }
+
+      // 4) Deep resonant sub-bass pulse
+      if (subPulse[sIdx]) {
+        this._voiceSciFiBass(ctx, session.gain, subPulse[sIdx], t, 0.46, 0.14);
+      }
+
+      // 5) Delicate bronze-jade windchimes
+      if (step % 12 === 5 || step % 16 === 11 || step % 16 === 15) {
+        const wf = windChimes[step % windChimes.length];
+        this.playBronzeBell(wf, 2.35, 0.038, t + 0.02, session.gain, 0.76);
+      }
+
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, stepMs));
+  }
+
   // 11. battle (普通战斗) — Energetic, urgent: driving Taiko war-drums + fast Pipa/Guqin ostinato + punchy bass
   _buildBattleTrack(ctx, session) {
     const bassLine = [
@@ -1717,22 +1925,275 @@ class SoundEngine {
   }
 
   /**
-   * Weapon-matched Basic Attack SFX
+   * Physics-Accurate Weapon Attack Foley ('sword' | 'blade' | 'gun' | 'staff')
    */
-  playBasicAttackSfx(weaponObj = null) {
+  playWeaponAttack(weaponStyle = 'sword', isCrit = false) {
     if (this.muted || this.settings.sfxMuted) return;
     const ctx = this.ensureCtx();
     if (!ctx) return;
     const t = ctx.currentTime;
     const dest = this.sfxMaster || ctx.destination;
 
+    const raw = String(weaponStyle || 'sword').toLowerCase();
+    let style = 'sword';
+    if (/blade|heavy|great|cleav|saw|axe|saber/.test(raw)) style = 'blade';
+    else if (/gun|rail|rifle|pistol|shotgun|sniper|cannon|plasma|laser|beam/.test(raw)) style = 'gun';
+    else if (/staff|halberd|spear|pole|wand|rod|ji|lance/.test(raw)) style = 'staff';
+
+    const critMul = isCrit ? 1.24 : 1.0;
+
+    if (style === 'sword') {
+      // 'sword' (墨剑/光剑): crisp high-Q metallic ring (2.4kHz + 4.8kHz harmonic ping) + razor-sharp filtered air-slice transient
+      const pitch = isCrit ? 1.08 : 1.0;
+
+      // Razor-sharp filtered air-slice transient
+      this.playNoiseBurst(0.048, 'highpass', 5200 * pitch, 7800 * pitch, 2.4, 0.13 * critMul, t, dest);
+      this.playNoiseBurst(0.135, 'bandpass', 4200 * pitch, 880 * pitch, 3.2, 0.21 * critMul, t + 0.012, dest);
+
+      // High-Q metallic ring: 2.4kHz + 4.8kHz harmonic ping through resonant bandpass
+      const pingSpecs = [
+        { freq: 2400 * pitch, q: 14, vol: 0.125 * critMul, dur: isCrit ? 0.42 : 0.28 },
+        { freq: 4800 * pitch, q: 12, vol: 0.075 * critMul, dur: isCrit ? 0.32 : 0.20 }
+      ];
+      if (isCrit) {
+        pingSpecs.push({ freq: 7200, q: 10, vol: 0.05, dur: 0.26 });
+      }
+      pingSpecs.forEach((p, idx) => {
+        const osc = ctx.createOscillator();
+        const bp = ctx.createBiquadFilter();
+        const g = ctx.createGain();
+        osc.type = idx === 0 ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(p.freq, t + 0.018);
+        osc.frequency.exponentialRampToValueAtTime(p.freq * 0.985, t + 0.018 + p.dur);
+
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(p.freq, t + 0.018);
+        bp.Q.value = p.q;
+
+        g.gain.setValueAtTime(0.0001, t + 0.018);
+        g.gain.linearRampToValueAtTime(p.vol, t + 0.023);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.018 + p.dur);
+
+        osc.connect(bp);
+        bp.connect(g);
+        g.connect(dest);
+        if (this.sfxReverbSend) {
+          const send = ctx.createGain();
+          send.gain.setValueAtTime(0.42, t + 0.018);
+          g.connect(send);
+          send.connect(this.sfxReverbSend);
+        }
+        osc.start(t + 0.018);
+        osc.stop(t + 0.018 + p.dur + 0.04);
+      });
+
+      // Solid steel-cut impact thud
+      this._sfxTone(155, 46, isCrit ? 0.19 : 0.12, 'sine', 0.17 * critMul, t + 0.028, dest);
+      return;
+    }
+
+    if (style === 'blade') {
+      // 'blade' (重刃/链锯): heavy low-mid steel cleave (180Hz body thud) + gritty bandpass sawtooth rasp
+      // 1) Heavy 180Hz body thud
+      this._sfxTone(180, 44, isCrit ? 0.30 : 0.23, 'sine', 0.29 * critMul, t, dest);
+      this._sfxTone(180, 72, 0.16, 'triangle', 0.18 * critMul, t, dest);
+      this.playNoiseBurst(0.18, 'lowpass', 780, 140, 1.1, 0.24 * critMul, t + 0.01, dest);
+
+      // 2) Gritty bandpass sawtooth rasp (dual detuned saws through resonant bandpass)
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(isCrit ? 1220 : 960, t);
+      bp.frequency.exponentialRampToValueAtTime(310, t + 0.24);
+      bp.Q.value = 3.8;
+
+      const raspGain = ctx.createGain();
+      raspGain.gain.setValueAtTime(0.0001, t);
+      raspGain.gain.linearRampToValueAtTime(0.19 * critMul, t + 0.014);
+      raspGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+
+      bp.connect(raspGain);
+      raspGain.connect(dest);
+      if (this.sfxReverbSend) {
+        const send = ctx.createGain();
+        send.gain.setValueAtTime(0.28, t);
+        raspGain.connect(send);
+        send.connect(this.sfxReverbSend);
+      }
+
+      [136, 145].forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(f, t);
+        osc.frequency.exponentialRampToValueAtTime(74 + i * 5, t + 0.24);
+        osc.connect(bp);
+        osc.start(t);
+        osc.stop(t + 0.29);
+      });
+
+      // Coarse metallic steel-cleave scrape
+      this.playNoiseBurst(0.22, 'bandpass', 1850, 380, 2.2, 0.20 * critMul, t + 0.015, dest);
+      if (isCrit) {
+        this._voiceAnvilClang(ctx, dest, t + 0.02, 0.18);
+      }
+      return;
+    }
+
+    if (style === 'gun') {
+      // 'gun' (电磁炮/粒子枪): 90ms ascending capacitor charge chirp (600Hz -> 2600Hz) + punchy electromagnetic plasma crack + sub-bass recoil
+      // 1) 90ms ascending capacitor charge chirp (600Hz -> 2600Hz)
+      this._sfxTone(600, 2600, 0.09, 'sawtooth', 0.115 * critMul, t, dest);
+      this._sfxTone(300, 1300, 0.09, 'sine', 0.085 * critMul, t, dest);
+
+      // 2) Punchy electromagnetic plasma crack at t + 0.09
+      const fireT = t + 0.09;
+      this.playNoiseBurst(isCrit ? 0.22 : 0.16, 'bandpass', 4600, 560, 1.4, 0.28 * critMul, fireT, dest);
+      this.playNoiseBurst(0.08, 'highpass', 3800, 1600, 1.8, 0.20 * critMul, fireT, dest);
+      this._sfxTone(2250, 260, 0.14, 'sawtooth', 0.15 * critMul, fireT, dest);
+
+      // 3) Sub-bass recoil
+      this._sfxTone(168, isCrit ? 28 : 34, isCrit ? 0.36 : 0.28, 'sine', 0.32 * critMul, fireT, dest);
+      if (isCrit) {
+        this.playNoiseBurst(0.075, 'highpass', 3600, 6400, 2.4, 0.16, fireT + 0.07, dest);
+        this.playBronzeBell(1680, 0.34, 0.07, fireT + 0.02, dest, 0.45);
+      }
+      return;
+    }
+
+    // 'staff' (非攻机关戟/法杖): crisp clockwork mechanical click-snap + deep resonant bronze bell-staff shockwave
+    // 1) Crisp clockwork mechanical click-snap (twin rapid gear latch ticks)
+    this.playNoiseBurst(0.024, 'bandpass', 3200, 4800, 4.5, 0.18 * critMul, t, dest);
+    this._sfxTone(1440, 680, 0.025, 'triangle', 0.13 * critMul, t, dest);
+    this.playNoiseBurst(0.026, 'bandpass', 4400, 6200, 4.2, 0.19 * critMul, t + 0.032, dest);
+    this._sfxTone(1960, 920, 0.028, 'triangle', 0.14 * critMul, t + 0.032, dest);
+
+    // 2) Deep resonant bronze bell-staff shockwave at t + 0.055
+    const hitT = t + 0.055;
+    this.playBronzeBell(NOTE.D3, isCrit ? 1.65 : 1.3, 0.19 * critMul, hitT, dest, 0.58);
+    this.playBronzeBell(NOTE.A3, isCrit ? 1.35 : 1.05, 0.12 * critMul, hitT + 0.015, dest, 0.55);
+    this._sfxTone(155, 38, isCrit ? 0.40 : 0.32, 'sine', 0.28 * critMul, hitT, dest);
+    this.playNoiseBurst(0.22, 'bandpass', 1150, 220, 1.8, 0.18 * critMul, hitT, dest);
+    if (isCrit) {
+      this.playBronzeBell(NOTE.D5, 1.1, 0.11, hitT + 0.025, dest, 0.62);
+    }
+  }
+
+  /**
+   * Alias for playWeaponAttack(weaponStyle, isCrit)
+   */
+  playWeaponHit(weaponStyle = 'sword', isCrit = false) {
+    this.playWeaponAttack(weaponStyle, isCrit);
+  }
+
+  /**
+   * Mo-Jia Talisman Cast SFX: crisp paper-snap + resonant jade-chime shimmer + ascending qi whoosh
+   */
+  playTalismanCast() {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    // 1) Crisp paper-snap transient
+    this.playNoiseBurst(0.045, 'highpass', 3200, 6200, 1.6, 0.22, t, dest);
+    this.playNoiseBurst(0.032, 'bandpass', 1850, 920, 2.2, 0.16, t + 0.008, dest);
+
+    // 2) Ascending qi whoosh
+    this.playNoiseBurst(0.38, 'bandpass', 480, 2850, 2.8, 0.18, t + 0.035, dest);
+    this._sfxTone(280, 880, 0.34, 'sine', 0.11, t + 0.04, dest);
+    this._sfxTone(420, 1320, 0.32, 'triangle', 0.065, t + 0.05, dest);
+
+    // 3) Resonant jade-chime shimmer
+    [NOTE.A5, NOTE.D6, NOTE.E6].forEach((f, idx) => {
+      this.playBronzeBell(f, 1.05 - idx * 0.12, 0.095 - idx * 0.012, t + 0.045 + idx * 0.055, dest, 0.62);
+    });
+  }
+
+  /**
+   * Diablo-style Loot Affix Drop SFX: distinct metallic chime for 'rare' / glorious chord shimmer for 'legend'
+   */
+  playLootAffixDrop(quality = 'rare') {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+    const q = String(quality || 'rare').toLowerCase();
+
+    if (q === 'legend' || q === 'mythic' || q === 'legendary') {
+      // Glorious Diablo-style legendary chord shimmer
+      this._sfxTone(145, 42, 0.32, 'sine', 0.24, t, dest);
+      this.playNoiseBurst(0.11, 'highpass', 3400, 6800, 1.8, 0.14, t, dest);
+      this._voiceGlassPad(ctx, dest, [NOTE.D4, NOTE.Fs4, NOTE.A4, NOTE.D5], 1.55, 0.14, t + 0.04, 0.65);
+
+      const chord = [NOTE.D5, NOTE.Fs5, NOTE.A5, NOTE.D6, NOTE.E6, NOTE.G6];
+      chord.forEach((f, i) => {
+        const ot = t + 0.03 + i * 0.062;
+        this.playBronzeBell(f, 1.45, i === 0 ? 0.14 : 0.105, ot, dest, 0.68);
+        if (i < 4) {
+          this.pluckGuqin(f, 1.05, 0.095, ot, dest, 0.5, 0.01);
+        }
+      });
+      return;
+    }
+
+    if (q === 'rare' || q === 'epic') {
+      // Distinct crisp metallic chime
+      this._sfxTone(2850, 2820, 0.18, 'sine', 0.085, t, dest);
+      this._sfxTone(4280, 4220, 0.14, 'triangle', 0.055, t, dest);
+      const notes = q === 'epic'
+        ? [NOTE.D5, NOTE.A5, NOTE.D6, NOTE.E6]
+        : [NOTE.D5, NOTE.A5, NOTE.D6];
+      notes.forEach((f, i) => {
+        this.playBronzeBell(f, 0.85, 0.115 - i * 0.01, t + 0.025 + i * 0.072, dest, 0.54);
+      });
+      return;
+    }
+
+    // Fine / Common lightweight metallic clink
+    this.playBronzeBell(NOTE.A4, 0.38, 0.08, t, dest, 0.35);
+    this.playBronzeBell(NOTE.D5, 0.45, 0.09, t + 0.06, dest, 0.38);
+  }
+
+  /**
+   * Weapon-matched Basic Attack SFX
+   */
+  playBasicAttackSfx(weaponObj = null, isCrit = false) {
+    if (this.muted || this.settings.sfxMuted) return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const dest = this.sfxMaster || ctx.destination;
+
+    const wStyle = String(weaponObj?.weaponStyle || '').toLowerCase();
+    if (wStyle && ['sword', 'blade', 'gun', 'staff'].includes(wStyle)) {
+      this.playWeaponAttack(wStyle, isCrit);
+      return;
+    }
+
     const wType = String(weaponObj?.weaponType || '').toLowerCase();
     const wId = String(weaponObj?.id || '').toLowerCase();
     const genre = String(weaponObj?.genre || '').toLowerCase();
 
+    // Staff / Halberd / Spear
+    if (['staff', 'halberd', 'spear', 'polearm', 'wand'].includes(wType) || /staff|halberd|spear/.test(wId)) {
+      this.playWeaponAttack('staff', isCrit);
+      return;
+    }
+
+    // Heavy Blade / Chainsaw
+    if (['blade', 'greatsword', 'heavy_blade', 'chainsaw', 'axe'].includes(wType) || /chainsaw|heavyblade|greatsword/.test(wId)) {
+      this.playWeaponAttack('blade', isCrit);
+      return;
+    }
+
     // Plasma / Energy blade / Railgun
     if (wType === 'plasma' || wType === 'railgun' || wId.includes('plasma') || wId.includes('pulsesword')) {
-      this._plasmaSlashLayer(t, dest, wType === 'railgun');
+      if (wType === 'railgun' || wId.includes('railgun')) {
+        this.playWeaponAttack('gun', isCrit);
+      } else {
+        this._plasmaSlashLayer(t, dest, false);
+      }
       return;
     }
 
@@ -1754,8 +2215,8 @@ class SoundEngine {
       return;
     }
 
-    // Default blade / sword
-    this._swordSlashLayer(t, dest, { pitch: 1.0, heavy: false });
+    // Default sword foley
+    this.playWeaponAttack('sword', isCrit);
   }
 
   /**
