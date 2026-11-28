@@ -27,11 +27,11 @@ import {
   SIDE_QUESTS,
   STORY_CUTSCENES,
   WORLD_LORE_ENTRIES
-} from './data.js?v=29';
-import { InkWorldEngine } from './rpg_world.js?v=29';
-import { sfx } from './audio.js?v=29';
-import { spawnFloatText } from './fx.js?v=29';
-import { storage } from './storage.js?v=29';
+} from './data.js?v=30';
+import { InkWorldEngine } from './rpg_world.js?v=30';
+import { sfx } from './audio.js?v=30';
+import { spawnFloatText } from './fx.js?v=30';
+import { storage } from './storage.js?v=30';
 
 // ==================== 常量与辅助 ====================
 const SLOT_NAMES = {
@@ -678,6 +678,8 @@ function getBgmTrackForMap(mapId) {
   const id = String(mapId || state.mapId || 'town');
   if (id === 'town') return 'town';
   if (id.startsWith('interior_')) return 'interior';
+  if (id === 'cave_tianshu' || id === 'cave_shrine' || id === 'cave_thunder_altar') return 'cave_tianshu';
+  if (id === 'cave_fox' || id === 'cave_fox_shrine' || id === 'cave_lotus' || id === 'cave_mire') return 'cave_fox';
   if (id.startsWith('cave_')) return 'cave';
   if (id === 'wasteland') return 'wasteland';
   if (id === 'ruins') return 'ruins';
@@ -826,12 +828,13 @@ function enterMap(mapId, spawnX = null, spawnY = null, opts = {}) {
 function refreshCurrentMapLoot() {
   if (!world?.map) return;
   const curMap = world.map;
-  if (curMap.isSafe || !curMap.lootZones?.length) {
-    showToast('当前安全区域没有可刷新的野外废墟，请出城探索！', 'info');
+  const hasRoamingMonsters = Array.isArray(world.enemies) && world.enemies.some((en) => !en.data?.isBoss);
+  if (curMap.isSafe || !hasRoamingMonsters) {
+    showToast('此地清平，并无野外游荡异兽可惊动，请出城或深入险地再寻新迹。', 'info');
     return;
   }
   if (state.energy < 8) {
-    showToast('内息不足（需 8 点内息），请使用纯净水或回医馆歇脚！', 'warn');
+    showToast('内息不足（需 8 点内息），请饮纯净水或回医馆调息。', 'warn');
     return;
   }
   state.energy -= 8;
@@ -842,18 +845,30 @@ function refreshCurrentMapLoot() {
   state.regionWeathers[curMap.regionId] = nextW;
   world.setWeather(nextW);
 
-  // 刷新游荡异兽（已永久开启的宝箱绝不复生）
+  // 惊动并重置当前荒野/秘窟中所有非首领游荡异兽，供侠客再觅战机与掉落
+  let stirredCount = 0;
   for (const en of world.enemies) {
-    if (!en.alive && !en.data?.isBoss) {
+    if (en.data?.isBoss) continue;
+    if (!en.alive) {
       en.alive = true;
       en.hp = en.maxHp;
       en.x = en.homeX;
       en.y = en.homeY;
       en.respawnTimer = 0;
+      stirredCount += 1;
+    } else {
+      en.hp = en.maxHp;
+      en.respawnTimer = 0;
     }
   }
   sfx.pick('fine');
-  showToast(`已搜寻新迹！第 ${state.day} 天，天气转为「${WEATHERS[nextW].name}」，区域游荡异兽已重新出没！`, 'success');
+  const weatherName = WEATHERS[nextW]?.name || '晴朗';
+  showToast(
+    stirredCount > 0
+      ? `风起尘动！第 ${state.day} 日天色转为「${weatherName}」，惊动 ${stirredCount} 只游荡异兽重现踪迹！`
+      : `风起尘动！第 ${state.day} 日天色转为「${weatherName}」，此地游荡异兽皆已蠢蠢欲动！`,
+    'success'
+  );
   updateHUD();
   scheduleSave();
 }
@@ -1757,6 +1772,7 @@ function handleNpcOption(npc, idx, opt) {
 // ==================== 《轩辕剑三》回合制战斗系统 ====================
 function getEnemySpritePath(tpl) {
   const st = tpl?.spriteType || 'rat';
+  if (ASSETS[st]) return ASSETS[st];
   if (['rat', 'dog', 'boss_ratking', 'slime'].includes(st)) {
     return 'assets/sprites/enemy_beast.png';
   }
@@ -3688,13 +3704,21 @@ function renderBattleSubpanel() {
 function openModal(title, bodyHtml, footerHtml = '', opts = {}) {
   const backdrop = $('modal-backdrop');
   const wasClosed = !backdrop || backdrop.classList.contains('hidden');
+  const titleEl = $('modal-title');
+  const bodyEl = $('modal-body');
+  const isSameModal = !wasClosed && Boolean(titleEl) && titleEl.textContent === title;
+  const prevScroll = isSameModal && bodyEl ? bodyEl.scrollTop : 0;
+
   modalLocked = Boolean(opts.locked);
   if (world) world.paused = true;
   $('modal-box')?.classList.remove('modal-crucible-full', 'modal-worldmap-full', 'modal-armory-full');
   const closeBtn = $('modal-close');
   if (closeBtn) closeBtn.style.display = modalLocked ? 'none' : '';
-  $('modal-title').textContent = title;
-  $('modal-body').innerHTML = bodyHtml;
+  if (titleEl) titleEl.textContent = title;
+  if (bodyEl) {
+    bodyEl.innerHTML = bodyHtml;
+    bodyEl.scrollTop = isSameModal ? prevScroll : 0;
+  }
   $('modal-footer').innerHTML = footerHtml || (modalLocked ? '' : '<button class="btn btn-secondary" id="modal-default-close">合上卷轴</button>');
   backdrop?.classList.remove('hidden');
   if (wasClosed) sfx.uiTick?.();
@@ -3843,6 +3867,7 @@ function openWorldMap(selectedRegionId = null) {
 
 // ==================== 物品 / 妖魂 / 装备真实视觉缩略图渲染 ====================
 function _getSpiritSpriteSrc(spriteType) {
+  if (ASSETS[spriteType]) return ASSETS[spriteType];
   if (['rat', 'dog', 'boss_ratking', 'slime'].includes(spriteType)) {
     return 'assets/sprites/enemy_beast.png';
   }

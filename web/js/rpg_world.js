@@ -1,5 +1,5 @@
-import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=29';
-import { sfx } from './audio.js?v=29';
+import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=30';
+import { sfx } from './audio.js?v=30';
 
 // ==================== 工具函数 ====================
 function clamp(v, min, max) {
@@ -84,7 +84,21 @@ const SPRITE_PATHS = {
   enemy_beast: 'assets/sprites/enemy_beast.png',
   enemy_mech: 'assets/sprites/enemy_mech.png',
   enemy_demon: 'assets/sprites/enemy_demon.png',
-  chest: 'assets/sprites/chest.png'
+  chest: 'assets/sprites/chest.png',
+  boss_rat_king: 'assets/sprites/boss_rat_king.webp',
+  boss_duangang: 'assets/sprites/boss_duangang.webp',
+  boss_zhurong: 'assets/sprites/boss_zhurong.webp',
+  boss_lotus_bane: 'assets/sprites/boss_lotus_bane.webp',
+  boss_tianshu: 'assets/sprites/boss_tianshu.webp'
+};
+
+const BOSS_SPRITE_ALIASES = {
+  boss_ratking: 'boss_rat_king',
+  boss_rat_king: 'boss_rat_king',
+  boss_duangang: 'boss_duangang',
+  boss_zhurong: 'boss_zhurong',
+  boss_lotus_bane: 'boss_lotus_bane',
+  boss_tianshu: 'boss_tianshu'
 };
 
 // 默认各场景底图对应的严格可行走多边形（归一化 0..1 坐标，加载时按 map.width × map.height 缩放）
@@ -436,6 +450,13 @@ export class InkWorldEngine {
       this.enemies = list;
     }
 
+    // 预加载当前地图首领的专属精灵图（若有）
+    for (const en of this.enemies) {
+      if (en.data?.isBoss) {
+        this._resolveBespokeBossSprite(en.data);
+      }
+    }
+
     this.clickRipples = [];
     this.footDust = [];
     this.savePoint = this._computeSavePoint(map);
@@ -462,6 +483,21 @@ export class InkWorldEngine {
         node.collected = true;
       }
     }
+    this.detectNearest();
+  }
+
+  /** 同步已击败首领列表（支持 Set 或 Array），立即标记当前地图匹配首领为已击败 */
+  setDefeatedBosses(list) {
+    this._defeatedBosses = list instanceof Set
+      ? new Set(list)
+      : new Set(Array.isArray(list) ? list : []);
+    for (const en of this.enemies) {
+      if (en.data?.isBoss && (this._defeatedBosses.has(en.data.id) || this._defeatedBosses.has(en.enemyId))) {
+        en.alive = false;
+        en.respawnTimer = Infinity;
+      }
+    }
+    this._pausedFrameDrawn = false;
     this.detectNearest();
   }
 
@@ -613,7 +649,7 @@ export class InkWorldEngine {
       this._cachedHudRightBottom = null;
     }
 
-    const actionEl = document.querySelector('.action-bar, .hud-bottom-right, .mobile-controls');
+    const actionEl = document.querySelector('.stage-controls .action-group, .action-bar, .hud-bottom-right, .mobile-controls');
     if (actionEl) {
       const actRect = actionEl.getBoundingClientRect();
       if (actRect.height > 0) {
@@ -717,13 +753,25 @@ export class InkWorldEngine {
   }
 
   _getEnemySpriteKey(spriteType) {
-    if (['rat', 'dog', 'boss_ratking', 'slime'].includes(spriteType)) {
+    if (['rat', 'dog', 'boss_ratking', 'boss_rat_king', 'slime'].includes(spriteType)) {
       return 'enemy_beast';
     }
     if (['drone', 'flame_mech', 'guard', 'auto_turret', 'heavy_mech', 'mech_taotie', 'boss_zhurong', 'raider', 'raider_shield', 'boss_duangang'].includes(spriteType)) {
       return 'enemy_mech';
     }
     return 'enemy_demon';
+  }
+
+  _resolveBespokeBossSprite(tpl) {
+    if (!tpl?.isBoss) return null;
+    const rawType = tpl.spriteType || tpl.id || '';
+    const assetKey = (rawType && ASSETS[rawType])
+      ? rawType
+      : (BOSS_SPRITE_ALIASES[rawType] || BOSS_SPRITE_ALIASES[tpl.id] || null);
+    if (!assetKey) return null;
+    const assetPath = ASSETS[assetKey] || SPRITE_PATHS[assetKey];
+    if (!assetPath) return null;
+    return this._getSprite(assetKey, assetPath);
   }
 
   _getBgImage(path) {
@@ -2596,9 +2644,13 @@ export class InkWorldEngine {
     const idleScaleY = isIdle ? (1 + idleBreathWave * 0.015) : 1;
     const idleScaleX = isIdle ? (1 - idleBreathWave * 0.006) : 1;
     const accent = tpl.accent || '#d9483b';
+    const bespokeBoss = isBoss ? this._resolveBespokeBossSprite(tpl) : null;
+    const hasBespokeBoss = Boolean(
+      bespokeBoss && bespokeBoss.loaded && !bespokeBoss.error && bespokeBoss.img.naturalHeight > 0
+    );
     const spriteKey = this._getEnemySpriteKey(tpl.spriteType);
-    const sprite = this._getSprite(spriteKey);
-    const drawH = isBoss ? 102 : 76;
+    const sprite = hasBespokeBoss ? bespokeBoss : this._getSprite(spriteKey);
+    const drawH = isBoss ? (hasBespokeBoss ? 112 : 102) : 76;
 
     // 精确朝向修正：enemy_beast 与 enemy_mech 原图朝左，enemy_demon 原图朝右
     const spriteFlip = (spriteKey === 'enemy_demon')
@@ -2640,18 +2692,36 @@ export class InkWorldEngine {
       ctx.stroke();
     }
 
-    // 透明 PNG 分体肢体/尾巴动画绘制（足底牢牢贴地 y = 0）
-    ctx.save();
-    ctx.translate(0, 4);
-    ctx.scale(spriteFlip * idleScaleX, idleScaleY);
-    if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
-      this._drawArticulatedSprite(ctx, spriteKey, sprite.img, drawH, t, p, moveAmt, en.homeX * 0.07);
+    // 专属首领精灵整图渲染（平滑呼吸起伏 + 朝向翻转，不套用三段式通用野兽/机甲切分）
+    if (hasBespokeBoss) {
+      const img = bespokeBoss.img;
+      const drawW = (img.naturalWidth / img.naturalHeight) * drawH;
+      const breathWave = Math.sin(t * 2.6 + en.homeX * 0.03);
+      const walkBob = isIdle ? 0 : Math.abs(Math.sin(p * 0.75)) * 3.5;
+      const breathBob = breathWave * 1.8;
+      const bossScaleY = 1 + breathWave * 0.02;
+      const bossScaleX = 1 - breathWave * 0.012;
+      const bossFlip = en.facing < 0 ? -1 : 1;
+
+      ctx.save();
+      ctx.translate(0, 4 - walkBob - breathBob);
+      ctx.scale(bossFlip * bossScaleX, bossScaleY);
+      ctx.drawImage(img, -drawW * 0.5, -drawH, drawW, drawH);
+      ctx.restore();
     } else {
-      ctx.translate(0, -4);
-      ctx.scale(tpl.scale || 1, tpl.scale || 1);
-      this._drawEnemySilhouette(ctx, tpl.spriteType, tpl.color || '#332d29', accent, t);
+      // 透明 PNG 分体肢体/尾巴动画绘制（足底牢牢贴地 y = 0）
+      ctx.save();
+      ctx.translate(0, 4);
+      ctx.scale(spriteFlip * idleScaleX, idleScaleY);
+      if (sprite && sprite.loaded && !sprite.error && sprite.img.naturalHeight > 0) {
+        this._drawArticulatedSprite(ctx, spriteKey, sprite.img, drawH, t, p, moveAmt, en.homeX * 0.07);
+      } else {
+        ctx.translate(0, -4);
+        ctx.scale(tpl.scale || 1, tpl.scale || 1);
+        this._drawEnemySilhouette(ctx, tpl.spriteType, tpl.color || '#332d29', accent, t);
+      }
+      ctx.restore();
     }
-    ctx.restore();
 
     // 无框浮空书法名称（零矩形框）
     const labelY = -drawH - 10;

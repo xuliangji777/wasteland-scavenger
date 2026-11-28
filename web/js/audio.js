@@ -1,5 +1,5 @@
-// ==================== Web Audio Studio Synthesizer & Foley Engine (v28) ====================
-// Zero external MP3 dependencies · Warm Master Bus + Spatial Delay/Reverb + 12 BGM + Bespoke Combat Foley
+// ==================== Web Audio Studio Synthesizer & Foley Engine (v30) ====================
+// Zero external MP3 dependencies · Warm Master Bus + Spatial Delay/Reverb + 14 BGM + Bespoke Combat Foley
 
 const NOTE = {
   C2: 65.41,  D2: 73.42,  Eb2: 77.78, E2: 82.41,  F2: 87.31,  Fs2: 92.50, G2: 98.00,  Ab2: 103.83, A2: 110.00, Bb2: 116.54, B2: 123.47,
@@ -978,14 +978,14 @@ class SoundEngine {
     this.playSciFiPad([NOTE.D4, NOTE.Fs4, NOTE.A4, NOTE.D5], 1.55, 0.12, now + 2.2, bus, 0.55);
   }
 
-  // ==================== 12 Distinct BGM Tracks with 0.6s Crossfade ====================
+  // ==================== 14 Distinct BGM Tracks with 0.6s Crossfade ====================
 
   playBgm(trackName) {
     const aliasMap = { wild: 'wasteland' };
     const normalized = aliasMap[trackName] || trackName;
     const valid = [
       'studio', 'prologue', 'town', 'interior', 'wasteland', 'ruins',
-      'arsenal', 'swamp', 'cave', 'vault', 'battle', 'boss', 'none'
+      'arsenal', 'swamp', 'cave', 'cave_tianshu', 'cave_fox', 'vault', 'battle', 'boss', 'none'
     ];
     const target = valid.includes(normalized) ? normalized : 'none';
 
@@ -1072,8 +1072,10 @@ class SoundEngine {
       case 'ruins':     this._buildRuinsTrack(ctx, session);     break;
       case 'arsenal':   this._buildArsenalTrack(ctx, session);   break;
       case 'swamp':     this._buildSwampTrack(ctx, session);     break;
-      case 'cave':      this._buildCaveTrack(ctx, session);      break;
-      case 'vault':     this._buildVaultTrack(ctx, session);     break;
+      case 'cave':         this._buildCaveTrack(ctx, session);        break;
+      case 'cave_tianshu': this._buildCaveTianshuTrack(ctx, session); break;
+      case 'cave_fox':     this._buildCaveFoxTrack(ctx, session);     break;
+      case 'vault':        this._buildVaultTrack(ctx, session);       break;
       case 'battle':    this._buildBattleTrack(ctx, session);    break;
       case 'boss':      this._buildBossTrack(ctx, session);      break;
       default: break;
@@ -1398,6 +1400,129 @@ class SoundEngine {
     };
     tick();
     session.timers.push(setInterval(tick, 520));
+  }
+
+  // 9b. cave_tianshu (终局地脉奇点 · 玄墨天枢) — bpm 64: solemn deep bronze temple chimes + dark sci-fi sub-bass pulse + pentatonic guqin resonance
+  _buildCaveTianshuTrack(ctx, session) {
+    // Deep cosmic-ink singularity drone
+    this._createPadDrone(ctx, session, [NOTE.D2, NOTE.A2, NOTE.D3], {
+      type: 'sawtooth', gain: 0.085, filterFreq: 260, lfoRate: 0.055, lfoDepth: 110, q: 1.6
+    });
+    this._createAmbientNoise(ctx, session, {
+      gain: 0.028, filterType: 'bandpass', freq: 240, q: 3.4, lfoRate: 0.05, lfoDepth: 95
+    });
+
+    // bpm 64 -> 8th-note step = 60000 / 64 / 2 = 468.75ms
+    const stepMs = Math.round(60000 / 64 / 2);
+    const subPulse = [
+      NOTE.D2, 0, 0, NOTE.D2, 0, 0, NOTE.A2 * 0.5, 0,
+      NOTE.F2, 0, 0, NOTE.F2, 0, 0, NOTE.C2, 0,
+      NOTE.G2, 0, 0, NOTE.G2, 0, 0, NOTE.A2 * 0.5, 0,
+      NOTE.D2, 0, 0, 0, NOTE.C2, 0, NOTE.A2 * 0.5, 0
+    ];
+    const guqinRes = [
+      NOTE.D3, 0, 0, 0, NOTE.A3, 0, NOTE.C4, 0,
+      0, 0, NOTE.D4, 0, 0, NOTE.A3, 0, 0,
+      NOTE.F3, 0, 0, 0, NOTE.G3, 0, NOTE.A3, 0,
+      0, 0, NOTE.F3, 0, NOTE.D3, 0, 0, 0
+    ];
+    const chimeSeq = [
+      NOTE.D3, 0, 0, 0, 0, 0, 0, 0,
+      NOTE.A4, 0, 0, 0, 0, 0, NOTE.F4, 0,
+      NOTE.G3, 0, 0, 0, 0, 0, 0, 0,
+      NOTE.D4, 0, 0, 0, NOTE.A3, 0, 0, 0
+    ];
+    const darkChords = [
+      [NOTE.D3, NOTE.A3, NOTE.F4],
+      [NOTE.C3, NOTE.G3, NOTE.D4],
+      [NOTE.Bb2, NOTE.F3, NOTE.C4],
+      [NOTE.A2, NOTE.E3, NOTE.A3]
+    ];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.04;
+      const idx = step % 32;
+
+      // Dark sci-fi sub-bass pulse
+      if (subPulse[idx]) {
+        this._voiceSciFiBass(ctx, session.gain, subPulse[idx], t, 0.42, 0.16);
+      }
+      // Solemn low ritual Taiko on major downbeats
+      if (idx % 16 === 0) {
+        this.playTaikoDrum(78, 0.24, t, session.gain, 0.48);
+      }
+      // Solemn deep bronze temple chimes
+      if (chimeSeq[idx]) {
+        this.playBronzeBell(chimeSeq[idx], 3.4, idx % 16 === 0 ? 0.14 : 0.09, t, session.gain, 0.72);
+      }
+      // Pentatonic guqin resonance
+      if (guqinRes[idx]) {
+        this.pluckGuqin(guqinRes[idx], 2.5, 0.13, t, session.gain, 0.58, 0.018);
+      }
+      // Slow sweeping singularity pad
+      if (idx % 16 === 0) {
+        const chord = darkChords[Math.floor(step / 16) % darkChords.length];
+        this.playSciFiPad(chord, 5.2, 0.10, t, session.gain, 0.6);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, stepMs));
+  }
+
+  // 9c. cave_fox (狐仙秘境 · 青丘古韵) — bpm 74: ethereal xiao flute lead + delicate plucked guzheng arpeggios + soft mystical shimmer
+  _buildCaveFoxTrack(ctx, session) {
+    // Soft moonlit mist pad
+    this._createPadDrone(ctx, session, [NOTE.A2, NOTE.E3, NOTE.B3], {
+      type: 'sine', gain: 0.095, filterFreq: 520, lfoRate: 0.11, lfoDepth: 140, q: 1.5
+    });
+
+    // bpm 74 -> 8th-note step = 60000 / 74 / 2 = 405.4ms
+    const stepMs = Math.round(60000 / 74 / 2);
+    const xiaoLead = [
+      NOTE.E5, 0, 0, 0, NOTE.G5, 0, NOTE.A5, 0,
+      0, 0, NOTE.G5, 0, NOTE.E5, 0, NOTE.D5, 0,
+      NOTE.B4, 0, 0, 0, NOTE.D5, 0, NOTE.E5, 0,
+      0, 0, NOTE.D5, 0, NOTE.A4, 0, 0, 0,
+      NOTE.A5, 0, 0, 0, NOTE.G5, 0, NOTE.E5, 0,
+      0, 0, NOTE.D5, 0, NOTE.E5, 0, NOTE.G5, 0,
+      NOTE.E5, 0, 0, NOTE.D5, NOTE.B4, 0, NOTE.A4, 0,
+      0, 0, 0, 0, 0, 0, 0, 0
+    ];
+    const guzhengArp = [
+      NOTE.A3, NOTE.E4, NOTE.A4, NOTE.B4, NOTE.D5, NOTE.B4, NOTE.A4, NOTE.E4,
+      NOTE.G3, NOTE.D4, NOTE.G4, NOTE.A4, NOTE.B4, NOTE.A4, NOTE.G4, NOTE.D4,
+      NOTE.F3, NOTE.C4, NOTE.G4, NOTE.A4, NOTE.C5, NOTE.A4, NOTE.G4, NOTE.C4,
+      NOTE.E3, NOTE.B3, NOTE.E4, NOTE.G4, NOTE.B4, NOTE.G4, NOTE.E4, NOTE.B3
+    ];
+    const shimmerNotes = [NOTE.E6, NOTE.B5, NOTE.A5, NOTE.D6, NOTE.G5];
+
+    let step = 0;
+    const tick = () => {
+      if (session.stopped || !this.ctx) return;
+      const t = this.ctx.currentTime + 0.04;
+      const xIdx = step % xiaoLead.length;
+      const gIdx = step % guzhengArp.length;
+
+      // Delicate plucked guzheng arpeggio
+      if (gIdx % 2 === 0 || gIdx % 8 === 5) {
+        this.pluckGuqin(guzhengArp[gIdx], 1.65, gIdx % 8 === 0 ? 0.12 : 0.085, t, session.gain, 0.56, 0.012);
+      }
+      // Ethereal xiao flute lead
+      if (xiaoLead[xIdx]) {
+        this.playXiaoFlute(xiaoLead[xIdx], 2.1, 0.135, t, session.gain, 0.65);
+      }
+      // Soft mystical shimmer chimes
+      if (step % 12 === 4 || step % 16 === 14) {
+        const sf = shimmerNotes[step % shimmerNotes.length];
+        this.playBronzeBell(sf, 2.2, 0.042, t, session.gain, 0.74);
+      }
+      step++;
+    };
+    tick();
+    session.timers.push(setInterval(tick, stepMs));
   }
 
   // 10. vault (天枢核心) — Grand ancient-future destiny: lush sci-fi choir pad + bronze astrolabe arpeggio + solemn temple bell
