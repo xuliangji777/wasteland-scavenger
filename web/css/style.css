@@ -567,7 +567,11 @@ html, body {
   .prologue-text { font-size: 13.5px; line-height: 1.65; }
 }
 
-/* 自定义水墨滚动条 */
+/* 自定义水墨滚动条（跨浏览器 WebKit + Firefox 标准） */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 162, 74, 0.4) transparent;
+}
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: rgba(16, 14, 12, 0.55); }
 ::-webkit-scrollbar-thumb { background: rgba(200, 155, 60, 0.32); border-radius: 3px; }
@@ -626,7 +630,7 @@ html, body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 1400;
+  z-index: 850;
 }
 .float-text {
   position: fixed;
@@ -1068,8 +1072,8 @@ html, body {
 }
 
 .hud-circle-btn {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: none;
   background: radial-gradient(circle, rgba(16, 14, 12, 0.58) 0%, rgba(16, 14, 12, 0.22) 66%, transparent 100%);
@@ -2490,8 +2494,8 @@ html, body {
 .wuxing-wheel .bat-cmd-orb,
 .bat-cmd-orb {
   position: relative;
-  width: 46px;
-  height: 46px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -2811,13 +2815,13 @@ html, body {
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.96), 0 0 18px rgba(212, 162, 74, 0.30);
 }
 .modal-close-x {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: transparent;
   border: none;
   color: var(--paper-muted);
-  font-size: 16px;
+  font-size: 18px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -2836,6 +2840,7 @@ html, body {
   z-index: 2;
   padding: 14px 20px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -3044,8 +3049,16 @@ html, body {
   padding: 8px 10px;
   color: var(--paper-light);
   font-size: 12.5px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
-.textarea-field { min-height: 72px; font-family: monospace; font-size: 11px; }
+.input-field:focus-visible,
+.textarea-field:focus-visible {
+  outline: none;
+  border-bottom-color: #5eead4;
+  background: rgba(12, 16, 18, 0.72);
+  box-shadow: 0 2px 12px rgba(94, 234, 212, 0.32), 0 0 0 1px rgba(229, 187, 92, 0.36);
+}
+.textarea-field { min-height: 72px; font-family: monospace; font-size: 11px; resize: vertical; }
 
 /* ==================== 暗黑词缀装备行（全无框水墨浮空行） ==================== */
 .equip-slot-grid {
@@ -4457,8 +4470,8 @@ html, body {
   .hud-location-float { gap: 1px; }
   .loc-map-title { font-size: 14.5px; letter-spacing: 1px; }
   .loc-sub-line { font-size: 9.5px; }
-  .hud-pill-btn { height: 28px; padding: 0 8px 0 4px; font-size: 10.5px; }
-  .hud-circle-btn { width: 28px; height: 28px; }
+  .hud-pill-btn { height: 30px; padding: 0 8px 0 4px; font-size: 10.5px; }
+  .hud-circle-btn { width: 34px; height: 34px; }
 
   .stage-corner-info { display: none; }
 
@@ -4636,8 +4649,8 @@ html, body {
   .rpg-exp-line { width: 120px; }
   .hud-quest-float { font-size: 10px; }
   .loc-map-title { font-size: 15px; }
-  .hud-pill-btn { height: 26px; font-size: 10.5px; }
-  .hud-circle-btn { width: 26px; height: 26px; }
+  .hud-pill-btn { height: 28px; font-size: 10.5px; }
+  .hud-circle-btn { width: 34px; height: 34px; }
 
   .stage-corner-info { display: none; }
   .stage-controls {
@@ -4711,17 +4724,18 @@ html, body {
       calc(6px + env(safe-area-inset-bottom))
       calc(14px + env(safe-area-inset-left));
   }
-  .battle-hud-top { gap: 10px; padding: 0; }
+  .battle-hud-top { gap: 8px; padding: 0; align-items: flex-start; }
+  .battle-gauge-side { flex: 1 1 0; width: auto; max-width: 42%; min-width: 0; }
   .battle-unit-row { gap: 8px; }
   .battle-unit-crest.hero-crest { width: 44px; height: 44px; }
   .battle-unit-crest.enemy-crest { width: 42px; height: 42px; }
   .battle-unit-crest.enemy-crest img,
   .battle-unit-crest.enemy-crest svg { width: 32px !important; height: 32px !important; }
   .battle-lv-seal { font-size: 9px; padding: 0 4px; right: -3px; bottom: -2px; }
-  .vs-seal-frame { width: 32px; height: 32px; }
-  .vs-seal { font-size: 13px; }
-  .battle-turn-pill { font-size: 9.5px; padding: 1px 7px; letter-spacing: 0.8px; }
-  .battle-vs { gap: 3px; padding-top: 0; }
+  .vs-seal-frame { width: 28px; height: 28px; }
+  .vs-seal { font-size: 12px; }
+  .battle-turn-pill { font-size: 9.5px; padding: 1px 7px; letter-spacing: 0.8px; white-space: nowrap; }
+  .battle-vs { display: flex !important; flex-shrink: 0; gap: 2px; padding-top: 0; }
   .unit-name { font-size: 14px; }
   .battle-slant-bar { height: 9px; }
   .battle-slant-bar.hero-mp-bar { height: 6px; }
@@ -4743,14 +4757,16 @@ html, body {
     bottom: calc(10px + env(safe-area-inset-bottom));
   }
 
-  /* 横屏绝学/丹药子面板：紧贴左下战报上方、避开右侧五行罗盘 */
+  /* 横屏绝学/丹药子面板：紧贴左下战报上方、避开右侧五行罗盘（支持流畅触控滚动） */
   #bat-subpanel,
   .battle-subpanel {
     left: calc(16px + env(safe-area-inset-left));
     bottom: calc(52px * var(--ui-scale, 1) + env(safe-area-inset-bottom));
     max-height: 118px;
     padding: 6px 10px 4px;
-    overflow-y: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
   .skill-branch-tabs {
     gap: 10px;
@@ -5228,8 +5244,56 @@ html, body {
 }
 .settings-range {
   flex: 1;
-  accent-color: var(--bronze-bright);
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  background: transparent;
   cursor: pointer;
+}
+.settings-range::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgba(212, 162, 74, 0.28);
+  border-radius: 2px;
+}
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 35%, #fef08a 0%, #e5bb5c 58%, #a67c32 100%);
+  border: 1.5px solid rgba(255, 248, 230, 0.75);
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.28), 0 0 10px rgba(94, 234, 212, 0.55), 0 2px 5px rgba(0, 0, 0, 0.85);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.settings-range:hover::-webkit-slider-thumb,
+.settings-range:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.42), 0 0 14px rgba(229, 187, 92, 0.72), 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+.settings-range::-moz-range-track {
+  height: 4px;
+  background: rgba(212, 162, 74, 0.28);
+  border-radius: 2px;
+  border: none;
+}
+.settings-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 35%, #fef08a 0%, #e5bb5c 58%, #a67c32 100%);
+  border: 1.5px solid rgba(255, 248, 230, 0.75);
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.28), 0 0 10px rgba(94, 234, 212, 0.55), 0 2px 5px rgba(0, 0, 0, 0.85);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.settings-range:hover::-moz-range-thumb,
+.settings-range:focus-visible::-moz-range-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.42), 0 0 14px rgba(229, 187, 92, 0.72), 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+.settings-range:focus-visible {
+  outline: none;
 }
 .settings-slider-val {
   flex-shrink: 0;
@@ -6623,39 +6687,60 @@ html, body {
   transform: none;
 }
 
-/* 移动端横屏高密模式 (vh <= 520，如 844×390 @ 3x DPR 物理 1080P+ 手机) */
+/* 移动端横屏高密模式 (vh <= 520，覆盖 667×375 ~ 844×390 横屏手机，零顶栏重叠) */
 html[data-density="compact"] .hud-overlay-top {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
   padding: calc(6px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) 4px calc(10px + env(safe-area-inset-left));
 }
 html[data-density="compact"] .hud-hero-cluster {
-  max-width: min(460px, 60vw);
+  max-width: min(360px, 52vw);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+html[data-density="compact"] .hud-right-cluster {
+  position: static;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+  max-width: 46vw;
 }
 html[data-density="compact"] .hero-medallion,
 html[data-density="compact"] .hero-medallion-ring {
-  width: 52px;
-  height: 52px;
+  width: 42px;
+  height: 42px;
 }
 html[data-density="compact"] .gauge-track {
-  width: 168px;
-  height: 10px;
-}
-html[data-density="compact"] .gauge-mp .gauge-track {
-  width: 146px;
+  width: 128px;
   height: 8px;
 }
+html[data-density="compact"] .gauge-mp .gauge-track {
+  width: 110px;
+  height: 7px;
+}
 html[data-density="compact"] .rpg-exp-line {
-  width: 168px;
+  width: 128px;
+}
+html[data-density="compact"] .hud-quest-float {
+  font-size: 10.5px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 html[data-density="compact"] .loc-map-title {
-  font-size: 19px;
+  font-size: 15px;
 }
 html[data-density="compact"] .hud-pill-btn {
-  height: 32px;
-  font-size: 11.5px;
+  height: 30px;
+  font-size: 11px;
 }
 html[data-density="compact"] .hud-circle-btn {
-  width: 32px;
-  height: 32px;
+  width: 42px;
+  height: 42px;
 }
 html[data-density="compact"] .stage-controls {
   left: calc(10px + env(safe-area-inset-left));
@@ -6678,6 +6763,7 @@ html[data-density="compact"] .dpad-btn {
 html[data-density="compact"] .ink-dock {
   left: 51.5%;
   bottom: calc(6px + env(safe-area-inset-bottom));
+  width: auto;
   max-width: calc((100vw - 16px) / var(--ui-scale, 1));
   gap: 2px;
   padding: 2px 4px;
@@ -6698,6 +6784,18 @@ html[data-density="compact"] .ink-dock .dock-tab small {
 html[data-density="compact"] #rpg-battle-overlay .battle-hud-top {
   margin-bottom: calc(-32px * (1 - var(--ui-scale, 1)));
 }
+html[data-density="compact"] #rpg-battle-overlay .battle-gauge-side {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 42%;
+  min-width: 0;
+}
+html[data-density="compact"] #rpg-battle-overlay .battle-vs {
+  display: flex !important;
+  flex-shrink: 0;
+  gap: 2px;
+  padding-top: 0;
+}
 html[data-density="compact"] #rpg-battle-overlay .battle-bottom-panel {
   margin-top: 0;
 }
@@ -6709,6 +6807,38 @@ html[data-density="compact"] #modal-box.modal-armory-full {
   height: 100dvh;
   max-height: 100dvh;
   border: none;
+}
+
+/* 窄横屏手机 (如 667×375 iPhone SE)：确保底部功能坞与十字键、右侧交互群零碰撞 */
+@media (max-width: 740px) and (max-height: 500px) and (orientation: landscape) {
+  html[data-density="compact"] .dpad-cross,
+  .dpad-cross {
+    left: max(16px, calc(env(safe-area-inset-left, 0px) + 12px));
+    bottom: max(14px, calc(env(safe-area-inset-bottom, 0px) + 10px));
+  }
+  html[data-density="compact"] .stage-controls .action-group,
+  .stage-controls .action-group {
+    gap: 6px;
+  }
+  html[data-density="compact"] .ink-dock,
+  .ink-dock {
+    left: 49%;
+    width: auto;
+    max-width: calc((100vw - 320px) / var(--ui-scale, 1));
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    gap: 1px;
+    padding: 2px;
+  }
+  html[data-density="compact"] .ink-dock .dock-tab,
+  .ink-dock .dock-tab {
+    min-width: 36px;
+    padding: 2px 2px;
+  }
+  html[data-density="compact"] .ink-dock .dock-tab small,
+  .ink-dock .dock-tab small {
+    font-size: 9px;
+  }
 }
 
 /* ==================== 移动端竖屏横置提示（微信 / 手机浏览器） ==================== */

@@ -1,5 +1,5 @@
-import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=27';
-import { sfx } from './audio.js?v=6';
+import { ASSETS, QUALITY, ENEMIES, NPCS, WEATHERS } from './data.js?v=29';
+import { sfx } from './audio.js?v=29';
 
 // ==================== 工具函数 ====================
 function clamp(v, min, max) {
@@ -183,9 +183,17 @@ export class InkWorldEngine {
     this.map = null;
     this.weatherId = 0;
     this.paused = false;
+    this._pausedFrameDrawn = false;
     this.rafId = null;
     this._lastTime = 0;
     this._elapsed = 0;
+
+    // 触控主设备检测 & HUD 安全区缓存（避免 60fps DOM 布局抖动）
+    this._isTouchPrimary = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+    this._cachedHudRightBottom = null;
+    this._cachedActionTop = null;
+    this._cachedSafeRight = 0;
+    this._lastHudMeasureAt = 0;
 
     // 视图尺寸与摄像机
     this.viewW = 960;
@@ -237,6 +245,7 @@ export class InkWorldEngine {
     this._activePortals = [];
     this._activeNpc = null;
     this._openedChests = new Set();
+    this._defeatedBosses = new Set();
     this.lootNodes = [];
     this.enemies = [];
     this.savePoint = null;
@@ -286,9 +295,19 @@ export class InkWorldEngine {
    *   - guardian?: Object|null
    *   - heroWeaponType?: string
    */
-  loadMap(map, opts = {}) {
+  loadMap(map, spawnXOrOpts = {}, spawnY = undefined, maybeOpts = undefined) {
     if (!map) return;
+    let opts;
+    if (typeof spawnXOrOpts === 'number' || spawnXOrOpts === null) {
+      opts = { ...(maybeOpts || {}) };
+      if (typeof spawnXOrOpts === 'number') opts.spawnX = spawnXOrOpts;
+      if (typeof spawnY === 'number') opts.spawnY = spawnY;
+    } else {
+      opts = spawnXOrOpts || {};
+    }
+
     this.map = map;
+    this._pausedFrameDrawn = false;
     this._walkablePolys = resolveMapWalkablePolys(map);
     this.weatherId = opts.weatherId ?? (map.weatherPool?.[0] ?? 0);
     if (opts.guardian !== undefined) {
@@ -297,6 +316,12 @@ export class InkWorldEngine {
     if (opts.heroWeaponType !== undefined) {
       this.hero.weaponType = opts.heroWeaponType;
     }
+    if (opts.defeatedBosses !== undefined) {
+      this._defeatedBosses = opts.defeatedBosses instanceof Set
+        ? new Set(opts.defeatedBosses)
+        : new Set(Array.isArray(opts.defeatedBosses) ? opts.defeatedBosses : []);
+    }
+    const defeatedBosses = this._defeatedBosses || new Set();
 
     // 先清空动态实体，避免出生点吸附时误判旧地图碰撞体
     this.lootNodes = [];
@@ -313,10 +338,12 @@ export class InkWorldEngine {
     this.hero.walkPhase = 0;
     this.hero._lastHalfStep = 0;
     this.hero._stuckFrames = 0;
+    this.hero._slideDir = 0;
     this._clearKeys();
 
-    this.guardianPos.x = this.hero.x - 36;
-    this.guardianPos.y = this.hero.y + 8;
+    const gPt = this._snapToWalkable(this.hero.x - 36, this.hero.y + 8, 10);
+    this.guardianPos.x = gPt.x;
+    this.guardianPos.y = gPt.y;
     this.guardianPos.facing = this.hero.lastSide || 1;
     this.guardianPos.moving = false;
 
@@ -366,23 +393,26 @@ export class InkWorldEngine {
       return node;
     });
 
-    // 巡逻敌人与 Boss（出生点与巡逻原点均吸附至可行走地面）
+    // 巡逻敌人与 Boss（出生点与巡逻原点均吸附至可行走地面；已击败首领绝不重新生成）
     if (Array.isArray(opts.enemies)) {
-      this.enemies = opts.enemies.map((e) => {
-        const en = this._normalizeEnemy(e);
-        const pt = this._snapToWalkable(en.x, en.y, 16);
-        const hpt = this._snapToWalkable(en.homeX, en.homeY, 16);
-        en.x = pt.x;
-        en.y = pt.y;
-        en.homeX = hpt.x;
-        en.homeY = hpt.y;
-        return en;
-      });
+      this.enemies = opts.enemies
+        .map((e) => this._normalizeEnemy(e))
+        .filter((en) => !(en.data?.isBoss && (defeatedBosses.has(en.data.id) || defeatedBosses.has(en.enemyId))))
+        .map((en) => {
+          const pt = this._snapToWalkable(en.x, en.y, 16);
+          const hpt = this._snapToWalkable(en.homeX, en.homeY, 16);
+          en.x = pt.x;
+          en.y = pt.y;
+          en.homeX = hpt.x;
+          en.homeY = hpt.y;
+          return en;
+        });
     } else {
       const list = [];
       for (const sp of map.enemySpawns || []) {
         const tpl = ENEMIES[sp.enemyId];
         if (!tpl) continue;
+        if (tpl.isBoss && (defeatedBosses.has(tpl.id) || defeatedBosses.has(sp.enemyId))) continue;
         const en = this._createEnemyFromSpawn(sp, tpl);
         const pt = this._snapToWalkable(en.x, en.y, 16);
         en.x = pt.x;
@@ -393,7 +423,7 @@ export class InkWorldEngine {
       }
       if (map.bossSpawn) {
         const tpl = ENEMIES[map.bossSpawn.enemyId];
-        if (tpl) {
+        if (tpl && !(tpl.isBoss && (defeatedBosses.has(tpl.id) || defeatedBosses.has(map.bossSpawn.enemyId)))) {
           const en = this._createEnemyFromSpawn(map.bossSpawn, tpl);
           const pt = this._snapToWalkable(en.x, en.y, 18);
           en.x = pt.x;
@@ -450,15 +480,18 @@ export class InkWorldEngine {
   /** 切换当前地图天气 */
   setWeather(wid) {
     this.weatherId = wid ?? 0;
+    this._pausedFrameDrawn = false;
     this.seedWeatherParticles();
   }
 
   /** 设置当前出战护驾灵兽（传 null 取消） */
   setGuardian(guardian) {
     this.guardian = guardian || null;
+    this._pausedFrameDrawn = false;
     if (this.guardian) {
-      this.guardianPos.x = this.hero.x - this.hero.lastSide * 38;
-      this.guardianPos.y = this.hero.y + 6;
+      const gPt = this._snapToWalkable(this.hero.x - this.hero.lastSide * 38, this.hero.y + 6, 10);
+      this.guardianPos.x = gPt.x;
+      this.guardianPos.y = gPt.y;
     }
   }
 
@@ -524,12 +557,21 @@ export class InkWorldEngine {
   start() {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this._lastTime = performance.now();
+    this._pausedFrameDrawn = false;
     const tick = (now) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - this._lastTime) / 1000));
       this._lastTime = now;
-      this._elapsed += dt;
-      this.update(dt);
-      this.draw();
+      if (this.paused) {
+        if (!this._pausedFrameDrawn) {
+          this.draw();
+          this._pausedFrameDrawn = true;
+        }
+      } else {
+        this._pausedFrameDrawn = false;
+        this._elapsed += dt;
+        this.update(dt);
+        this.draw();
+      }
       this.rafId = requestAnimationFrame(tick);
     };
     this.rafId = requestAnimationFrame(tick);
@@ -543,18 +585,72 @@ export class InkWorldEngine {
     }
   }
 
+  /** 缓存 HUD 安全区边界（仅在 resize 或 1 秒节流后读取 DOM，消除 60fps 布局抖动） */
+  _measureHudSafeArea(force = false) {
+    if (typeof document === 'undefined' || !this.canvas) return;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (!force && now - this._lastHudMeasureAt < 1000) return;
+    this._lastHudMeasureAt = now;
+
+    const canvasRect = this.canvas.getBoundingClientRect();
+    let safeRight = 0;
+
+    const topRightEl = document.querySelector('.hud-top-right, .hud-right-cluster');
+    if (topRightEl) {
+      const hudRect = topRightEl.getBoundingClientRect();
+      if (hudRect.height > 0) {
+        this._cachedHudRightBottom = Math.max(12, Math.ceil(hudRect.bottom - canvasRect.top) + 8);
+      } else {
+        this._cachedHudRightBottom = null;
+      }
+      if (hudRect.width > 0 && canvasRect.width > 0) {
+        const rightGap = Math.max(0, Math.round(canvasRect.right - hudRect.right));
+        if (rightGap > 14 && rightGap <= 84) {
+          safeRight = rightGap - 12;
+        }
+      }
+    } else {
+      this._cachedHudRightBottom = null;
+    }
+
+    const actionEl = document.querySelector('.action-bar, .hud-bottom-right, .mobile-controls');
+    if (actionEl) {
+      const actRect = actionEl.getBoundingClientRect();
+      if (actRect.height > 0) {
+        this._cachedActionTop = Math.floor(actRect.top - canvasRect.top) - 8;
+      } else {
+        this._cachedActionTop = null;
+      }
+    } else {
+      this._cachedActionTop = null;
+    }
+
+    // 兼容 CSS env(safe-area-inset-right) 自定义变量或根节点右内边距
+    if (typeof window !== 'undefined' && window.getComputedStyle) {
+      const rootStyle = window.getComputedStyle(document.documentElement);
+      const cssSafeRight = parseFloat(rootStyle.getPropertyValue('--safe-right') || rootStyle.getPropertyValue('--sat-right') || '0');
+      if (Number.isFinite(cssSafeRight) && cssSafeRight > safeRight) {
+        safeRight = Math.ceil(cssSafeRight);
+      }
+    }
+    this._cachedSafeRight = Math.max(0, Math.min(72, safeRight));
+  }
+
   /** 适配画布 DPR 与父容器尺寸 */
   resize() {
     const parent = this.canvas.parentElement;
     if (!parent) return;
     const rect = parent.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.viewW = Math.max(320, Math.floor(rect.width));
     this.viewH = Math.max(240, Math.floor(rect.height));
     this.cameraZoom = clamp(Math.min(this.viewW / 1260, this.viewH / 650), 0.60, 1.02);
     this.canvas.width = Math.floor(this.viewW * dpr);
     this.canvas.height = Math.floor(this.viewH * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._isTouchPrimary = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+    this._measureHudSafeArea(true);
+    this._pausedFrameDrawn = false;
     if (this.map) this._snapCamera();
   }
 
@@ -586,6 +682,7 @@ export class InkWorldEngine {
       img.onload = () => {
         entry.loaded = true;
         entry.error = false;
+        this._pausedFrameDrawn = false;
       };
       img.onerror = () => {
         if (!entry.retried) {
@@ -638,6 +735,7 @@ export class InkWorldEngine {
       img.onload = () => {
         entry.loaded = true;
         entry.error = false;
+        this._pausedFrameDrawn = false;
       };
       img.onerror = () => {
         if (!entry.retried) {
@@ -713,7 +811,10 @@ export class InkWorldEngine {
     this.keys.down = false;
     this.keys.left = false;
     this.keys.right = false;
-    document.querySelector('.dpad-cross')?.classList.remove('is-active');
+    if (typeof document !== 'undefined') {
+      document.querySelector('.dpad-cross')?.classList.remove('is-active');
+      document.querySelectorAll('.dpad-btn.active').forEach((el) => el.classList.remove('active'));
+    }
   }
 
   _handleKeyDown(e) {
@@ -922,6 +1023,7 @@ export class InkWorldEngine {
     if (!this._collidesAt(nx, ny, r)) {
       entity.x = nx;
       entity.y = ny;
+      entity._slideDir = 0;
       return;
     }
 
@@ -937,20 +1039,24 @@ export class InkWorldEngine {
     }
     if (moved) return;
 
-    // 针对斜角 2.5D 多边形边界，沿偏转角尝试丝滑贴边滑行
+    // 针对斜角 2.5D 多边形边界与圆形宝箱/石碑障碍，沿偏转切线角丝滑绕行（保持同侧方向防左右抖动）
     const stepLen = Math.hypot(dx, dy);
-    const polys = this._walkablePolys?.length ? this._walkablePolys : map.walkablePolys;
-    if (stepLen > 0.05 && polys?.length) {
+    if (stepLen > 0.05) {
       const baseAngle = Math.atan2(dy, dx);
-      const offsets = [0.42, -0.42, 0.84, -0.84, 1.22, -1.22];
-      for (const off of offsets) {
-        const a = baseAngle + off;
-        const tx = clamp(entity.x + Math.cos(a) * stepLen * 0.82, 24, map.width - 24);
-        const ty = clamp(entity.y + Math.sin(a) * stepLen * 0.82, 36, map.height - 24);
-        if (!this._collidesAt(tx, ty, r)) {
-          entity.x = tx;
-          entity.y = ty;
-          return;
+      const prefer = entity._slideDir || 1;
+      const magnitudes = [0.42, 0.78, 1.12, 1.38, 1.54];
+      for (const mag of magnitudes) {
+        const dirs = [prefer, -prefer];
+        for (const sgn of dirs) {
+          const a = baseAngle + sgn * mag;
+          const tx = clamp(entity.x + Math.cos(a) * stepLen * 0.88, 24, map.width - 24);
+          const ty = clamp(entity.y + Math.sin(a) * stepLen * 0.88, 36, map.height - 24);
+          if (!this._collidesAt(tx, ty, r)) {
+            entity.x = tx;
+            entity.y = ty;
+            entity._slideDir = sgn;
+            return;
+          }
         }
       }
     }
@@ -1092,10 +1198,11 @@ export class InkWorldEngine {
         }
       } else if (h.targetX !== null) {
         h._stuckFrames += 1;
-        if (h._stuckFrames > 14) {
+        if (h._stuckFrames > 28) {
           h.targetX = null;
           h.targetY = null;
           h._stuckFrames = 0;
+          h._slideDir = 0;
         }
       }
     } else {
@@ -1173,16 +1280,31 @@ export class InkWorldEngine {
   }
 
   _updateGuardian(dt) {
-    if (!this.guardian) return;
+    if (!this.guardian || !this.map) return;
     const h = this.hero;
     const followDist = 46;
-    const desiredX = h.x - (h.dirX || h.lastSide) * followDist;
-    const desiredY = h.y - (h.dirY || 0) * (followDist * 0.55) + 4;
+    const desiredX = clamp(h.x - (h.dirX || h.lastSide) * followDist, 24, this.map.width - 24);
+    const desiredY = clamp(h.y - (h.dirY || 0) * (followDist * 0.55) + 4, 36, this.map.height - 24);
     const prevX = this.guardianPos.x;
     const prevY = this.guardianPos.y;
     const lerp = 1 - Math.pow(1 - 0.09, dt * 60);
-    this.guardianPos.x += (desiredX - this.guardianPos.x) * lerp;
-    this.guardianPos.y += (desiredY - this.guardianPos.y) * lerp;
+    const nx = prevX + (desiredX - prevX) * lerp;
+    const ny = prevY + (desiredY - prevY) * lerp;
+    const gRad = 10;
+
+    if (this._isWalkable(nx, ny, gRad)) {
+      this.guardianPos.x = nx;
+      this.guardianPos.y = ny;
+    } else if (this._isWalkable(nx, prevY, gRad)) {
+      this.guardianPos.x = nx;
+    } else if (this._isWalkable(prevX, ny, gRad)) {
+      this.guardianPos.y = ny;
+    } else if (dist(prevX, prevY, h.x, h.y) > 220 || !this._isWalkable(prevX, prevY, gRad)) {
+      const safe = this._snapToWalkable(h.x - (h.dirX || h.lastSide) * 28, h.y + 4, gRad);
+      this.guardianPos.x = safe.x;
+      this.guardianPos.y = safe.y;
+    }
+
     const dx = this.guardianPos.x - prevX;
     const dy = this.guardianPos.y - prevY;
     const moved = Math.hypot(dx, dy);
@@ -1198,6 +1320,7 @@ export class InkWorldEngine {
   _updateEnemies(dt) {
     for (const en of this.enemies) {
       if (!en.alive) {
+        if (en.data?.isBoss) continue;
         if (en.respawnTimer > 0) {
           en.respawnTimer -= dt;
           if (en.respawnTimer <= 0) {
@@ -1603,6 +1726,27 @@ export class InkWorldEngine {
     }
   }
 
+  /** 等比 Cover 居中裁剪绘制底图，彻底消除任意画幅下的纵横比拉伸畸变 */
+  _drawImageCover(ctx, img, dx, dy, dw, dh) {
+    const sw = img.naturalWidth || img.width;
+    const sh = img.naturalHeight || img.height;
+    if (!sw || !sh || !dw || !dh) return;
+    const imgRatio = sw / sh;
+    const dstRatio = dw / dh;
+    let sx = 0;
+    let sy = 0;
+    let cw = sw;
+    let ch = sh;
+    if (imgRatio > dstRatio) {
+      cw = sh * dstRatio;
+      sx = (sw - cw) * 0.5;
+    } else if (imgRatio < dstRatio) {
+      ch = sw / dstRatio;
+      sy = (sh - ch) * 0.5;
+    }
+    ctx.drawImage(img, sx, sy, cw, ch, dx, dy, dw, dh);
+  }
+
   _drawMapBackground(ctx) {
     const map = this.map;
     const mw = map.width;
@@ -1615,15 +1759,15 @@ export class InkWorldEngine {
       const isWide2x1 = !isCave && mw >= 2400;
       if (isWide2x1) {
         const tileW = mw / 2;
-        // 2×1 纯横向镜像拼接（绝不垂直翻转，保持 100% 真实 2.5D 重力与建筑透视）
+        // 2×1 纯横向镜像等比 Cover 拼接（零垂直拉伸畸变，保持 100% 真实 2.5D 重力与建筑透视）
         // Col 0 (Left): normal
-        ctx.drawImage(entry.img, 0, 0, tileW, mh);
+        this._drawImageCover(ctx, entry.img, 0, 0, tileW, mh);
 
         // Col 1 (Right): horizontal mirror only (scaleX: -1, scaleY: 1)
         ctx.save();
         ctx.translate(mw, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(entry.img, 0, 0, tileW, mh);
+        this._drawImageCover(ctx, entry.img, 0, 0, tileW, mh);
         ctx.restore();
 
         // 中央垂直水墨薄雾过渡带，柔和消除左右拼接接缝
@@ -1635,8 +1779,8 @@ export class InkWorldEngine {
         ctx.fillStyle = vGrad;
         ctx.fillRect(tileW - seamW, 0, seamW * 2, mh);
       } else {
-        // 1×1 原生整图绘制（cave 2240×1400、主城 1600×1000、室内 1000×700，零镜像畸变）
-        ctx.drawImage(entry.img, 0, 0, mw, mh);
+        // 1×1 等比 Cover 整图绘制（cave 2100×1200、主城 1600×1000、室内 1200×700，零纵横比畸变）
+        this._drawImageCover(ctx, entry.img, 0, 0, mw, mh);
       }
     } else {
       // 加载中或回退宣纸墨地底纹
@@ -2238,12 +2382,12 @@ export class InkWorldEngine {
     const isIdle = moveAmt < 0.05;
 
     if (spriteKey === 'enemy_beast') {
-      // 四足野兽/巨鼠王/啸天犬（原图朝左：前半身 0..0.50*sw，后半身 0.50*sw..sw，尾巴右上 0.62*sw..sw）
+      // 四足野兽/巨鼠王/啸天犬（原图朝左：躯干 0..0.66*sw，尾巴右上 0.66*sw..sw 干净切分零重影）
       // 1. 摆动/甩动狼尾
-      const tailSrcX = sw * 0.62;
-      const tailSrcW = sw * 0.38;
+      const tailSrcX = sw * 0.66;
+      const tailSrcW = sw * 0.34;
       const tailSrcH = sh * 0.52;
-      const tailPivX = -drawW * 0.5 + drawW * 0.68;
+      const tailPivX = -drawW * 0.5 + drawW * 0.66;
       const tailPivY = -drawH * 0.56;
       const tailRot = Math.sin(t * (isIdle ? 4.5 : 13) + seed) * (isIdle ? 0.14 : 0.28);
       ctx.save();
@@ -2252,8 +2396,8 @@ export class InkWorldEngine {
       ctx.drawImage(
         img,
         tailSrcX, 0, tailSrcW, tailSrcH,
-        (-drawW * 0.5 + drawW * 0.62) - tailPivX, -drawH - tailPivY,
-        drawW * 0.38, drawH * 0.52
+        0, -drawH - tailPivY,
+        drawW * 0.34, drawH * 0.52
       );
       ctx.restore();
 
@@ -2294,7 +2438,7 @@ export class InkWorldEngine {
       );
       ctx.restore();
 
-      // 3. 躯干与咆哮兽首（避开尾部区域避免重影，轻微奔跑起伏俯仰）
+      // 3. 躯干与咆哮兽首（在 0.66*sw 处与尾部干净衔接，零重叠重影，轻微奔跑起伏俯仰）
       const pitch = Math.sin(p) * 0.06 * moveAmt;
       const heave = Math.abs(Math.cos(p)) * 2.2 * strideScale * moveAmt;
       ctx.save();
@@ -2302,8 +2446,8 @@ export class InkWorldEngine {
       ctx.rotate(pitch);
       ctx.drawImage(
         img,
-        0, 0, sw * 0.68, sh * 0.60,
-        -drawW * 0.5, -drawH * splitRatio, drawW * 0.68, drawH * 0.60
+        0, 0, sw * 0.66, sh * 0.60,
+        -drawW * 0.5, -drawH * splitRatio, drawW * 0.66, drawH * 0.60
       );
       ctx.restore();
       return;
@@ -2807,7 +2951,7 @@ export class InkWorldEngine {
       const cellW = img.naturalWidth / 4;
       const cellH = img.naturalHeight;
       const drawW = (cellW / cellH) * drawH;
-      const frameIdx = Math.floor(h.walkPhase / (Math.PI * 0.55)) % 4;
+      const frameIdx = Math.floor((h.walkPhase / (Math.PI * 0.5)) % 4);
 
       ctx.save();
       ctx.translate(0, 3 - strideBounce);
@@ -2823,11 +2967,11 @@ export class InkWorldEngine {
       );
       ctx.restore();
     } else if (idleSprite && idleSprite.loaded && !idleSprite.error && idleSprite.img.naturalHeight > 0) {
-      // 静止站立：hero.png 柔和呼吸，足底牢牢贴地
+      // 静止站立：hero.png 柔和呼吸，与行走基线 (+3) 完全齐平零跳帧
       const img = idleSprite.img;
       const drawW = (img.naturalWidth / img.naturalHeight) * drawH;
       ctx.save();
-      ctx.translate(0, 4);
+      ctx.translate(0, 3);
       ctx.scale(flipX * idleBreathX, idleBreathY);
       ctx.drawImage(img, -drawW * 0.5, -drawH, drawW, drawH);
       ctx.restore();
@@ -2888,7 +3032,7 @@ export class InkWorldEngine {
 
   _drawInteractHint(ctx, target) {
     const bob = Math.sin(this._elapsed * 4.2) * 3;
-    const text = `[E] ${target.label}`;
+    const text = this._isTouchPrimary ? target.label : `[E] ${target.label}`;
     const y = target.y - 74 + bob;
     this._drawFloatingLabel(
       ctx,
@@ -2960,25 +3104,19 @@ export class InkWorldEngine {
   // ==================== 右上角半透明水墨小地图 ====================
 
   _getMinimapRect() {
+    this._measureHudSafeArea(false);
     const uiScale = clamp(Math.min(this.viewW / 1280, this.viewH / 600), 0.72, 1.06);
     const mw = Math.round(146 * uiScale);
     const mh = Math.round(90 * uiScale);
     const padX = Math.max(8, Math.round(14 * uiScale));
-    const mx = this.viewW - mw - padX;
+    const safeRight = this._cachedSafeRight || 0;
+    const mx = Math.max(8, this.viewW - mw - padX - safeRight);
     const fallbackTop = Math.round(84 * uiScale);
-    let safeTop = fallbackTop;
-    const topRightEl = typeof document !== 'undefined'
-      ? document.querySelector('.hud-top-right, .hud-right-cluster')
-      : null;
-    if (topRightEl && this.canvas) {
-      const hudRect = topRightEl.getBoundingClientRect();
-      const canvasRect = this.canvas.getBoundingClientRect();
-      if (hudRect.height > 0) {
-        safeTop = Math.max(12, Math.ceil(hudRect.bottom - canvasRect.top) + 8);
-      }
-    }
+    const safeTop = this._cachedHudRightBottom ?? fallbackTop;
     const bottomReserve = Math.round(108 * uiScale);
-    const maxBottom = this.viewH - bottomReserve;
+    const maxBottom = this._cachedActionTop !== null
+      ? Math.min(this.viewH - 12, this._cachedActionTop)
+      : (this.viewH - bottomReserve);
     const my = clamp(safeTop, 8, Math.max(8, maxBottom - mh));
     return { x: mx, y: my, w: mw, h: mh };
   }

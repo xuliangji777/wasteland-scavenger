@@ -189,68 +189,101 @@ class LocalStorageAdapter {
   }
 }
 
-// ---------- 线上服务适配器（预留接口，方便后续切换服务端口） ----------
+// ---------- 线上服务适配器（预留异步接口，本地模式同步调用；未配置后端时自动安全降级至本地存储） ----------
 class RemoteStorageAdapter {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
+    this._fallback = new LocalStorageAdapter();
+    this._warned = false;
+  }
+
+  _warnFallback(action, err) {
+    if (!this._warned) {
+      this._warned = true;
+      console.warn(
+        `[Storage] RemoteStorageAdapter(${this.baseUrl}) 在 ${action} 时不可用，已自动回退至本地存档。注意：当前游戏主循环使用同步存取，切换线上模式前请接入异步存档管线。`,
+        err || ''
+      );
+    }
   }
 
   async request(path, options = {}) {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-      ...options
-    });
-    if (!res.ok) throw new Error(`服务端错误: ${res.status}`);
-    return res.json();
+    if (typeof fetch !== 'function' || !this.baseUrl) {
+      throw new Error('线上存储服务未配置或当前环境不支持 fetch');
+    }
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 5000) : null;
+    try {
+      const res = await fetch(`${this.baseUrl}${path}`, {
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        signal: controller?.signal,
+        ...options
+      });
+      if (!res.ok) throw new Error(`服务端错误: ${res.status}`);
+      return await res.json();
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   getCurrentUser() {
-    return localStorage.getItem(CURRENT_USER_KEY) || '未登录';
+    return this._fallback.getCurrentUser();
   }
 
   getAccounts() {
-    return [{ username: this.getCurrentUser(), createdAt: Date.now(), lastLogin: Date.now() }];
+    return this._fallback.getAccounts();
   }
 
-  async loginOrCreate(username, password = '') {
-    const data = await this.request('/auth/login', {
+  loginOrCreate(username, password = '') {
+    this._warnFallback('loginOrCreate');
+    this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password })
-    });
-    localStorage.setItem(CURRENT_USER_KEY, data.username || username);
-    return data;
+    }).catch(() => { /* fallback already applied */ });
+    return this._fallback.loginOrCreate(username);
   }
 
-  async listSlots(username) {
-    return this.request(`/save/${encodeURIComponent(username)}/slots`);
+  deleteAccount(username) {
+    this._warnFallback('deleteAccount');
+    return this._fallback.deleteAccount(username);
   }
 
-  async writeSlot(username, slotId, stateObj, meta = {}) {
-    return this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`, {
+  listSlots(username) {
+    this._warnFallback('listSlots');
+    return this._fallback.listSlots(username);
+  }
+
+  writeSlot(username, slotId, stateObj, meta = {}) {
+    const res = this._fallback.writeSlot(username, slotId, stateObj, meta);
+    this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`, {
       method: 'PUT',
       body: JSON.stringify({ state: stateObj, meta: extractMetaFromState(stateObj, meta) })
-    });
+    }).catch((err) => this._warnFallback('writeSlot', err));
+    return res;
   }
 
-  async loadSlot(username, slotId) {
-    return this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`);
+  loadSlot(username, slotId) {
+    this._warnFallback('loadSlot');
+    return this._fallback.loadSlot(username, slotId);
   }
 
-  async deleteSlot(username, slotId) {
-    return this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`, {
+  deleteSlot(username, slotId) {
+    const res = this._fallback.deleteSlot(username, slotId);
+    this.request(`/save/${encodeURIComponent(username)}/slots/${encodeURIComponent(slotId)}`, {
       method: 'DELETE'
-    });
+    }).catch((err) => this._warnFallback('deleteSlot', err));
+    return res;
   }
 
-  async loadSave(username) {
+  loadSave(username) {
     return this.loadSlot(username, 'auto');
   }
 
-  async writeSave(username, stateObj, meta = {}) {
+  writeSave(username, stateObj, meta = {}) {
     return this.writeSlot(username, 'auto', stateObj, meta);
   }
 
-  async clearSave(username) {
+  clearSave(username) {
     return this.deleteSlot(username, 'auto');
   }
 }
@@ -258,6 +291,7 @@ class RemoteStorageAdapter {
 // ---------- 统一导出门面 ----------
 export function createStorageService(config = STORAGE_CONFIG) {
   if (config.mode === 'remote') {
+    console.warn('[Storage] STORAGE_CONFIG.mode="remote" 启用：将优先使用本地同步副本并后台同步至远端，避免未启动后端时崩溃。');
     return new RemoteStorageAdapter(config.apiBaseUrl);
   }
   return new LocalStorageAdapter();

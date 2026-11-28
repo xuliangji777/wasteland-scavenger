@@ -28,8 +28,10 @@ class SoundEngine {
 
     // BGM State
     this.currentTrack = 'none';
+    this.desiredBgmTrack = 'none';
     this.pendingTrack = null;
     this.pendingJingle = false;
+    this.studioGain = null;
     this.activeSession = null;
 
     // Autoplay unlock
@@ -94,13 +96,33 @@ class SoundEngine {
     this._saveSettings();
     this._applyBusGains(0.08);
 
-    if (!this.muted && !this.settings.bgmMuted) {
+    if (this.muted || this.settings.bgmMuted) {
+      if (this.activeSession) {
+        this.desiredBgmTrack = this.activeSession.trackName || this.currentTrack || this.desiredBgmTrack;
+        this.pendingTrack = this.desiredBgmTrack;
+        this._fadeOutSession(this.activeSession, 0.15);
+        this.activeSession = null;
+      }
+      this.stopStudioJingle(0.15);
+    } else {
       const target = (this.pendingTrack && this.pendingTrack !== 'none')
         ? this.pendingTrack
-        : this.currentTrack;
-      if (target && target !== 'none' && !this.activeSession && this.ctx && this.ctx.state === 'running') {
-        this.pendingTrack = null;
-        this._startBgmSession(target, 0.6);
+        : ((this.desiredBgmTrack && this.desiredBgmTrack !== 'none') ? this.desiredBgmTrack : this.currentTrack);
+      if (target && target !== 'none' && !this.activeSession) {
+        const ctx = this._createOrGetCtx();
+        if (ctx && ctx.state === 'running') {
+          this.pendingTrack = null;
+          this._startBgmSession(target, 0.6);
+        } else if (ctx && ctx.state === 'suspended') {
+          this.pendingTrack = target;
+          this._bindUnlockListeners();
+          ctx.resume().then(() => {
+            if (this.pendingTrack === target && !this.muted && !this.settings.bgmMuted && !this.activeSession) {
+              this.pendingTrack = null;
+              this._startBgmSession(target, 0.6);
+            }
+          }).catch(() => {});
+        }
       }
     }
     return this.getSettings();
@@ -133,6 +155,8 @@ class SoundEngine {
     if (this._unlockBound || typeof window === 'undefined') return;
     this._unlockBound = true;
     window.addEventListener('pointerdown', this._onUserGesture, { passive: true });
+    window.addEventListener('touchend', this._onUserGesture, { passive: true });
+    window.addEventListener('click', this._onUserGesture, { passive: true });
     window.addEventListener('keydown', this._onUserGesture, { passive: true });
   }
 
@@ -140,6 +164,8 @@ class SoundEngine {
     if (!this._unlockBound || typeof window === 'undefined') return;
     this._unlockBound = false;
     window.removeEventListener('pointerdown', this._onUserGesture);
+    window.removeEventListener('touchend', this._onUserGesture);
+    window.removeEventListener('click', this._onUserGesture);
     window.removeEventListener('keydown', this._onUserGesture);
   }
 
@@ -149,7 +175,7 @@ class SoundEngine {
 
     const onUnlocked = () => {
       this._unbindUnlockListeners();
-      if (this.muted) return;
+      if (this.muted || this.settings.bgmMuted) return;
 
       if (this.pendingJingle) {
         this.pendingJingle = false;
@@ -292,6 +318,15 @@ class SoundEngine {
   toggleMute() {
     this.muted = !this.muted;
     const ctx = this.ctx;
+    if (this.muted) {
+      this.stopStudioJingle(0.12);
+      if (this.activeSession) {
+        this.desiredBgmTrack = this.activeSession.trackName || this.currentTrack || this.desiredBgmTrack;
+        this.pendingTrack = this.desiredBgmTrack;
+        this._fadeOutSession(this.activeSession, 0.15);
+        this.activeSession = null;
+      }
+    }
     if (ctx && this.masterGain) {
       const now = ctx.currentTime;
       const g = this.masterGain.gain;
@@ -306,12 +341,14 @@ class SoundEngine {
         }
         g.linearRampToValueAtTime(1.0, now + 0.35);
 
-        const target = (this.pendingTrack && this.pendingTrack !== 'none')
-          ? this.pendingTrack
-          : this.currentTrack;
-        if (target && target !== 'none' && !this.activeSession) {
-          this.pendingTrack = null;
-          this._startBgmSession(target, 0.6);
+        if (!this.settings.bgmMuted) {
+          const target = (this.pendingTrack && this.pendingTrack !== 'none')
+            ? this.pendingTrack
+            : ((this.desiredBgmTrack && this.desiredBgmTrack !== 'none') ? this.desiredBgmTrack : this.currentTrack);
+          if (target && target !== 'none' && !this.activeSession) {
+            this.pendingTrack = null;
+            this._startBgmSession(target, 0.6);
+          }
         }
       }
     } else if (!this.muted) {
@@ -864,8 +901,25 @@ class SoundEngine {
 
   // ==================== Track 1: Studio Signature Theme (3.8s) ====================
 
+  stopStudioJingle(fadeSec = 0.15) {
+    this.pendingJingle = false;
+    const gainNode = this.studioGain;
+    this.studioGain = null;
+    if (!gainNode || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const g = gainNode.gain;
+    try {
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(Math.max(g.value, 0.0001), now);
+      g.linearRampToValueAtTime(0, now + fadeSec);
+    } catch (_) {}
+    setTimeout(() => {
+      try { gainNode.disconnect(); } catch (_) {}
+    }, Math.ceil((fadeSec + 0.08) * 1000));
+  }
+
   playStudioJingle() {
-    if (this.muted) return;
+    if (this.muted || this.settings.bgmMuted) return;
     const ctx = this._createOrGetCtx();
     if (!ctx) return;
 
@@ -873,7 +927,7 @@ class SoundEngine {
       this.pendingJingle = true;
       this._bindUnlockListeners();
       ctx.resume().then(() => {
-        if (this.pendingJingle && !this.muted) {
+        if (this.pendingJingle && !this.muted && !this.settings.bgmMuted) {
           this.pendingJingle = false;
           this._renderStudioJingle(ctx);
         }
@@ -885,12 +939,17 @@ class SoundEngine {
   }
 
   _renderStudioJingle(ctx) {
+    this.stopStudioJingle(0.05);
     const now = ctx.currentTime + 0.03;
     const bus = ctx.createGain();
+    this.studioGain = bus;
     bus.gain.setValueAtTime(0.92, now);
     bus.gain.setValueAtTime(0.92, now + 3.2);
     bus.gain.linearRampToValueAtTime(0, now + 3.85);
     bus.connect(this.bgmMaster);
+    setTimeout(() => {
+      if (this.studioGain === bus) this.studioGain = null;
+    }, 4000);
 
     // 1) Rising warm sci-fi pad (0.0s -> 3.6s)
     this.playSciFiPad([NOTE.D3, NOTE.A3, NOTE.D4, NOTE.A4], 3.6, 0.18, now, bus, 0.5);
@@ -935,13 +994,19 @@ class SoundEngine {
       return;
     }
 
+    // Immediately fade out any playing studio jingle to guarantee zero audio overlap
+    this.stopStudioJingle(0.15);
+
     if (target === 'none') {
       this.pendingTrack = null;
       this.currentTrack = 'none';
+      this.desiredBgmTrack = 'none';
       this._fadeOutSession(this.activeSession, 0.6);
       this.activeSession = null;
       return;
     }
+
+    this.desiredBgmTrack = target;
 
     if (this.currentTrack === target && this.activeSession && !this.activeSession.stopped) {
       return;
@@ -949,21 +1014,21 @@ class SoundEngine {
 
     this.currentTrack = target;
 
-    const ctx = this._createOrGetCtx();
-    if (!ctx) return;
-
-    if (this.muted) {
+    if (this.muted || this.settings.bgmMuted) {
       this.pendingTrack = target;
-      this._fadeOutSession(this.activeSession, 0.4);
+      this._fadeOutSession(this.activeSession, 0.25);
       this.activeSession = null;
       return;
     }
+
+    const ctx = this._createOrGetCtx();
+    if (!ctx) return;
 
     if (ctx.state === 'suspended') {
       this.pendingTrack = target;
       this._bindUnlockListeners();
       ctx.resume().then(() => {
-        if (this.pendingTrack === target && !this.muted) {
+        if (this.pendingTrack === target && !this.muted && !this.settings.bgmMuted) {
           this.pendingTrack = null;
           this._startBgmSession(target, 0.6);
         }

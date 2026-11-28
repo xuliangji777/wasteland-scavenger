@@ -27,11 +27,11 @@ import {
   SIDE_QUESTS,
   STORY_CUTSCENES,
   WORLD_LORE_ENTRIES
-} from './data.js?v=27';
-import { InkWorldEngine } from './rpg_world.js?v=27';
-import { sfx } from './audio.js?v=28';
-import { spawnFloatText } from './fx.js';
-import { storage } from './storage.js?v=4';
+} from './data.js?v=29';
+import { InkWorldEngine } from './rpg_world.js?v=29';
+import { sfx } from './audio.js?v=29';
+import { spawnFloatText } from './fx.js?v=29';
+import { storage } from './storage.js?v=29';
 
 // ==================== 常量与辅助 ====================
 const SLOT_NAMES = {
@@ -145,6 +145,8 @@ function createInitialState() {
     debt: 0,
     reputation: 0,
     radShield: 0,
+    hermitLuckBuff: 0,
+    dailyFreeHealDay: 0,
     warn: 0,
     tideSec: 60,
     skillPoints: 1,
@@ -229,6 +231,7 @@ function migrateState(raw) {
   s.bag = Array.isArray(raw.bag) ? raw.bag.filter((b) => b && ITEMS[b.itemId]) : base.bag;
   s.elixirs = raw.elixirs && typeof raw.elixirs === 'object' ? raw.elixirs : {};
   s.equipped = { ...base.equipped, ...(raw.equipped || {}) };
+  if (!s.equipped.weapon) s.equipped.weapon = base.equipped.weapon;
   s.equipBag = Array.isArray(raw.equipBag) ? raw.equipBag.filter(Boolean) : [];
   s.capturedSpirits = raw.capturedSpirits && typeof raw.capturedSpirits === 'object' ? raw.capturedSpirits : {};
   s.unlockedGuardians = Array.isArray(raw.unlockedGuardians) ? raw.unlockedGuardians : [];
@@ -248,6 +251,13 @@ function migrateState(raw) {
   s.stats = { ...base.stats, ...(raw.stats || {}) };
   s.dailyDone = Array.isArray(raw.dailyDone) ? raw.dailyDone : [];
   if (!MAPS_BY_ID[s.mapId]) s.mapId = 'town';
+  let estMaxHp = 100 + (Number(s.level) || 1) * 20;
+  for (const slot of ['weapon', 'armor', 'mech', 'relic']) {
+    if (s.equipped[slot]?.maxHp) estMaxHp += s.equipped[slot].maxHp;
+  }
+  if (!Number.isFinite(s.hp) || s.hp <= 0) {
+    s.hp = Math.max(1, Math.round(estMaxHp * 0.5));
+  }
   return s;
 }
 
@@ -257,6 +267,7 @@ let state = createInitialState();
 let world = null;
 let battle = null;
 let currentDialog = null;
+let modalLocked = false;
 let crucibleSlots = [null, null];
 let crucibleTab = 'forge';
 let crucibleFilter = 'all';
@@ -606,6 +617,13 @@ function unlockCollection(colId) {
   return false;
 }
 
+function grantUncollectedAntique() {
+  const missing = COLLECTIONS.filter((c) => !state.collections.includes(c.id));
+  if (!missing.length) return null;
+  const pick = missing[Math.floor(Math.random() * missing.length)];
+  return unlockCollection(pick.id) ? pick : null;
+}
+
 function addEquipmentToBag(eq) {
   if (!eq) return;
   state.equipBag.unshift(eq);
@@ -737,11 +755,13 @@ function applyEnterMap(target, spawnX = null, spawnY = null, showBanner = true, 
   const wid = target.sceneType === 'interior' ? 0 : (state.regionWeathers[region.id] ?? 0);
 
   state.openedChests = state.openedChests || [];
+  state.defeatedBosses = state.defeatedBosses || [];
   world.loadMap(target, {
     weatherId: wid,
     spawnX: sx,
     spawnY: sy,
     openedChests: state.openedChests,
+    defeatedBosses: state.defeatedBosses,
     guardian: state.activeGuardianId ? GUARDIANS[state.activeGuardianId] : null,
     heroWeaponType: state.equipped.weapon?.weaponType || 'blade'
   });
@@ -854,7 +874,8 @@ function rollItemFromMap(map) {
 
 function rollQuality(bonusMult = 1) {
   const eagleBonus = 1 + (state.skills[1] || 0) * 0.15 + (state.skills[5] || 0) * 0.06;
-  const m = bonusMult * eagleBonus;
+  const hermitBonus = (state.hermitLuckBuff || 0) > 0 ? 1.15 : 1;
+  const m = bonusMult * eagleBonus * hermitBonus;
   const legendRate = Math.min(0.18, QUALITY.legend.rate * m);
   const rareRate = Math.min(0.32, QUALITY.rare.rate * m);
   const fineRate = Math.min(0.42, QUALITY.fine.rate * Math.sqrt(m));
@@ -1087,7 +1108,13 @@ function handleLootNode(node) {
   const lootParts = [`+${goldGain} 币`];
   let bestQuality = 'fine';
 
-  // 2. 剧情信物 / 古董发现判定（保留主线与古董图鉴推进）
+  // 2. 剧情信物 / 古董发现判定（保留主线与古董图鉴推进，并彻底杜绝随机卡死）
+  let unlockedAntiqueThisChest = false;
+  if (curMap?.id === 'cave_metro' && node.type === 'vault_box' && !state.stories.includes(1)) {
+    unlockStoryRelic(1);
+    lootParts.push('信物·旧磁带');
+    bestQuality = 'legend';
+  }
   const mapRoll = rollItemFromMap(curMap);
   if (mapRoll?.isStory && !state.stories.includes(mapRoll.storyId)) {
     unlockStoryRelic(mapRoll.storyId);
@@ -1096,6 +1123,7 @@ function handleLootNode(node) {
   } else if (mapRoll?.isCollection) {
     const isNew = unlockCollection(mapRoll.colId);
     if (isNew) {
+      unlockedAntiqueThisChest = true;
       lootParts.push(`古董·${mapRoll.name}`);
       bestQuality = 'rare';
     } else {
@@ -1103,6 +1131,16 @@ function handleLootNode(node) {
       state.gold += dupBonus;
       lootParts.push(`古董折现+${dupBonus}币`);
     }
+  }
+  if (node.type === 'vault_box' && !unlockedAntiqueThisChest) {
+    const pityAntique = grantUncollectedAntique();
+    if (pityAntique) {
+      lootParts.push(`古董·${pityAntique.name}`);
+      if (bestQuality !== 'legend') bestQuality = 'rare';
+    }
+  }
+  if ((state.hermitLuckBuff || 0) > 0) {
+    state.hermitLuckBuff = Math.max(0, state.hermitLuckBuff - 1);
   }
 
   // 3. 1–2 件区域高价值物资 / 科技件 / 灵药（优先科技/特产/补给/稀有）
@@ -1280,6 +1318,9 @@ function finishActiveCutscene(markSeen = true) {
   activeCutscene = null;
   if (!ctx) return;
   state.seenCutscenes = state.seenCutscenes || [];
+  if (ctx.cs?.id === 'npc_story_jiubao' && !state.stories.includes(1)) {
+    unlockStoryRelic(1);
+  }
   if (markSeen && !state.seenCutscenes.includes(ctx.cs.id)) {
     state.seenCutscenes.push(ctx.cs.id);
     scheduleSave();
@@ -1549,16 +1590,43 @@ function handleNpcOption(npc, idx, opt) {
       } else {
         state.gold -= 150;
         sfx.coin();
-        for (const n of world.lootNodes) n.collected = false;
-        $('dialog-text').textContent = '“拿去吧，这片荒原的暗格与废炮位置都标好了，物资已为你重新探明！”';
+        const curMap = world?.map || MAPS_BY_ID[state.mapId] || MAPS[0];
+        const curReg = getMapRegion(curMap);
+        const regionIdx = getRegionTierIndex(curMap);
+        const stats = getHeroStats();
+        const mapRemaining = (world?.lootNodes || []).filter((n) => !n.opened && !n.collected).length;
+        let regionRemaining = 0;
+        for (const mid of (curReg?.maps || [])) {
+          const m = MAPS_BY_ID[mid];
+          if (!m || !Array.isArray(m.lootZones)) continue;
+          for (const lz of m.lootZones) {
+            if (!(state.openedChests || []).includes(getChestKey(mid, lz))) {
+              regionRemaining += 1;
+            }
+          }
+        }
+        const itemPool = REGION_CHEST_ITEMS[regionIdx] || REGION_CHEST_ITEMS[0];
+        const pickId = itemPool[Math.floor(Math.random() * itemPool.length)];
+        const bonusRes = grantItemToBagOrGold(pickId, Math.random() < 0.35 ? 'rare' : 'fine', stats);
+        state.radShield = (state.radShield || 0) + 1;
+        state.hermitLuckBuff = Math.max(state.hermitLuckBuff || 0, 5);
+        const bonusTxt = bonusRes?.label ? `获赠【${bonusRes.label}】、` : '';
+        $('dialog-text').textContent = `“密道勘测已毕！当前「${curMap.name}」尚余 ${mapRemaining} 处未启宝箱，整片「${curReg.name}」尚余 ${regionRemaining} 处秘藏。${bonusTxt}+1 层抗辐射护盾，且接下来 5 次寻宝珍稀爆率 +15%！”`;
+        showToast(`密道勘测：本图余 ${mapRemaining} 箱 / 本域余 ${regionRemaining} 箱 · 寻宝福运 +15%！`, 'success');
       }
     } else if (idx === 1) {
       $('dialog-text').textContent = '“北侧塌坡下就是战前防空洞，里头盘踞着墨尾巨鼠王。记得交锋时将荒原妖邪击至力竭，再以【天工墨壶】收摄残灵！”';
     } else if (idx === 2) {
       const stats = getHeroStats();
-      state.hp = Math.min(stats.maxHp, state.hp + 25);
-      state.energy = Math.min(stats.maxEnergy, state.energy + 20);
-      $('dialog-text').textContent = '“喝口热茶暖暖身子，荒原风硬，莫要硬扛！”（+25 气血，+20 内息）';
+      const isEmergency = state.hp < stats.maxHp * 0.3;
+      if (state.dailyFreeHealDay === state.day && !isEmergency) {
+        $('dialog-text').textContent = '“今日热茶已尽，待明日再来，或是回墨石镇医馆歇脚吧。若真伤重垂危（气血不足三成），老鬼定会再施援手。”';
+      } else {
+        state.hp = Math.min(stats.maxHp, state.hp + 25);
+        state.energy = Math.min(stats.maxEnergy, state.energy + 20);
+        state.dailyFreeHealDay = state.day;
+        $('dialog-text').textContent = '“喝口热茶暖暖身子，荒原风硬，莫要硬扛！”（+25 气血，+20 内息）';
+      }
     }
   } else if (id === 'shaobing') {
     if (idx === 0) {
@@ -1625,20 +1693,38 @@ function handleNpcOption(npc, idx, opt) {
       $('dialog-text').textContent = '“……21:47！我想起来了！沈砚，天枢主脑正在吞噬地脉奇点，快去 07 号避难所找林博士，我用无线电为你指引坐标！”';
     } else if (idx === 1) {
       const stats = getHeroStats();
-      state.energy = stats.maxEnergy;
-      state.hp = stats.maxHp;
-      $('dialog-text').textContent = '“老伙计，歇会儿吧。电台调好了，气血与内息都恢复到巅峰了！”';
+      const isEmergency = state.hp < stats.maxHp * 0.3;
+      if (state.dailyFreeHealDay === state.day && !isEmergency) {
+        $('dialog-text').textContent = '“今日草庐药水用尽了，先去医馆休整或明日再来；若真拼到气血不足三成，随时回来找我应急！”';
+      } else {
+        state.energy = stats.maxEnergy;
+        state.hp = stats.maxHp;
+        state.dailyFreeHealDay = state.day;
+        $('dialog-text').textContent = '“老伙计，歇会儿吧。电台调好了，气血与内息都恢复到巅峰了！”';
+      }
     } else if (idx === 2) {
       $('dialog-text').textContent = '“玄墨大帝在天枢地脉密窟深处，半血后会进入二阶段觉醒。务必带上最强护驾与绝世神兵！”';
     }
   } else if (id === 'xuezhe') {
     if (idx === 0) {
-      if (state.gold < 400) showToast('神经强化需 400 废土币。', 'warn');
-      else {
+      const remainingNeed = SKILLS.reduce((sum, sk) => {
+        const curLv = state.skills[sk.id] || 0;
+        for (let lv = curLv; lv < sk.maxLevel; lv++) {
+          sum += (sk.cost?.[lv] ?? 1);
+        }
+        return sum;
+      }, 0);
+      const maxBuyable = Math.max(0, remainingNeed - (state.skillPoints || 0));
+      if (maxBuyable <= 0) {
+        showToast('你的修为点已足以将全部心法修至圆满，无需再购！', 'info');
+        $('dialog-text').textContent = '“你的神经潜能已达圆满阈值，现有修为点足以修满全部六门心法，不必再浪费废土币了。”';
+      } else if (state.gold < 400) {
+        showToast('神经强化需 400 废土币。', 'warn');
+      } else {
         state.gold -= 400;
         state.skillPoints += 1;
         sfx.ending();
-        $('dialog-text').textContent = `“战前神经强化完成！获得 +1 修为点（当前可用 ${state.skillPoints}）。”`;
+        $('dialog-text').textContent = `“战前神经强化完成！获得 +1 修为点（当前可用 ${state.skillPoints}，距全满尚需 ${Math.max(0, maxBuyable - 1)} 点）。”`;
       }
     } else if (idx === 1) {
       $('dialog-text').textContent = '“欲成「天工墨主 · 墨土之王」，须击败玄墨大帝，且集齐 8 件古董、5 章剧情信物并拥有护驾灵兽！”';
@@ -1652,8 +1738,15 @@ function handleNpcOption(npc, idx, opt) {
     if (idx === 1) {
       $('dialog-text').textContent = '“古武破甲快剑、军火加特林与狙杀、科幻墨甲重炮浮游炮、仙妖金钟罩与镇魂收妖——四系技能随等级解锁，战斗中可随时切换！”';
     } else if (idx === 2) {
-      state.energy = getHeroStats().maxEnergy;
-      $('dialog-text').textContent = '“吐纳一周天，丹田充盈！内息已完全恢复！”';
+      const stats = getHeroStats();
+      const isEmergency = state.hp < stats.maxHp * 0.3 || state.energy < stats.maxEnergy * 0.3;
+      if (state.dailyFreeHealDay === state.day && !isEmergency) {
+        $('dialog-text').textContent = '“今日导引调息已行过一次，过犹不及！明日再来，或气血/内息不足三成时再来寻我。”';
+      } else {
+        state.energy = stats.maxEnergy;
+        state.dailyFreeHealDay = state.day;
+        $('dialog-text').textContent = '“吐纳一周天，丹田充盈！内息已完全恢复！”';
+      }
     }
   }
 
@@ -2549,7 +2642,7 @@ function startBattle(worldEnemy, skipPreCutscene = false) {
   sfx.playBgm?.(tpl.isBoss ? 'boss' : 'battle');
 }
 
-function closeBattle() {
+function closeBattle(skipSave = false) {
   battle = null;
   battleSubMode = null;
   stopBattleAmbient();
@@ -2563,7 +2656,7 @@ function closeBattle() {
   }
   sfx.playBgm?.(getBgmTrackForMap(state.mapId));
   updateHUD();
-  scheduleSave();
+  if (!skipSave) scheduleSave();
 }
 
 function triggerHitAnim(isEnemy, strong = false) {
@@ -2587,7 +2680,8 @@ function calcDamageToEnemy(mult = 1, opts = {}) {
   const pen = opts.ignoreDef ? 1 : clamp(stats.armorPen + (opts.armorPen || 0), 0, 1);
   const effDef = Math.round(def * (1 - pen));
 
-  let dmg = Math.max(4, Math.round(atk * mult - effDef * 0.75));
+  const baseDmg = atk * mult;
+  let dmg = Math.max(4, Math.round(baseDmg * (100 / (100 + effDef * 1.15))));
   if (opts.isArtillery && stats.artilleryBonus > 0) {
     dmg = Math.round(dmg * (1 + stats.artilleryBonus));
   }
@@ -2655,7 +2749,7 @@ function handleBattleVictory(captured = false) {
   const wEn = battle.worldEnemy;
   if (wEn) {
     wEn.alive = false;
-    wEn.respawnTimer = tpl.isBoss ? 120 : 45;
+    wEn.respawnTimer = tpl.isBoss ? Infinity : 45;
   }
 
   const curMap = world?.map || MAPS_BY_ID[state.mapId] || MAPS_BY_ID.town;
@@ -2673,11 +2767,20 @@ function handleBattleVictory(captured = false) {
   const dropList = [];
   if (tpl.isBoss) {
     if (!state.defeatedBosses.includes(tpl.id)) state.defeatedBosses.push(tpl.id);
+    world?.setDefeatedBosses?.(state.defeatedBosses);
     if (tpl.dropSpiritId) {
       state.capturedSpirits[tpl.dropSpiritId] = (state.capturedSpirits[tpl.dropSpiritId] || 0) + 1;
     }
+    if (tpl.id === 'boss_duangang' && !state.stories.includes(1)) {
+      unlockStoryRelic(1);
+      dropList.push('信物·旧磁带');
+    }
     if (tpl.dropStoryId !== undefined) {
       unlockStoryRelic(tpl.dropStoryId);
+    }
+    const bossAntique = grantUncollectedAntique();
+    if (bossAntique) {
+      dropList.push(`古董·${bossAntique.name}`);
     }
     advanceQuestTrigger(`defeat_${tpl.id}`);
 
@@ -2744,6 +2847,14 @@ function handleBattleVictory(captured = false) {
         dropList.push(`【${QUALITY[eq.quality].name}】${eq.name}`);
       }
     }
+
+    // 普通怪物：8% 保底概率掉落尚未收录的战前古董，杜绝真结局卡死
+    if (Math.random() < 0.08) {
+      const pityAntique = grantUncollectedAntique();
+      if (pityAntique) {
+        dropList.push(`古董·${pityAntique.name}`);
+      }
+    }
   }
 
   const extraMsg = dropList.length ? ` 战利品：${dropList.join('、')}！` : '';
@@ -2799,7 +2910,11 @@ function loadFromSlot(slotId, slotLabel = '存档') {
     return false;
   }
   state = migrateState(data);
-  closeModal();
+  const loadedStats = getHeroStats();
+  if (!Number.isFinite(state.hp) || state.hp <= 0) {
+    state.hp = Math.max(1, Math.round(loadedStats.maxHp * 0.5));
+  }
+  closeModal(false, true);
   enterMap(state.mapId, state.heroX, state.heroY);
   sfx.ending();
   showToast(`已读取「${slotLabel}」：回到 ${MAPS_BY_ID[state.mapId]?.name || '墨石镇'}！`, 'success');
@@ -2816,7 +2931,7 @@ function handleBattleDefeat() {
     const latest = getLatestSavedSlot();
     logBattle(`败于首领【${bossName}】之手！可选择读取最近存档重战，或撤回墨石镇医馆休整。`);
     setTimeout(() => {
-      closeBattle();
+      closeBattle(true);
       openModal(
         `首领战败 · ${bossName}`,
         `<div class="modal-list-item">
@@ -2825,7 +2940,8 @@ function handleBattleDefeat() {
         `
           ${latest ? `<button class="btn btn-purple" id="btn-boss-reload">读取最近存档 (${escapeHtml(latest.label)})</button>` : ''}
           <button class="btn btn-amber" id="btn-boss-retreat">撤回墨石镇医馆</button>
-        `
+        `,
+        { locked: true }
       );
       $('btn-boss-reload')?.addEventListener('click', () => {
         loadFromSlot(latest.slotId, latest.label);
@@ -2835,7 +2951,7 @@ function handleBattleDefeat() {
         state.gold -= loss;
         state.hp = Math.round(stats.maxHp * 0.6);
         state.energy = Math.round(stats.maxEnergy * 0.6);
-        closeModal();
+        closeModal(false, true);
         enterMap('town', 1240, 365);
         showToast(`已撤回墨石镇医馆，损失 ${loss} 废土币。`, 'warn');
       });
@@ -2930,7 +3046,8 @@ function runEnemyTurn(prevLogs = []) {
       const tpl = battle.tpl;
       const isSpecial = tpl.specialEvery && (battle.turn % tpl.specialEvery === 0);
       const mult = isSpecial ? (tpl.specialMult || 1.5) : 1;
-      let rawDmg = Math.max(3, Math.round(battle.enemy.atk * mult - stats.def * 0.65));
+      const baseEnemyDmg = battle.enemy.atk * mult;
+      let rawDmg = Math.max(4, Math.round(baseEnemyDmg * (100 / (100 + stats.def * 1.15))));
       let reduce = stats.dmgReduce + (battle.dmgReduceTurns > 0 ? 0.30 : 0);
       rawDmg = Math.max(2, Math.round(rawDmg * (1 - clamp(reduce, 0, 0.78))));
 
@@ -3568,20 +3685,27 @@ function renderBattleSubpanel() {
 }
 
 // ==================== 通用古卷弹窗控制 ====================
-function openModal(title, bodyHtml, footerHtml = '') {
+function openModal(title, bodyHtml, footerHtml = '', opts = {}) {
   const backdrop = $('modal-backdrop');
   const wasClosed = !backdrop || backdrop.classList.contains('hidden');
+  modalLocked = Boolean(opts.locked);
   if (world) world.paused = true;
   $('modal-box')?.classList.remove('modal-crucible-full', 'modal-worldmap-full', 'modal-armory-full');
+  const closeBtn = $('modal-close');
+  if (closeBtn) closeBtn.style.display = modalLocked ? 'none' : '';
   $('modal-title').textContent = title;
   $('modal-body').innerHTML = bodyHtml;
-  $('modal-footer').innerHTML = footerHtml || '<button class="btn btn-secondary" id="modal-default-close">合上卷轴</button>';
+  $('modal-footer').innerHTML = footerHtml || (modalLocked ? '' : '<button class="btn btn-secondary" id="modal-default-close">合上卷轴</button>');
   backdrop?.classList.remove('hidden');
   if (wasClosed) sfx.uiTick?.();
   $('modal-default-close')?.addEventListener('click', () => closeModal());
 }
 
-function closeModal(silent = false) {
+function closeModal(silent = false, force = false) {
+  if (modalLocked && !force) return;
+  modalLocked = false;
+  const closeBtn = $('modal-close');
+  if (closeBtn) closeBtn.style.display = '';
   const backdrop = $('modal-backdrop');
   const wasOpen = Boolean(backdrop && !backdrop.classList.contains('hidden'));
   $('modal-box')?.classList.remove('modal-crucible-full', 'modal-worldmap-full', 'modal-armory-full');
@@ -3943,7 +4067,15 @@ function getCruciblePoolEntries() {
 function normalizeFuseInput(slotObj) {
   if (!slotObj) return null;
   if (slotObj.kind === 'equip') {
-    return { kind: 'item', id: 10, _equipUid: slotObj.uid };
+    const q = slotObj.eq?.quality || EQUIPMENT[slotObj.id]?.quality || 'common';
+    const mappedId = q === 'legend'
+      ? 10
+      : q === 'rare'
+        ? 14
+        : (q === 'fine' || q === 'uncommon')
+          ? 5
+          : 2;
+    return { kind: 'item', id: mappedId, _equipUid: slotObj.uid };
   }
   return { kind: slotObj.kind, id: slotObj.id };
 }
@@ -5074,8 +5206,13 @@ function openEndingModal() {
 
 // ==================== 8. 城镇服务：杂货铺 / 医馆 / 拆解坊 / 钱庄 ====================
 function openShop() {
+  const stats = getHeroStats();
+  const bagFull = state.bag.length >= stats.bagMax;
   const rows = SHOP_STOCK.map((s) => {
     const it = ITEMS[s.itemId];
+    const noGold = state.gold < s.price;
+    const isDisabled = noGold || bagFull;
+    const btnLabel = bagFull ? '行囊已满' : noGold ? `缺币 (${s.price}币)` : `买 ${s.price}币`;
     return `
       <div class="modal-list-item">
         <div style="display:flex;align-items:center;gap:10px;">
@@ -5085,7 +5222,7 @@ function openShop() {
             <div class="modal-item-desc">${escapeHtml(it.desc)}</div>
           </div>
         </div>
-        <button class="btn btn-amber btn-sm" data-buy-id="${s.itemId}" data-buy-price="${s.price}">买 ${s.price}币</button>
+        <button class="btn btn-amber btn-sm" data-buy-id="${s.itemId}" data-buy-price="${s.price}" ${isDisabled ? 'disabled' : ''}>${btnLabel}</button>
       </div>
     `;
   }).join('');
@@ -5130,14 +5267,14 @@ function openInn() {
           <div class="modal-item-title">草药安神汤（40 废土币）</div>
           <div class="modal-item-desc">立即回满气血 (${stats.maxHp}) 与内息 (${stats.maxEnergy})，饱食 +50。</div>
         </div>
-        <button class="btn btn-green btn-sm" id="inn-rest-basic">歇脚 40币</button>
+        <button class="btn btn-green btn-sm" id="inn-rest-basic" ${state.gold < 40 ? 'disabled' : ''}>${state.gold < 40 ? '缺币 (40币)' : '歇脚 40币'}</button>
       </div>
       <div class="modal-list-item">
         <div>
           <div class="modal-item-title">秘制药浴 + 抗辐针（120 废土币）</div>
           <div class="modal-item-desc">全状态回满（含饱食 100），清零警戒，并获 1 层抗辐射护盾！</div>
         </div>
-        <button class="btn btn-amber btn-sm" id="inn-rest-pro">药浴 120币</button>
+        <button class="btn btn-amber btn-sm" id="inn-rest-pro" ${state.gold < 120 ? 'disabled' : ''}>${state.gold < 120 ? '缺币 (120币)' : '药浴 120币'}</button>
       </div>
     `
   );
@@ -5327,12 +5464,16 @@ function openSaveModal(atShrine = false) {
       </div>
       <div class="modal-item-title">已有存档账号</div>
       ${listHtml}
-      <div class="modal-item-title" style="margin-top:6px;">行迹密卷 · 镌刻与拓印</div>
-      <textarea id="json-backup-text" class="textarea-field" placeholder="点击「拓印当前行迹」生成密卷铭文，或粘贴密卷铭文后点击「还原行迹」"></textarea>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn btn-secondary btn-sm" id="btn-json-export">拓印当前行迹</button>
-        <button class="btn btn-purple btn-sm" id="btn-json-import">还原覆盖当前行者</button>
-      </div>
+      <details style="margin-top:8px;">
+        <summary class="modal-item-title" style="cursor:pointer;user-select:none;">高级存档迁移码（镌刻与拓印）</summary>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+          <textarea id="json-backup-text" class="textarea-field" placeholder="点击「拓印当前行迹」生成密卷铭文，或粘贴密卷铭文后点击「还原行迹」"></textarea>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn btn-secondary btn-sm" id="btn-json-export">拓印当前行迹</button>
+            <button class="btn btn-purple btn-sm" id="btn-json-import">还原覆盖当前行者</button>
+          </div>
+        </div>
+      </details>
     `;
   }
 
@@ -5507,8 +5648,8 @@ function openHelpModal(tab = null) {
 
   const tabsHtml = `
     <div class="modal-tabs">
-      <button class="modal-tab-btn${settingsModalTab === 'settings' ? ' active' : ''}" data-stab="settings">⚙️ 游戏设置</button>
-      <button class="modal-tab-btn${settingsModalTab === 'guide' ? ' active' : ''}" data-stab="guide">📜 江湖指南</button>
+      <button class="modal-tab-btn${settingsModalTab === 'settings' ? ' active' : ''}" data-stab="settings">游戏设置</button>
+      <button class="modal-tab-btn${settingsModalTab === 'guide' ? ' active' : ''}" data-stab="guide">江湖指南</button>
     </div>
   `;
 
@@ -5579,7 +5720,7 @@ function openHelpModal(tab = null) {
         </div>
 
         <div class="settings-actions">
-          <button class="btn btn-amber" id="btn-replay-intro">🎬 重播「老年饼工作室」片头与序章</button>
+          <button class="btn btn-amber" id="btn-replay-intro">重播「老年饼工作室」片头与序章</button>
         </div>
       </div>
     `;
@@ -5592,7 +5733,7 @@ function openHelpModal(tab = null) {
     `;
   }
 
-  openModal('⚙️ 游戏设置 · 江湖指南', tabsHtml + bodyHtml);
+  openModal('游戏设置 · 江湖指南', tabsHtml + bodyHtml);
 
   document.querySelectorAll('.modal-tab-btn[data-stab]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -5718,7 +5859,7 @@ function finishOpeningPrologue() {
 function startHazardLoop() {
   if (hazardTimer) clearInterval(hazardTimer);
   hazardTimer = setInterval(() => {
-    if (!world?.map || battle) return;
+    if (!world?.map || battle || world.paused) return;
     const curMap = world.map;
     if (!curMap.hasTide) return;
     state.tideSec -= 1;

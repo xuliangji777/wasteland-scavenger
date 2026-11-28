@@ -10,14 +10,9 @@
   "icons": [
     {
       "src": "./assets/app_icon.png",
-      "sizes": "1024x1024",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "./icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
     }
   ]
 }
